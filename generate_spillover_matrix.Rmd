@@ -17,14 +17,24 @@ getwd()
 In this script, imcRtools is used to generate a spillover matrix according to https://bodenmillergroup.github.io/IMCDataAnalysis/spillover-correction.html#generate-the-spillover-matrix
 
 ```{r install-packages, message=FALSE}
+
+#Install jsonlite
 install.packages('jsonlite', dependencies=TRUE, repos='http://cran.rstudio.com/')
 
+#Update apt-repo
+sudo apt-get Update
+
+#Install system packages
+apt-get install -y --no-install-recommends zlib1g-dev libfftw3-dev libxml2-dev libxt-dev curl libglpk-dev libcairo2-dev libmagick++-dev libcurl4-gnutls-dev libudunits2-dev libgdal-dev libproj-dev pandoc pandoc-citeproc libnode-dev tk libv8-dev
+
+# Install BiocManager
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 
 # The following initializes usage of Bioc devel
 BiocManager::install(version='devel')
 
+# Install imcRtools
 BiocManager::install("imcRtools")
 
 #check which packages are installed
@@ -33,7 +43,7 @@ installed.packages()
 #check whether a particular R package is installed
 a<-installed.packages()
 packages<-a[,1] 
-is.element("BiocManager", packages)
+is.element("imcRtools", packages)
 ```
 
 ```{r load-packages, message=FALSE}

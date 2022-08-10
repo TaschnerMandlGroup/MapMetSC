@@ -20,7 +20,7 @@ In this script, imcRtools is used to generate a spillover matrix according to ht
 
 #Install jsonlite
 install.packages('jsonlite', dependencies=TRUE, repos='http://cran.rstudio.com/')
-
+browse()
 #Update apt-repo
 sudo apt-get Update
 
@@ -36,6 +36,19 @@ BiocManager::install(version='devel')
 
 # Install imcRtools
 BiocManager::install("imcRtools")
+BiocManager::install("SpatialExperiment")
+BiocManager::install("SingleCellExperiment")
+BiocManager::install("CATALYST")
+
+BiocManager::install("scuttle")
+BiocManager::install("scater")
+BiocManager::install("batchelor")
+BiocManager::install("cytomapper")
+BiocManager::install("dittoSeq")
+install.packages("tidyverse")
+install.packages('Seurat')
+install.packages("harmony")
+
 
 #check which packages are installed
 installed.packages()
@@ -43,10 +56,12 @@ installed.packages()
 #check whether a particular R package is installed
 a<-installed.packages()
 packages<-a[,1] 
-is.element("imcRtools", packages)
+is.element("Seurat", packages)
 ```
 
 ```{r load-packages, message=FALSE}
-library
 library(imcRtools)
+browser()
+
+# https://renkun.me/2020/09/13/debugging-r-in-vscode/
 ```

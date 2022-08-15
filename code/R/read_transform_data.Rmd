@@ -148,6 +148,7 @@ spe$study_id <- meta$Study_ID[match(spe$fm_id, meta$Sample)]
 spe$infiltration_right <- meta$Infiltration_right[match(spe$fm_id, meta$Sample)]
 spe$infiltration_left <- meta$Infiltration_left[match(spe$fm_id, meta$Sample)]
 spe$DE_date <- meta$DE_date[match(spe$fm_id, meta$Sample)]
+spe$DE_year <- sub("-.*", "", spe$DE_date)
 spe$timepoint <- meta$Timepoint[match(spe$fm_id, meta$Sample)]
 spe$MYCN_amp <- meta$MYCN_amp[match(spe$fm_id, meta$Sample)]
 spe$ALK_amp <- meta$ALK_amp[match(spe$fm_id, meta$Sample)]

@@ -100,6 +100,7 @@ cur_cells <- sample(seq_len(ncol(spe)), 2000)
 dittoHeatmap(spe[,cur_cells], genes = rownames(spe)[rowData(spe)$use_channel],
              assay = "exprs", cluster_cols = TRUE, scale = "none",
              heatmap.colors = viridis(100), annot.by = "sample",
+             annotation_legend = FALSE,
              annotation_colors = list(sample = metadata(spe)$color_vectors$sample))
 ```
 
@@ -107,6 +108,7 @@ dittoHeatmap(spe[,cur_cells], genes = rownames(spe)[rowData(spe)$use_channel],
 dittoHeatmap(spe[,cur_cells], genes = rownames(spe)[rowData(spe)$use_channel],
              assay = "exprs", cluster_cols = TRUE, scaled.to.max="TRUE",
              heatmap.colors = viridis(100), annot.by = "sample",
+             annotation_legend = FALSE,
              annotation_colors = list(sample = metadata(spe)$color_vectors$sample))
 ```
 
@@ -262,6 +264,7 @@ assay(image_mean, "exprs") <- asinh(counts(image_mean))
              assay = "exprs", cluster_cols = TRUE, scale = "none",
              heatmap.colors = viridis(100), 
              annot.by = c("sample", "staining_date"),
+             annotation_legend = FALSE,
              annotation_colors = list(sample = metadata(spe)$color_vectors$sample,
                                       staining_batch = metadata(spe)$color_vectors$staining_date),
              show_colnames = FALSE)
@@ -293,6 +296,7 @@ mixture model across the transformed counts of all cells contained in the
 
 ```{r cell-snr, message=FALSE, warning=FALSE, results="hide", fig.keep="all"}
 library(mclust)
+
 
 set.seed(220224)
 mat <- apply(assay(spe, "exprs"), 1, function(x){
@@ -405,8 +409,7 @@ required memory per CPU, we will delete unused variables.
 
 ```{r dimred, message=FALSE}
 library(scater)
-rm(selected_patients, selected_roi, selecting_staining_dates, staining_batch, staining_date, test, width_px, year)
-rm(images)
+
 gc() #free unused space
 
 set.seed(220225)

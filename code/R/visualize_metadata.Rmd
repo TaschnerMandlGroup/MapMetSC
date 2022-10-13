@@ -107,10 +107,40 @@ dittoDimPlot(spe, var = "pg_clusters_corrected",
     ggtitle("Phenograph clusters expression on UMAP, integrated cells")
 ```
 
-
-```{r phenograph-heatmap-2-allcells-mean, message=FALSE, fig.height=7}
+```{r phenograph-heatmap-2-allcells-mean-of-scaled-uncorrected, message=FALSE, fig.height=7}
 library(scuttle)
 
+sce <- as(spe, "SingleCellExperiment")
+
+cluster_mean <- aggregateAcrossCells(sce,
+                                    ids = sce$pg_clusters,
+                                    statistics="mean",
+                                    use.assay.type = "scaled_exprs")
+
+col_pg = setNames(dittoColors(1)[1:length(unique(sce$pg_clusters))], 
+                sort(unique(sce$pg_clusters)))
+
+column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$pg_clusters, 
+                                 ncells=anno_barplot(colData(cluster_mean)$ncells, height = unit(3, "cm")),
+                                 col=list(clusters=col_pg))
+            
+
+#scaled
+dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
+            assay = "scaled_exprs", scale = "none",
+            column_title = "Phenograph clusters on non-integrated cells (mean of scaled exprs)",
+            heatmap.colors = viridis(100),
+            cluster_cols=TRUE,
+            show_colnames= TRUE,
+            show_column_dend = FALSE,
+            complex=TRUE,
+            top_annotation=column_annot)
+
+```
+We observe that phenograph cluster 26 of the non-integreated data, represents the sticky cells. We will exclude those cells and re-perform the batch correction and phenograph clustering to see how detected cell types change. 
+
+
+```{r phenograph-heatmap-2-allcells-mean, message=FALSE, fig.height=7}
 sce <- as(spe, "SingleCellExperiment")
 
 cluster_mean <- aggregateAcrossCells(sce,
@@ -151,8 +181,35 @@ dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
             complex=TRUE,
             top_annotation=column_annot)
 
-#rm(sce)
-#rm(cluster_mean)
+```
+
+```{r phenograph-heatmap-2-allcells-mean-of-scaled, message=FALSE, fig.height=7}
+
+sce <- as(spe, "SingleCellExperiment")
+
+cluster_mean <- aggregateAcrossCells(sce,
+                                    ids = sce$pg_clusters_corrected,
+                                    statistics="mean",
+                                    use.assay.type = "scaled_exprs")
+
+col_pg = setNames(dittoColors(1)[1:length(unique(sce$pg_clusters_corrected))], 
+                sort(unique(sce$pg_clusters_corrected)))
+
+column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$pg_clusters_corrected, 
+                                 ncells=anno_barplot(colData(cluster_mean)$ncells, height = unit(3, "cm")),
+                                 col=list(clusters=col_pg))
+            
+
+#scaled
+dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
+            assay = "scaled_exprs", scale = "none",
+            column_title = "Phenograph clusters on integrated cells (mean of scaled exprs)",
+            heatmap.colors = viridis(100),
+            cluster_cols=TRUE,
+            show_colnames= TRUE,
+            show_column_dend = FALSE,
+            complex=TRUE,
+            top_annotation=column_annot)
 
 ```
 
@@ -188,6 +245,34 @@ dittoDimPlot(spe, var = "som_clusters_corrected",
     ggtitle("SOM clusters expression on UMAP, integrated cells")
 ```
 
+```{r flowSOM-heatmap-2-allcells-mean-of-scaled-uncorrected, message=FALSE, fig.height=7}
+sce <- as(spe, "SingleCellExperiment")
+
+cluster_mean <- aggregateAcrossCells(sce,
+                                    ids = sce$som_clusters,
+                                    statistics="mean",
+                                    use.assay.type = "scaled_exprs")
+
+col_som = setNames(dittoColors(1)[1:length(unique(sce$som_clusters))], 
+                sort(unique(sce$som_clusters)))
+
+column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$som_clusters, 
+                                 ncells=anno_barplot(colData(cluster_mean)$ncells, height = unit(3, "cm")),
+                                 col=list(clusters=col_som))
+            
+
+#scaled
+dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
+            assay = "scaled_exprs", scale = "none",
+            column_title = "FlowSOM clusters on non-integrated cells (mean of scaled exprs)",
+            heatmap.colors = viridis(100),
+            cluster_cols=TRUE,
+            show_colnames= TRUE,
+            show_column_dend = FALSE,
+            complex=TRUE,
+            top_annotation=column_annot)
+
+```
 
 ```{r flowSOM-heatmap-2-allcells-mean, message=FALSE, fig.height=7}
 
@@ -236,6 +321,37 @@ dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
 
 ```
 
+```{r flowSOM-heatmap-2-allcells-mean-of-scaled, message=FALSE, fig.height=7}
+
+sce <- as(spe, "SingleCellExperiment")
+
+cluster_mean <- aggregateAcrossCells(sce,
+                                    ids = sce$som_clusters_corrected,
+                                    statistics="mean",
+                                    use.assay.type = "scaled_exprs")
+
+
+col_som = setNames(dittoColors(1)[1:length(unique(sce$som_clusters_corrected))], 
+                sort(unique(sce$som_clusters_corrected)))
+
+column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$som_clusters_corrected, 
+                                 ncells=anno_barplot(colData(cluster_mean)$ncells, height = unit(3, "cm")),
+                                 col=list(clusters=col_som))
+            
+
+#scaled
+dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
+            assay = "scaled_exprs", scale = "none",
+            column_title = "FlowSOM clusters on integrated cells (mean of scaled exprs)",
+            heatmap.colors = viridis(100),
+            cluster_cols=TRUE,
+            show_colnames= TRUE,
+            show_column_dend = FALSE,
+            complex=TRUE,
+            top_annotation=column_annot)
+
+
+```
 
 ```{r flowSOM-heatmap-2-scale, message=FALSE, fig.height=7}
 

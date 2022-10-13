@@ -1,12 +1,12 @@
 ---
-title: "Batch correction"
+title: "Batch correction on full dataset"
 output: html_document
 date: '2022-08-13'
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
+library(parallel)
 library(BiocParallel)
 library(imcRtools)
 library(scater)
@@ -43,7 +43,7 @@ However cache=TRUE did not work and was computing batch correction anyway. Thus 
 
 ```{r read-data-batch-correction}
 path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20220723_Steinbock_Mesmer_IFbased"
-spe <- readRDS(file.path(path,"data/spe.rds"))
+spe <- readRDS(file.path(path,"data/spe.rds")) # change this if you want to use the full dataset (with sticky cells)
 ```
 
 
@@ -93,7 +93,7 @@ detectCores(all.tests = FALSE, logical = TRUE) # find out how many logical cores
 spe <- runUMAP(spe, dimred = "harmony", name = "UMAP_harmony", BPPARAM = MulticoreParam()) 
 ```
 
-```{r visualizing-batch-correction-harmony-1, message=FALSE, warning=FALSE, fig.height=3}
+```{r visualizing-batch-correction-harmony-1, message=FALSE, warning=FALSE, fig.width=12}
 # visualize sample
 
 library(cowplot)
@@ -111,22 +111,25 @@ p1 <- dittoDimPlot(spe, var = "sample",
                    reduction.use = "UMAP", size = 0.2, legend.size=2) + 
     scale_color_manual(values = metadata(spe)$color_vectors$sample) +
     ggtitle("Sample ID on UMAP before correction") + 
-    theme(legend.text=element_text(size=2))
+    theme(legend.text=element_text(size=4))
 p2 <- dittoDimPlot(spe, var = "sample", 
                    reduction.use = "UMAP_harmony", size = 0.2, legend.size=2) + 
     scale_color_manual(values = metadata(spe)$color_vectors$sample) +
     ggtitle("Sample ID on UMAP after correction") + 
-    theme(legend.text=element_text(size=2))
+    theme(legend.text=element_text(size=4))
 
 plot_grid(p1)
 ```
-```{r}
+```{r, fig.width=12}
 plot_grid(p2)
 ```
 
 And we visualize selected marker expression as defined above.
 
 ```{r visualizing-batch-correction-harmony-2, warning=FALSE, message=FALSE, fig.width=7, fig.height=25}
+
+# Before correction
+
 # Before correction
 plot_list <- multi_dittoDimPlot(spe, var = rownames(spe)[rowData(spe)$use_channel], reduction.use = "UMAP", 
                    assay = "exprs", size = 0.2, list.out = TRUE) 
@@ -137,7 +140,7 @@ plot_grid(plotlist = plot_list, nrow=13, ncol=3)
 plot_list <- multi_dittoDimPlot(spe, var = rownames(spe)[rowData(spe)$use_channel], reduction.use = "UMAP_harmony", 
                    assay = "exprs", size = 0.2, ncol=3, nrow=13, list.out = TRUE) 
 plot_list <- lapply(plot_list, function(x) x + scale_color_viridis())
-plot_grid(plotlist = plot_list, nrow=13, ncol=3) 
+plot_grid(plotlist = plot_list, nrow=13, ncol=3)
 ```
 
 We observe a more aggressive merging of cells from different samples compared

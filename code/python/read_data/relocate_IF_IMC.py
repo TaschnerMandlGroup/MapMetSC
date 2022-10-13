@@ -25,7 +25,7 @@ def relocate_IF_IMC(path: str):
     RoI_names = ['ROI_0' + '0' + i.split('I')[-1] if int(i.split('I')[-1])<10 else 'ROI_0' + i.split('I')[-1] for i in RoIs]
 
     #Create dataframe for IMC-readout
-    data = {'Name': RoI_names, 'W': [700, 700, 700, 700], 'H': [700, 700, 700, 700]}  
+    data = {'Name': RoI_names, 'W': [700 for i in RoI_names], 'H': [700 for i in RoI_names]}  
     RoI_df = pd.DataFrame(data)  
 
     for i, j in enumerate(RoI_df.Name):

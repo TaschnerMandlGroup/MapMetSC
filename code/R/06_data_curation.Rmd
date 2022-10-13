@@ -1,0 +1,283 @@
+---
+title: "Data curation"
+output: html_document
+date: '2022-08-15'
+---
+
+```{r setup, include=FALSE, cache=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "120%")
+```
+
+# Curate the data
+
+Here, we will further curate the data by excluding clusters of sticky cells. Therefore we will first show the mean value per cluster.
+
+## Load data
+
+We will first read in the previously generated `SpatialExperiment` object and save 0-1 scaled expressions in the `scaled_exprs` slot.
+
+```{r read-data-pheno, message=FALSE}
+library(SpatialExperiment)
+library(ComplexHeatmap)
+library(RColorBrewer)
+library(dittoSeq)
+library(bruceR)
+library(circlize)
+library(viridis)
+library(scuttle)
+
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20220723_Steinbock_Mesmer_IFbased"
+spe <- readRDS(file.path(path,"data/spe_all.rds"))
+
+# Sample cells
+set.seed(220619)
+cur_cells <- sample(seq_len(ncol(spe)), 2000)
+
+#Scale expression between 0 and 1 for later visualization
+assay(spe, "scaled_exprs") <- t(apply(assay(spe, "exprs"), 1, RESCALE, to=0:1))
+```
+
+First, we will show the mean value per cluster on the mean of the scaled, uncorrected data together with the number of cells per cluster in annotation barplots. 
+Let's start with the phenograph clusters.
+
+```{r rphenograph-dimplot, message=FALSE}
+dittoDimPlot(spe, var = "pg_clusters", 
+             reduction.use = "UMAP", size = 0.2,
+             do.label = TRUE) +
+    ggtitle("Phenograph clusters expression on UMAP, non-integrated")
+```
+
+```{r phenograph-heatmap-2-allcells-mean-of-scaled-uncorrected, message=FALSE, fig.height=7}
+
+sce <- as(spe, "SingleCellExperiment")
+
+cluster_mean <- aggregateAcrossCells(sce,
+                                    ids = sce$pg_clusters,
+                                    statistics="mean",
+                                    use.assay.type = "scaled_exprs")
+
+col_pg = setNames(dittoColors(1)[1:length(unique(sce$pg_clusters))], 
+                sort(unique(sce$pg_clusters)))
+
+column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$pg_clusters, 
+                                 ncells=anno_barplot(colData(cluster_mean)$ncells, height = unit(3, "cm")),
+                                 col=list(clusters=col_pg))
+            
+
+#scaled
+dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
+            assay = "scaled_exprs", scale = "none",
+            column_title = "Phenograph clusters on non-integrated cells (mean of scaled exprs)",
+            heatmap.colors = viridis(100),
+            cluster_cols=TRUE,
+            show_colnames= TRUE,
+            show_column_dend = FALSE,
+            complex=TRUE,
+            top_annotation=column_annot)
+
+```
+
+We observe that phenograph cluster 26 of the non-integreated data, represents the sticky cells. Let's check if we also see this cluster in the integrated cells.
+
+```{r rphenograph-dimplot-integrated, message=FALSE}
+dittoDimPlot(spe, var = "pg_clusters_corrected", 
+             reduction.use = "UMAP_harmony", size = 0.2,
+             do.label = TRUE) +
+    ggtitle("Phenograph clusters expression on UMAP, integrated")
+```
+
+```{r phenograph-heatmap-2-allcells-mean-of-scaled-corrected, message=FALSE, fig.height=7}
+
+sce <- as(spe, "SingleCellExperiment")
+
+cluster_mean <- aggregateAcrossCells(sce,
+                                    ids = sce$pg_clusters_corrected,
+                                    statistics="mean",
+                                    use.assay.type = "scaled_exprs")
+
+col_pg = setNames(dittoColors(1)[1:length(unique(sce$pg_clusters_corrected))], 
+                sort(unique(sce$pg_clusters_corrected)))
+
+column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$pg_clusters_corrected, 
+                                 ncells=anno_barplot(colData(cluster_mean)$ncells, height = unit(3, "cm")),
+                                 col=list(clusters=col_pg))
+            
+
+#scaled
+dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
+            assay = "scaled_exprs", scale = "none",
+            column_title = "Phenograph clusters on integrated cells (mean of scaled exprs)",
+            heatmap.colors = viridis(100),
+            cluster_cols=TRUE,
+            show_colnames= TRUE,
+            show_column_dend = FALSE,
+            complex=TRUE,
+            top_annotation=column_annot)
+
+```
+
+We also find the cluster of sticky cells here, which is cluster 28 of the corrected data. 
+
+We will now compare the phenograph clusters on corrected and uncorrected data to see how well cluster 26 of uncorrected cells captures cluster 28 of corrected cells.
+
+```{r compare-PG-non-vs-integrated, message=FALSE, fig.height=12}
+library(patchwork)
+library(pheatmap)
+library(gridExtra)
+
+tab1 <- table(paste("Rphenograph_non-integrated", spe$pg_clusters), 
+              paste("Rphenograph_integrated", spe$pg_clusters_corrected))
+
+pheatmap(log10(tab1 + 10), color = viridis(100))
+
+```
+We see that the non-integrated PG cluster 26 almost perfectly captures the integrated PG cluster 28.
+
+To make sure that batch correction is not affected by those staining artifacts, as they introduce artificial variance in the respective markers, we will exclude cluster 26 in the non-integrated cells and re-perform the batch correction and phenograph clustering to see how detected cell types change. To do so, we will save the reduced SPE as `spe_curated_pg` and go back to quality_control.RMD.
+
+```{r save-pg-curated-data, message=FALSE, fig.height=7}
+
+spe_curated_pg <- (spe[,!(spe$pg_clusters%in%26)])
+
+saveRDS(spe_curated_pg, file.path(path,"data/spe_curated_pg.rds"))
+
+```
+
+Now we will do the same based on the SOM clusters.
+
+```{r flowSOM-dimplot, message=FALSE}
+dittoDimPlot(spe, var = "som_clusters", 
+             reduction.use = "UMAP", size = 0.2,
+             do.label = TRUE) +
+    ggtitle("FlowSOM clusters expression on UMAP, non-integrated")
+```
+
+```{r flowSOM-heatmap-2-allcells-mean-of-scaled-uncorrected, message=FALSE, fig.height=7}
+
+sce <- as(spe, "SingleCellExperiment")
+
+cluster_mean <- aggregateAcrossCells(sce,
+                                    ids = sce$som_clusters,
+                                    statistics="mean",
+                                    use.assay.type = "scaled_exprs")
+
+col_som = setNames(dittoColors(1)[1:length(unique(sce$som_clusters))], 
+                sort(unique(sce$som_clusters)))
+
+column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$som_clusters, 
+                                 ncells=anno_barplot(colData(cluster_mean)$ncells, height = unit(3, "cm")),
+                                 col=list(clusters=col_som))
+            
+
+#scaled
+dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
+            assay = "scaled_exprs", scale = "none",
+            column_title = "FlowSOM clusters on non-integrated cells (mean of scaled exprs)",
+            heatmap.colors = viridis(100),
+            cluster_cols=TRUE,
+            show_colnames= TRUE,
+            show_column_dend = FALSE,
+            complex=TRUE,
+            top_annotation=column_annot)
+
+```
+
+We observe that flowSOM cluster 6 of the non-integreated data, represents the sticky cells. Let's check if we also see this cluster in the integrated cells.
+
+```{r flowSOM-dimplot-integrated, message=FALSE}
+dittoDimPlot(spe, var = "som_clusters_corrected", 
+             reduction.use = "UMAP_harmony", size = 0.2,
+             do.label = TRUE) +
+    ggtitle("FlowSOM clusters expression on UMAP, integrated")
+```
+
+```{r flowSOM-heatmap-2-allcells-mean-of-scaled-corrected, message=FALSE, fig.height=7}
+
+sce <- as(spe, "SingleCellExperiment")
+
+cluster_mean <- aggregateAcrossCells(sce,
+                                    ids = sce$som_clusters_corrected,
+                                    statistics="mean",
+                                    use.assay.type = "scaled_exprs")
+
+col_som = setNames(dittoColors(1)[1:length(unique(sce$som_clusters_corrected))], 
+                sort(unique(sce$som_clusters_corrected)))
+
+column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$som_clusters_corrected, 
+                                 ncells=anno_barplot(colData(cluster_mean)$ncells, height = unit(3, "cm")),
+                                 col=list(clusters=col_som))
+            
+
+#scaled
+dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
+            assay = "scaled_exprs", scale = "none",
+            column_title = "FlowSOM clusters on integrated cells (mean of scaled exprs)",
+            heatmap.colors = viridis(100),
+            cluster_cols=TRUE,
+            show_colnames= TRUE,
+            show_column_dend = FALSE,
+            complex=TRUE,
+            top_annotation=column_annot)
+
+```
+
+We also find the clusters of sticky cells here, which are present in cluster 9 and 14 of the integrated data. 
+
+We will now compare the flowSOM clusters on corrected and uncorrected data to see how well cluster 6 of uncorrected cells captures cluster 9 and 14 of corrected cells.
+
+```{r compare-SOM-non-vs-integrated, message=FALSE}
+
+tab1 <- table(paste("FlowSOM_non-integrated", spe$som_clusters), 
+              paste("FlowSOM_integrated", spe$som_clusters_corrected))
+
+pheatmap(log10(tab1 + 10), color = viridis(100))
+
+```
+We see that cluster 6 of non-integrated cells almost perfectly captures cluster 9 and 14 of integrated cells. 
+
+To decide whether we want to use Phenograph or FlowSOM based exclusion of sticky cells we can compare the two clustering methods.
+
+First on non-integrated cells:
+```{r compare-PG-SOM-non-integrated, message=FALSE, fig.height=7}
+
+tab1 <- table(paste("Phenograph_non-integrated", spe$pg_clusters), 
+              paste("FlowSOM_non_integrated", spe$som_clusters))
+
+pheatmap(log10(tab1 + 10), color = viridis(100))
+
+```
+We see that, in the non-integrated data, PG cluster 26 perfectly captures FlowSOM cluster 6, but also entails some cells from FlowSOM cluster 1.
+
+Now we will look at the same in the integrated data:
+
+```{r compare-PG-SOM-integrated, message=FALSE, fig.height=7}
+
+tab1 <- table(paste("Phenograph_integrated", spe$pg_clusters_corrected), 
+              paste("FlowSOM_integrated", spe$som_clusters_corrected))
+
+pheatmap(log10(tab1 + 10), color = viridis(100))
+
+```
+
+We see that, in the non-integrated data, PG cluster 28 perfectly captures FlowSOM cluster 9 and 14, but also entails some cells from FlowSOM cluster 8.
+
+To make sure that we exclude all sticky cells we will continue with data curated based on Phenograph. However, we will also save the dataset curated based on SOM excluding the non-integrated cluster 6 as `spe_curated_som`.
+
+```{r save-som-curated-data, message=FALSE, fig.height=7}
+
+spe_curated_som <- (spe[,!(spe$som_clusters%in%6)])
+
+saveRDS(spe_curated_som, file.path(path,"data/spe_curated_som.rds"))
+
+```
+
+
+## Session Info
+
+<details>
+   <summary>SessionInfo</summary>
+   
+```{r, echo = FALSE}
+sessionInfo()
+```
+</details>

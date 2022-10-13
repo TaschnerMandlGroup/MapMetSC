@@ -1,5 +1,5 @@
 ---
-title: "Clustering"
+title: "Clustering on curated datset(without sticky cells)"
 output: html_document
 date: '2022-08-14'
 ---
@@ -58,7 +58,7 @@ library(SpatialExperiment)
 library(bruceR)
 
 path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20220723_Steinbock_Mesmer_IFbased"
-spe <- readRDS(file.path(path,"data/spe.rds"))
+spe <- readRDS(file.path(path,"data/spe_curated_pg.rds"))
 
 # Sample cells
 set.seed(220619)
@@ -123,7 +123,6 @@ n_threads <- detectCores()
 
 mat <- reducedDim(spe, "harmony")
 
-#out <- Rphenograph(mat, k = 45)
 out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
 
 clusters <- factor(out$communities)
@@ -257,33 +256,72 @@ cluster_mean <- aggregateAcrossCells(sce,
 assay(cluster_mean, "exprs") <- asinh(counts(cluster_mean))
 assay(cluster_mean, "scaled_exprs") <- t(apply(assay(cluster_mean, "exprs"), 1, RESCALE, to=0:1))
 
+col_pg = setNames(dittoColors(1)[1:length(unique(sce$pg_clusters_corrected))], 
+                sort(unique(sce$pg_clusters_corrected)))
+
+column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$pg_clusters_corrected, 
+                                 ncells=anno_barplot(colData(cluster_mean)$ncells, height = unit(3, "cm")),
+                                 col=list(clusters=col_pg))
+
 #not scaled
 cluster_mean%>%dittoHeatmap(genes = rownames(sce)[rowData(sce)$use_channel],
             assay = "exprs", scale = "none",
             heatmap.colors = viridis(100),
+            column_title = "Phenograph clusters on integrated cells (non-scaled)",
             cluster_cols=TRUE,
-            annotation_legend = FALSE,
-            fontsize=5,
             show_colnames= TRUE,
-            annot.by = "pg_clusters_corrected",
+            top_annotation=column_annot,
+            complex=TRUE,
             annot.colors = dittoColors(1)[1:length(unique(sce$pg_clusters_corrected))])
 
 #scaled
 cluster_mean%>%dittoHeatmap(genes = rownames(sce)[rowData(sce)$use_channel],
             assay = "scaled_exprs", 
-            annot.by = "pg_clusters_corrected",
+            column_title = "Phenograph clusters on integrated cells (scaled means)",
             cluster_cols=TRUE,
             scale="none",
-            annotation_legend = FALSE,
-            fontsize=5,
             heatmap.colors = viridis(100),
             show_colnames = TRUE,
+            top_annotation=column_annot,
+            complex=TRUE,
             annot.colors = dittoColors(1)[1:length(unique(sce$pg_clusters_corrected))])
 
 rm(sce)
 rm(cluster_mean)
 
 ```
+
+Now we will look at the mean of the scaled expressions.
+
+```{r phenograph-heatmap-2-allcells-mean-of-scaled, message=FALSE, fig.height=7}
+library(scuttle)
+
+sce <- as(spe, "SingleCellExperiment")
+
+cluster_mean <- aggregateAcrossCells(sce,
+                                    ids = sce$pg_clusters_corrected,
+                                    statistics="mean",
+                                    use.assay.type = "scaled_exprs")
+
+
+#scaled
+cluster_mean%>%dittoHeatmap(genes = rownames(sce)[rowData(sce)$use_channel],
+            assay = "scaled_exprs", 
+            column_title = "Phenograph clusters on integrated cells (mean of scaled exprs)",
+            cluster_cols=TRUE,
+            scale="none",
+            heatmap.colors = viridis(100),
+            show_colnames = TRUE,
+            top_annotation=column_annot,
+            complex=TRUE,
+            annot.colors = dittoColors(1)[1:length(unique(sce$pg_clusters_corrected))])
+
+rm(sce)
+rm(cluster_mean)
+
+```
+
+We can see that there are some clusters with almost no signal. Those could be cells that were detected based on DAPI, but actually swam off after IF image acquisition. 
 
 Clustering using the integrated embedding leads to clusters that contain cells
 of different patients. Cluster annotation can now be performed by manually
@@ -376,7 +414,7 @@ ccp <- ConsensusClusterPlus(t(som.out$objects$som$codes[[1]]),
                             plot = NULL)
 ```
 
-```{r flowSOM-2-visualize-clusters, fig.height=8}
+```{r flowSOM-2-visualize-clusters}
 # Visualize delta area plot
 CATALYST:::.plot_delta_area(ccp)
 
@@ -390,7 +428,7 @@ dittoDimPlot(spe, var = "som_clusters_corrected",
     ggtitle("SOM clusters expression on UMAP, integrated cells")
 ```
 
-```{r flowSOM-2-heatmap, fig.height=8}
+```{r flowSOM-2-heatmap}
 dittoHeatmap(spe[,cur_cells], 
              genes = rownames(spe)[rowData(spe)$use_channel],
              assay = "exprs", scale = "none",
@@ -457,6 +495,35 @@ rm(cluster_mean)
 
 ```
 
+Now we will look at the mean of the scaled expressions.
+
+```{r flowSOM-heatmap-2-allcells-mean-of-scaled, message=FALSE, fig.height=7}
+library(scuttle)
+
+sce <- as(spe, "SingleCellExperiment")
+
+cluster_mean <- aggregateAcrossCells(sce,
+                                    ids = sce$som_clusters_corrected,
+                                    statistics="mean",
+                                    use.assay.type = "scaled_exprs")
+
+#scaled
+cluster_mean%>%dittoHeatmap(genes = rownames(sce)[rowData(sce)$use_channel],
+            assay = "scaled_exprs", 
+            annot.by = "som_clusters_corrected",
+            cluster_cols=TRUE,
+            scale="none",
+            annotation_legend = FALSE,
+            fontsize=5,
+            heatmap.colors = viridis(100),
+            show_colnames = TRUE,
+            annot.colors = dittoColors(1)[1:length(unique(sce$som_clusters_corrected))])
+
+rm(sce)
+rm(cluster_mean)
+
+```
+
 The `FlowSOM` clustering approach has been used by [@Hoch2022] to sub-cluster tumor
 cells as measured by IMC.
 
@@ -494,7 +561,7 @@ hand.
 Below, a comparison between the clustering results of the integrated cells 
 is shown.
 
-```{r corrected, message=FALSE}
+```{r corrected, message=FALSE, fig.height=3}
 
 tab1 <- table(paste("Rphenograph", spe$pg_clusters_corrected), 
               paste("SOM", spe$som_clusters_corrected))
@@ -522,7 +589,7 @@ this cluster as B cells. Full cell labeling can be seen in the following section
 Finally, we save the updated `SpatialExperiment` object.
 
 ```{r phenotyping-save-object}
-saveRDS(spe, file.path(path,"data/spe.rds"))
+saveRDS(spe, file.path(path,"data/spe_curated_pg.rds"))
 ```
 
 ## Session Info

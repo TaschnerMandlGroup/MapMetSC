@@ -42,8 +42,8 @@ When a code chunk is time-consuming to run, you may consider caching it via the 
 However cache=TRUE did not work and was computing batch correction anyway. Thus the chunk was commented.
 
 ```{r read-data-batch-correction}
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20220723_Steinbock_Mesmer_IFbased"
-spe <- readRDS(file.path(path,"data/spe.rds")) # change this if you want to use the full dataset (with sticky cells)
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221010_Steinbock_Mesmer_IFbased/BM"
+spe <- readRDS(file.path(path,"data/BM_spe.rds")) # change this if you want to use the full dataset (with sticky cells)
 ```
 
 
@@ -74,6 +74,7 @@ mat <- t(assay(spe, "exprs")[rowData(spe)$use_channel,])
 harmony_emb <- HarmonyMatrix(mat, spe$sample, do_pca = TRUE)
 
 reducedDim(spe, "harmony") <- harmony_emb
+
 ```
 
 ```{r, echo=FALSE}
@@ -101,20 +102,24 @@ library(dittoSeq)
 library(viridis)
 library(RColorBrewer)
 
-n <- length(metadata(spe)$color_vectors$sample)
-qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
-col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+#n <- length(metadata(spe)$color_vectors$sample)
+#qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+#col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
 
-metadata(spe)$color_vectors$sample <- sample(col_vector, n)
+# col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+# n <- length(unique(spe_all$sample))
+# col_samples <- sample(col_vector_433, n)
+
+#metadata(spe)$color_vectors$sample <- sample(col_vector_433, n)
 
 p1 <- dittoDimPlot(spe, var = "sample", 
-                   reduction.use = "UMAP", size = 0.2, legend.size=2) + 
-    scale_color_manual(values = metadata(spe)$color_vectors$sample) +
+                   reduction.use = "UMAP", size = 0.2, legend.size=2, legend.show=FALSE) + 
+    scale_color_manual(values = col_samples) +
     ggtitle("Sample ID on UMAP before correction") + 
     theme(legend.text=element_text(size=4))
 p2 <- dittoDimPlot(spe, var = "sample", 
-                   reduction.use = "UMAP_harmony", size = 0.2, legend.size=2) + 
-    scale_color_manual(values = metadata(spe)$color_vectors$sample) +
+                   reduction.use = "UMAP_harmony", size = 0.2, legend.size=2, legend.show=FALSE) + 
+    scale_color_manual(values = col_samples) +
     ggtitle("Sample ID on UMAP after correction") + 
     theme(legend.text=element_text(size=4))
 
@@ -174,7 +179,7 @@ cells in a way that regresses out biological signals.
 The modified `SpatialExperiment` object is saved for further downstream analysis.
 
 ```{r save-objects-batch-correction}
-saveRDS(spe, file.path(path, "data/spe.rds"))
+saveRDS(spe, file.path(path, "data/BM_spe_reduced.rds"))
 ```
 
 ## Session Info

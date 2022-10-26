@@ -58,15 +58,12 @@ The `read_steinbock` function provided by `imcRtools` can now be used to read in
 `?read_steinbock`.
 
 ```{r read-steinbock}
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20220723_Steinbock_Mesmer_IFbased"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221010_Steinbock_Mesmer_IFbased/BM/pos"
 
-spe <- read_steinbock(path=path, 
-    extract_cellid_from = "Object",
-    extract_coords_from = c("centroid-1", "centroid-0"),
-    image_file = NULL,
-    panel_file = file.path(path, 'NB_Panel.csv'),
-    extract_names_from = "name",
-    BPPARAM = MulticoreParam(workers=12))
+spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'))
+
+#spe <- cbind(BM_pos_spe, BM_neg_spe)
+#spe <- readRDS(file.path(path,"data/BM_spe.rds"))
 spe
 ```
 
@@ -76,7 +73,7 @@ stored in the `counts` slot. Columns represent cells and rows represent channels
 
 ```{r counts}
 rowData(spe)
-counts(spe)[1:47,1:2]
+counts(spe)[1:47,1:5]
 ```
 
 Metadata associated to individual cells are stored in the `colData` slot. After
@@ -133,18 +130,21 @@ For the current data, we need to link metadata from an external excel file.
 More information on how to extract matching patterns from a string can be found [here](https://stringr.tidyverse.org/reference/str_extract.html).
 
 ```{r add-indication}
+base_path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221010_Steinbock_Mesmer_IFbased"
 library(stringr)
 
 spe$sample <- gsub(spe$sample_id, pattern="(^.*_BM)_.*", replacement="\\1")
 spe$fm_id <- str_match(spe$sample, "_\\s*(.*?)\\s*_")[,2] 
 
-meta <- read.csv(file.path(path, 'metadata.csv'))
+meta_all <- read.csv(file.path(base_path, 'metadata_complete.csv'))
+meta <- meta[meta$Tissue == 'BM',]
 spe$puncture_side <- meta$Puncture_side[match(spe$fm_id, meta$Sample)]
 spe$staining_date <- meta$Staining_date[match(spe$fm_id, meta$Sample)]
 spe$stainer <- meta$Stainer[match(spe$fm_id, meta$Sample)]
 spe$imc_date <- meta$IMC_date[match(spe$fm_id, meta$Sample)]
 spe$imc_score <- meta$IMC_score[match(spe$fm_id, meta$Sample)]
 spe$study_id <- meta$Study_ID[match(spe$fm_id, meta$Sample)]
+spe$exclude <- meta$exclude[match(spe$fm_id, meta$Sample)]
 spe$infiltration_right <- meta$Infiltration_right[match(spe$fm_id, meta$Sample)]
 spe$infiltration_left <- meta$Infiltration_left[match(spe$fm_id, meta$Sample)]
 spe$DE_date <- meta$DE_date[match(spe$fm_id, meta$Sample)]
@@ -171,6 +171,7 @@ spe$tod_dur <- meta$tod_dur[match(spe$fm_id, meta$Sample)]
 
 spe$ROI <- sub(".*ROI_", "", spe$sample_id)
 spe$year <- gsub(spe$sample_id, pattern="^.*_(.*)-.*", replacement="\\1")
+
 ```
 
 
@@ -203,7 +204,6 @@ Low (negative) values are being are reduced and stretched (not as much as high d
 **Check for technical confounders (batch effects)**
 
 ```{r plot by sample}
-
 selected_samples <- unique(spe$sample)[10:20]
 marker <- 'CD14'
 
@@ -268,6 +268,7 @@ dittoRidgePlot(spe[,spe$study_id%in%selected_patients], var = marker, group.by =
 
 ```
 ```{r plot by stainer}
+
 marker <- 'HLA-DR'
 dittoRidgePlot(spe, var = marker, group.by = "stainer", assay = "exprs") +
     ggtitle(paste(marker,  "- after transformation"))
@@ -276,6 +277,7 @@ dittoRidgePlot(spe, var = marker, group.by = "stainer", assay = "log") +
     ggtitle(paste(marker,  "- after transformation"))
 ```
 ```{r plot by IMC date}
+
 marker <- 'HLA-DR'
 dittoRidgePlot(spe, var = marker, group.by = "imc_date", assay = "exprs") +
     ggtitle(paste(marker,  "- after transformation"))
@@ -295,6 +297,7 @@ biological targets.
 
 ```{r select-features}
 rowData(spe)$use_channel <- !grepl("Histone|H4|Iridium|DAPI|136Ba|131Xe|134Xe|GD2-IF|CD56-IF", rownames(spe))
+
 ```
 
 **Define color schemes**
@@ -310,8 +313,9 @@ color_vectors <- list()
 sample <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$sample))], 
                 unique(spe$sample))
 
-ROI <- setNames(brewer.pal(length(unique(spe$ROI)), name = "BrBG"), 
+ROI <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$ROI))], 
                 unique(spe$ROI))
+
 
 staining_date <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$staining_date))], 
                 unique(spe$staining_batch))
@@ -382,9 +386,12 @@ Finally, the generated data objects can be saved for further downstream
 processing and analysis.
 
 ```{r save-objects-read-data}
-saveRDS(spe, file.path(path, "data/spe.rds"))
-#saveRDS(images, file.path(path,"data/images.rds"))
-#saveRDS(masks, file.path("data/masks.rds"))
+
+# spe <- spe[,!spe$exclude%in%c("maybe")]
+# 
+# saveRDS(spe, file.path(path, "data/BM_spe_reduced.rds"))
+
+saveRDS(spe, file.path(BM_path, "data/BM_spe.rds"))
 ```
 
 ## Session Info

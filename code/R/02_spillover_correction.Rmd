@@ -87,7 +87,7 @@ cofactor of 5; a common transformation for CyTOF data [@Bendall2011].
 
 ```{r read-txts, message=FALSE}
 library(imcRtools)
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20220723_Steinbock_Mesmer_IFbased"
+
 path_to_spillover_data <- "/mnt/Multimodal_Imaging_Daria/20220518_DL_SpilloverCorrection/Extra"
 
 # Create SingleCellExperiment from .txt files
@@ -258,8 +258,10 @@ asinh-transformed using a cofactor of 1.
 Non-metal columns present in the SPE (single-cell data), but not in the SCE (spillover matrix) will be added such that they do neither receive nor cause spill, as explained [here](https://rdrr.io/bioc/CATALYST/man/compCytof.html).
 
 ```{r single-cell-compensation}
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221010_Steinbock_Mesmer_IFbased/BM"
 
-spe <- readRDS(file.path(path,"data/spe.rds"))
+spe <- readRDS(file.path(path,"data/BM_spe.rds"))
+
 rowData(spe)$channel_name <- paste0(rowData(spe)$channel, "Di")
 
 spe <- compCytof(spe, sm, 
@@ -276,6 +278,7 @@ compensation.
 ```{r visualize-single-cell-spillover, message=FALSE}
 library(dittoSeq)
 library(patchwork)
+
 before <- dittoScatterPlot(spe, x.var = "HLA-DR", y.var = "PRPH",
                            assay.x = "exprs", assay.y = "exprs") +
     ggtitle("Before compensation")
@@ -302,7 +305,7 @@ perform this step, as we want to have the option to choose between non- and comp
 For further downstream analysis, the compensated `SpatialExperiment` are saved:
 
 ```{r save-objects-spill}
-saveRDS(spe, file.path(path,"data/spe.rds"))
+#saveRDS(spe, file.path(path,"data/spe.rds"))
 ```
 
 

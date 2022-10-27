@@ -25,7 +25,7 @@ We will first read in the data processed in previous sections. As compensation o
 path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221010_Steinbock_Mesmer_IFbased/BM"
 #images <- readRDS(file.path(path,"data/images.rds")) 
 #masks <- readRDS(file.path(path,"data/masks.rds"))
-spe <- readRDS(file.path(path,"data/BM_spe.rds"))
+spe_all <- readRDS(file.path(path,"data/BM_spe.rds"))
 
 #channelNames(images) <- rownames(spe)
 ```
@@ -386,11 +386,13 @@ potential staining differences can be crucial to assess data quality.
 We will use ridgeline visualizations to check differences in staining patterns:
 
 ```{r ridges, message=FALSE, fig.width=7, fig.height=35}
+pdf(file.path(path,"data/multi-ridgeplot_reduced.pdf"), height=35, width=7)
 multi_dittoPlot(spe, vars = rownames(spe)[rowData(spe)$use_channel],
                group.by = "year", plots = c("ridgeplot"), 
                assay = "exprs",
                color.panel = metadata(spe)$color_vectors$year
                )
+dev.off()
 ```
 
 We observe variations in the distributions of marker expression across years.
@@ -449,11 +451,12 @@ p2 <- dittoDimPlot(spe, var = "year", reduction.use = "TSNE", size = 0.2, legend
 p1
 ```
 
-```{r visualizing-umap-by-samples, message=FALSE}
+```{r visualizing-umap-by-samples, message=FALSE, fig.height=13}
 
-p3 <- dittoDimPlot(spe, var = "staining_date", reduction.use = "UMAP", size = 0.2, legend.show = FALSE, opacity=0.3) +
+p3 <- dittoDimPlot(spe, var = "stage", reduction.use = "UMAP", size = 0.2, legend.show = T, opacity=1) +
     #scale_color_manual(values = metadata(spe)$color_vectors$sample) +
-    ggtitle("IF-IMC Staining batch")
+    #scale_color_manual(values = col_vector_433) +
+    ggtitle("stage")
 p4 <- dittoDimPlot(spe, var = "sample", reduction.use = "TSNE", size = 0.2, legend.size=2) + 
     scale_color_manual(values = metadata(spe)$color_vectors$sample) +
     ggtitle("sample on TSNE") + 
@@ -524,7 +527,7 @@ spe <- runUMAP(spe, subset_row = rowData(spe)$use_channel, exprs_values = "log",
 ```
 
 ```{r visualizing-umap-log-raw-by-markers, message=FALSE, fig.width=7, fig.height=25}
-
+pdf(file.path(path,"data/multi-dimplot_reduced.pdf"), height=25, width=7)
 multi_dittoDimPlot(
   spe,
   vars = rownames(spe)[rowData(spe)$use_channel],
@@ -538,6 +541,8 @@ multi_dittoDimPlot(
   max.color="red"
 )  + 
     theme(legend.text=element_text(size=1))
+
+dev.off()
   
 ```
 

@@ -158,7 +158,7 @@ Heatmap(meta_timepoint,
         split=type,
         cluster_row_slices=F,
         row_title=NULL,
-        heatmap_legend_param = list(title="available"),#,title_position = "leftcenter-rot"
+        heatmap_legend_param = list(title="available"),
         top_annotation=columnAnnotation(total = anno_barplot(colSums(meta_timepoint), 
                                                              add_numbers=TRUE,
                                                              axis=FALSE,

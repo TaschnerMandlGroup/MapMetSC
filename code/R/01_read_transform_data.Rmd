@@ -58,11 +58,13 @@ The `read_steinbock` function provided by `imcRtools` can now be used to read in
 `?read_steinbock`.
 
 ```{r read-steinbock}
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221010_Steinbock_Mesmer_IFbased/BM/pos"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased"
 
-spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'))
+spe_pt <- read_steinbock(path=file.path(path, 'PT'), image_file=NULL, panel_file = file.path(path, 'PT', 'NB_Panel.csv')) 
+spe_bm_pos <- read_steinbock(path=file.path(path, 'BM', 'pos'), image_file=NULL, panel_file = file.path(path, 'BM', 'pos', 'NB_Panel.csv')) 
+spe_bm_neg <- read_steinbock(path=file.path(path, 'BM', 'neg'), image_file=NULL, panel_file = file.path(path, 'BM', 'neg', 'NB_Panel.csv'))
 
-#spe <- cbind(BM_pos_spe, BM_neg_spe)
+spe <- cbind(spe_pt, spe_bm_pos, spe_bm_neg)
 #spe <- readRDS(file.path(path,"data/BM_spe.rds"))
 spe
 ```
@@ -130,48 +132,52 @@ For the current data, we need to link metadata from an external excel file.
 More information on how to extract matching patterns from a string can be found [here](https://stringr.tidyverse.org/reference/str_extract.html).
 
 ```{r add-indication}
-base_path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221010_Steinbock_Mesmer_IFbased"
 library(stringr)
 
-spe$sample <- gsub(spe$sample_id, pattern="(^.*_BM)_.*", replacement="\\1")
-spe$fm_id <- str_match(spe$sample, "_\\s*(.*?)\\s*_")[,2] 
+base_path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased"
 
-meta_all <- read.csv(file.path(base_path, 'metadata_complete.csv'))
-meta <- meta[meta$Tissue == 'BM',]
-spe$puncture_side <- meta$Puncture_side[match(spe$fm_id, meta$Sample)]
-spe$staining_date <- meta$Staining_date[match(spe$fm_id, meta$Sample)]
-spe$stainer <- meta$Stainer[match(spe$fm_id, meta$Sample)]
-spe$imc_date <- meta$IMC_date[match(spe$fm_id, meta$Sample)]
-spe$imc_score <- meta$IMC_score[match(spe$fm_id, meta$Sample)]
-spe$study_id <- meta$Study_ID[match(spe$fm_id, meta$Sample)]
-spe$exclude <- meta$exclude[match(spe$fm_id, meta$Sample)]
-spe$infiltration_right <- meta$Infiltration_right[match(spe$fm_id, meta$Sample)]
-spe$infiltration_left <- meta$Infiltration_left[match(spe$fm_id, meta$Sample)]
-spe$DE_date <- meta$DE_date[match(spe$fm_id, meta$Sample)]
+spe$sample <- gsub(spe$sample_id, pattern="([UM]).*", replacement="\\1")
+spe$fm_id <- str_match(spe$sample, "_(.*)_")[,2]  
+spe$tissue <- str_match(spe$sample, "^.*_.*_(.*)")[,2] 
+spe$tissue[spe$tissue=="TU"] = "PT"
+
+meta <- read.csv(file.path(base_path, '20221031_metadata_complete.csv'))
+#meta <- meta[meta$Tissue == 'BM',]
+
+spe$puncture_side <- meta$Puncture_side[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$infiltration_right <- meta$Infiltration_right[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$infiltration_left <- meta$Infiltration_left[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$exclude <- meta$exclude[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$imc_score <- meta$IMC_score[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$staining_date <- meta$Staining_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$stainer <- meta$Stainer[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$imc_date <- meta$IMC_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$DE_date <- meta$DE_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$DE_year <- sub("-.*", "", spe$DE_date)
-spe$timepoint <- meta$Timepoint[match(spe$fm_id, meta$Sample)]
-spe$MYCN_amp <- meta$MYCN_amp[match(spe$fm_id, meta$Sample)]
-spe$ALK_amp <- meta$ALK_amp[match(spe$fm_id, meta$Sample)]
-spe$ALK_mut <- meta$ALK_mut[match(spe$fm_id, meta$Sample)]
-spe$ATRX_del <- meta$ATRX_del[match(spe$fm_id, meta$Sample)]
-spe$TERT_rear <- meta$TERT_rear[match(spe$fm_id, meta$Sample)]
-spe$X1p_loss <- meta$X1p_loss[match(spe$fm_id, meta$Sample)]
-spe$X1q_gain <- meta$X1q_gain[match(spe$fm_id, meta$Sample)]
-spe$X11q_loss <- meta$X11q_loss[match(spe$fm_id, meta$Sample)]
-spe$X17q_gain <- meta$X17q_gain[match(spe$fm_id, meta$Sample)]
-spe$stage <- meta$stage4[match(spe$fm_id, meta$Sample)]
-spe$rez_date <- meta$rez_dat[match(spe$fm_id, meta$Sample)]
-spe$prog_date <- meta$prog_dat[match(spe$fm_id, meta$Sample)]
-spe$event_date <- meta$event_dat[match(spe$fm_id, meta$Sample)]
-spe$tod_date <- meta$tod_dat1[match(spe$fm_id, meta$Sample)]
-spe$efs <- meta$efs[match(spe$fm_id, meta$Sample)]
-spe$tod <- meta$tod[match(spe$fm_id, meta$Sample)]
-spe$efs_dur <- meta$efs_dur[match(spe$fm_id, meta$Sample)]
-spe$tod_dur <- meta$tod_dur[match(spe$fm_id, meta$Sample)]
+spe$control <- meta$control[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$study_id <- meta$Study_ID[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$timepoint <- meta$Timepoint[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$stage <- meta$stage4[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$progression <- meta$efs[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$tod <- meta$tod[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$efs_dur <- meta$efs_dur[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$tod_date <- meta$tod_dat1[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$tod_dur <- meta$tod_dur[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$rez_date <- meta$rez_dat[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$prog_date <- meta$prog_dat[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$event_date <- meta$event_dat[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$MYCN_amp <- meta$MYCN_amp[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$ALK_amp <- meta$ALK_amp[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$ALK_mut <- meta$ALK_mut[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$ATRX_del <- meta$ATRX_del[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$TERT_rear <- meta$TERT_rear[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X1p_loss <- meta$X1p_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X1q_gain <- meta$X1q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X11q_loss <- meta$X11q_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X17q_gain <- meta$X17q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 
-spe$ROI <- sub(".*ROI_", "", spe$sample_id)
+spe$ROI <- str_match(spe$sample_id, "^.*_.*_.*_(.*_.*)_.*_.*$")[,2]
 spe$year <- gsub(spe$sample_id, pattern="^.*_(.*)-.*", replacement="\\1")
-
 ```
 
 
@@ -205,7 +211,7 @@ Low (negative) values are being are reduced and stretched (not as much as high d
 
 ```{r plot by sample}
 selected_samples <- unique(spe$sample)[10:20]
-marker <- 'CD14'
+marker <- 'CD15'
 
 library(dittoSeq)
 dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "counts") +
@@ -285,7 +291,18 @@ dittoRidgePlot(spe, var = marker, group.by = "imc_date", assay = "exprs") +
 dittoRidgePlot(spe, var = marker, group.by = "imc_date", assay = "log") +
     ggtitle(paste(marker,  "- after transformation"))
 ```
+```{r plot by tissue}
 
+selected_patients <- unique(spe$study_id)[10:20]
+marker <- 'CD3'
+
+dittoRidgePlot(spe[,spe$study_id%in%selected_patients], var = marker, group.by = "tissue", assay = "exprs") +
+    ggtitle(paste(marker,  "- after transformation"))
+
+dittoRidgePlot(spe[,spe$study_id%in%selected_patients], var = marker, group.by = "tissue", assay = "log") +
+    ggtitle(paste(marker,  "- after transformation"))
+
+```
 
 **Define interesting channels**
 

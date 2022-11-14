@@ -3,10 +3,21 @@ import cv2
 from skimage.segmentation import find_boundaries
 from scipy import ndimage
 from scipy.ndimage import maximum_filter
-
-
-#debug
 import matplotlib.pyplot as plt
+import xml.etree.ElementTree
+import tifffile
+import io
+
+def read_channel_names(path):
+    tiff = tifffile.TiffFile(path)
+    omexml_string = tiff.pages[0].description
+
+    root = xml.etree.ElementTree.parse(io.StringIO(omexml_string))
+    namespaces = {'ome': 'http://www.openmicroscopy.org/Schemas/OME/2016-06'}
+    channels = root.findall('ome:Image[1]/ome:Pixels/ome:Channel', namespaces)
+    channel_names = [c.attrib['Name'] for c in channels]
+
+    return channel_names
 
 
 def additive_blend(im0, im1):

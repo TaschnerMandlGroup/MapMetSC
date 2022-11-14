@@ -22,10 +22,10 @@ and single-cell levels and the chapter is sectioned as such.
 We will first read in the data processed in previous sections. As compensation on all images required too much memory (>45GB), we are not using the compensated images below. For convenience, we will re-set the `channelNames` to their biological targets.
 
 ```{r read-data, message=FALSE}
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221010_Steinbock_Mesmer_IFbased/BM"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221010_Steinbock_Mesmer_IFbased"
 #images <- readRDS(file.path(path,"data/images.rds")) 
 #masks <- readRDS(file.path(path,"data/masks.rds"))
-spe_all <- readRDS(file.path(path,"data/BM_spe.rds"))
+spe <- readRDS(file.path(path,"data/spe.rds"))
 
 #channelNames(images) <- rownames(spe)
 ```
@@ -84,10 +84,9 @@ purposes and overlay the sample from which the cells were extracted.
 library(RColorBrewer)
 
 n <- length(unique(spe$sample))
-qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
-col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 
-metadata(spe)$color_vectors$sample <- setNames(sample(col_vector, n), 
+metadata(spe)$color_vectors$sample <- setNames(sample(col_vector_433, n), 
                 unique(spe$sample))
 ```
 
@@ -95,14 +94,20 @@ metadata(spe)$color_vectors$sample <- setNames(sample(col_vector, n),
 library(dittoSeq)
 library(viridis)
 
-cur_cells <- sample(seq_len(ncol(spe)), 2000)
+#spe_bm <- spe_all[,spe_all$tissue == 'BM']
+#spe_pt <- spe_all[,spe_all$tissue == 'PT']
+#spe <- spe_pt
 
+cur_cells <- sample(seq_len(ncol(spe)), 20000)
+
+pdf(file.path(path,"data/sc_heatmap_combined.pdf"), height=7, width=12)
 dittoHeatmap(spe[,cur_cells], genes = rownames(spe)[rowData(spe)$use_channel],
              assay = "exprs", cluster_cols = TRUE, scale = "none",
-             heatmap.colors = viridis(100), annot.by = "sample",
+             heatmap.colors = viridis(100), annot.by = "tissue",
              annotation_legend = FALSE
              #annotation_colors = list(sample = metadata(spe)$color_vectors$sample)
              )
+dev.off()
 ```
 
 ```{r segmentation-heatmap-2, message=FALSE, fig.height=7}
@@ -386,11 +391,21 @@ potential staining differences can be crucial to assess data quality.
 We will use ridgeline visualizations to check differences in staining patterns:
 
 ```{r ridges, message=FALSE, fig.width=7, fig.height=35}
-pdf(file.path(path,"data/multi-ridgeplot_reduced.pdf"), height=35, width=7)
+pdf(file.path(path,"data/PT_multi-ridgeplot.pdf"), height=35, width=7)
 multi_dittoPlot(spe, vars = rownames(spe)[rowData(spe)$use_channel],
                group.by = "year", plots = c("ridgeplot"), 
-               assay = "exprs",
-               color.panel = metadata(spe)$color_vectors$year
+               assay = "exprs"#,
+               #color.panel = metadata(spe)$color_vectors$year
+               )
+dev.off()
+```
+
+```{r ridges, message=FALSE, fig.width=7, fig.height=35}
+pdf(file.path(path,"data/multi-ridgeplot_tissue.pdf"), height=35, width=7)
+multi_dittoPlot(spe, vars = rownames(spe)[rowData(spe)$use_channel],
+               group.by = "tissue", plots = c("ridgeplot"), 
+               assay = "exprs"#,
+               #color.panel = metadata(spe)$color_vectors$year
                )
 dev.off()
 ```
@@ -440,10 +455,10 @@ library(patchwork)
 library(viridis)
 
 p1 <- dittoDimPlot(spe, var = "year", reduction.use = "UMAP", size = 0.2, legend.show = FALSE) + 
-    scale_color_manual(values = metadata(spe)$color_vectors$year) +
+    #scale_color_manual(values = metadata(spe)$color_vectors$year) +
     ggtitle("year on UMAP")
 p2 <- dittoDimPlot(spe, var = "year", reduction.use = "TSNE", size = 0.2, legend.size=2) + 
-    scale_color_manual(values = metadata(spe)$color_vectors$year) +
+    #scale_color_manual(values = metadata(spe)$color_vectors$year) +
     ggtitle("year on TSNE") +
     theme(legend.text=element_text(size=5))
 
@@ -451,12 +466,12 @@ p2 <- dittoDimPlot(spe, var = "year", reduction.use = "TSNE", size = 0.2, legend
 p1
 ```
 
-```{r visualizing-umap-by-samples, message=FALSE, fig.height=13}
+```{r visualizing-umap-by-samples, message=FALSE, fig.height=20}
 
-p3 <- dittoDimPlot(spe, var = "stage", reduction.use = "UMAP", size = 0.2, legend.show = T, opacity=1) +
+p3 <- dittoDimPlot(spe, var = "tissue", reduction.use = "UMAP", size = 0.2, legend.show = T, opacity=1) +
     #scale_color_manual(values = metadata(spe)$color_vectors$sample) +
     #scale_color_manual(values = col_vector_433) +
-    ggtitle("stage")
+    ggtitle("tissue")
 p4 <- dittoDimPlot(spe, var = "sample", reduction.use = "TSNE", size = 0.2, legend.size=2) + 
     scale_color_manual(values = metadata(spe)$color_vectors$sample) +
     ggtitle("sample on TSNE") + 
@@ -468,20 +483,20 @@ p3
 
 
 ```{r visualizing-umap-by-markers, message=FALSE, fig.width=7, fig.height=25}
-
-multi_dittoDimPlot(
+library(viridis)
+library(cowplot)
+plot_list <- multi_dittoDimPlot(
   spe,
   vars = rownames(spe)[rowData(spe)$use_channel],
   reduction.use="UMAP",
   assay="exprs",
   legend.size=0.2,
   size=0.2,
-  ncol=3,
-  nrow=13,
-  min.color="gray90",
-  max.color="red"
-)  + 
-    theme(legend.text=element_text(size=1))
+  list.out = TRUE
+)  
+
+plot_list <- lapply(plot_list, function(x) x + scale_color_viridis())
+plot_grid(plotlist = plot_list, nrow=13, ncol=3) 
   
 
 ```
@@ -527,7 +542,7 @@ spe <- runUMAP(spe, subset_row = rowData(spe)$use_channel, exprs_values = "log",
 ```
 
 ```{r visualizing-umap-log-raw-by-markers, message=FALSE, fig.width=7, fig.height=25}
-pdf(file.path(path,"data/multi-dimplot_reduced.pdf"), height=25, width=7)
+
 multi_dittoDimPlot(
   spe,
   vars = rownames(spe)[rowData(spe)$use_channel],
@@ -541,8 +556,6 @@ multi_dittoDimPlot(
   max.color="red"
 )  + 
     theme(legend.text=element_text(size=1))
-
-dev.off()
   
 ```
 
@@ -553,7 +566,7 @@ As there is no improvement, we will stick with the arcsinh transformation.
 The modified `SpatialExperiment` object is saved for further downstream analysis.
 
 ```{r save-objects-quality-control}
-saveRDS(spe, file.path(path,"data/BM_spe_reduced.rds"))
+saveRDS(spe, file.path(path,"data/spe_reduced.rds"))
 ```
 
 ## Session Info

@@ -293,13 +293,12 @@ dittoRidgePlot(spe, var = marker, group.by = "imc_date", assay = "log") +
 ```
 ```{r plot by tissue}
 
-selected_patients <- unique(spe$study_id)[10:20]
-marker <- 'CD3'
+marker <- 'Ki-67'
 
-dittoRidgePlot(spe[,spe$study_id%in%selected_patients], var = marker, group.by = "tissue", assay = "exprs") +
+dittoRidgePlot(spe, var = marker, group.by = "tissue", assay = "exprs") +
     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe[,spe$study_id%in%selected_patients], var = marker, group.by = "tissue", assay = "log") +
+dittoRidgePlot(spe, var = marker, group.by = "tissue", assay = "log") +
     ggtitle(paste(marker,  "- after transformation"))
 
 ```
@@ -325,27 +324,27 @@ colors from the `RColorBrewer` and `dittoSeq` package but any other coloring
 package will suffice.
 
 ```{r define-colors, message=FALSE}
-library(RColorBrewer)
-color_vectors <- list()
-sample <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$sample))], 
-                unique(spe$sample))
-
-ROI <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$ROI))], 
-                unique(spe$ROI))
-
-
-staining_date <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$staining_date))], 
-                unique(spe$staining_batch))
-
-year <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$year))], 
-                unique(spe$year))
-
-color_vectors$sample <- sample
-color_vectors$year <- year
-color_vectors$ROI <- ROI
-color_vectors$staining_date <- staining_date
-
-metadata(spe)$color_vectors <- color_vectors
+# library(RColorBrewer)
+# color_vectors <- list()
+# sample <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$sample))], 
+#                 unique(spe$sample))
+# 
+# ROI <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$ROI))], 
+#                 unique(spe$ROI))
+# 
+# 
+# staining_date <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$staining_date))], 
+#                 unique(spe$staining_batch))
+# 
+# year <- setNames(dittoColors(reps = 1)[seq_along(unique(spe$year))], 
+#                 unique(spe$year))
+# 
+# color_vectors$sample <- sample
+# color_vectors$year <- year
+# color_vectors$ROI <- ROI
+# color_vectors$staining_date <- staining_date
+# 
+# metadata(spe)$color_vectors <- color_vectors
 ```
 
 ## Read in images {#read-images}
@@ -405,10 +404,8 @@ processing and analysis.
 ```{r save-objects-read-data}
 
 # spe <- spe[,!spe$exclude%in%c("maybe")]
-# 
-# saveRDS(spe, file.path(path, "data/BM_spe_reduced.rds"))
 
-saveRDS(spe, file.path(BM_path, "data/BM_spe.rds"))
+saveRDS(spe, file.path(base_path, "data/spe.rds"))
 ```
 
 ## Session Info

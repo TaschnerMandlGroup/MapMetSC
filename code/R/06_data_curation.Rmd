@@ -47,19 +47,19 @@ dittoDimPlot(spe, var = "pg_clusters",
     ggtitle("Phenograph clusters expression on UMAP, non-integrated")
 ```
 
-```{r phenograph-heatmap-2-allcells-mean-of-scaled-uncorrected, message=FALSE, fig.height=7}
+```{r phenograph-heatmap-2-allcells-mean-of-scaled-uncorrected, message=FALSE, fig.width = 20, fig.height=20}
 
 sce <- as(spe, "SingleCellExperiment")
 
 cluster_mean <- aggregateAcrossCells(sce,
-                                    ids = sce$pg_clusters,
+                                    ids = sce$pg_clusters_fastMNN,
                                     statistics="mean",
                                     use.assay.type = "scaled_exprs")
 
-col_pg = setNames(dittoColors(1)[1:length(unique(sce$pg_clusters))], 
-                sort(unique(sce$pg_clusters)))
+col_pg = setNames(rep(dittoColors(1),times=5)[1:length(unique(sce$pg_clusters_fastMNN))], 
+                sort(unique(sce$pg_clusters_fastMNN)))
 
-column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$pg_clusters, 
+column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$pg_clusters_fastMNN, 
                                  ncells=anno_barplot(colData(cluster_mean)$ncells, height = unit(3, "cm")),
                                  col=list(clusters=col_pg))
             
@@ -67,7 +67,7 @@ column_annot = HeatmapAnnotation(clusters=colData(cluster_mean)$pg_clusters,
 #scaled
 dittoHeatmap(cluster_mean, genes = rownames(sce)[rowData(sce)$use_channel],
             assay = "scaled_exprs", scale = "none",
-            column_title = "Phenograph clusters on non-integrated cells (mean of scaled exprs)",
+            column_title = "Phenograph clusters on fastMNN-integrated cells (mean of scaled exprs)",
             heatmap.colors = viridis(100),
             cluster_cols=TRUE,
             show_colnames= TRUE,

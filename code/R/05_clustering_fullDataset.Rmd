@@ -57,8 +57,8 @@ sample 2000 cells to visualize cluster membership.
 library(SpatialExperiment)
 library(bruceR)
 
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20220723_Steinbock_Mesmer_IFbased"
-spe <- readRDS(file.path(path,"data/spe.rds"))
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased/data/PT"
+spe_all <- readRDS(file.path(path,"spe.rds"))
 
 # Sample cells
 set.seed(220619)
@@ -121,32 +121,58 @@ reported to be more accurate than FlowSOM.
 
 n_threads <- detectCores()
 
-mat <- reducedDim(spe, "harmony")
+mat <- reducedDim(spe, "fastMNN")
+#mat <- t(assay(spe, "exprs"))
 
 #out <- Rphenograph(mat, k = 45)
 out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
 
 clusters <- factor(out$communities)
 
-spe$pg_clusters <- clusters
+spe$pg_clusters_fastMNN <- clusters
 ```
 
-```{r rphenograph-clustering-1, message=FALSE}
-dittoDimPlot(spe, var = "pg_clusters", 
-             reduction.use = "UMAP", size = 0.2,
+```{r rphenograph-clustering-1, message=FALSE, fig.width=20}
+dittoDimPlot(spe, var = "pg_clusters_fastMNN", 
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
              do.label = TRUE) +
-    ggtitle("Phenograph clusters expression on UMAP")
+    ggtitle("Phenograph clusters expression on UMAP_mnnCorrected")
 ```
 
-```{r phenograph-heatmap-1, fig.height=8}
+```{r phenograph-heatmap-1, fig.width=20}
+
+tissue_col <- setNames(dittoColors(1)[1:length(unique(spe$tissue))],
+                unique(spe$tissue))
+
+clusters_col <- setNames(rep(dittoColors(1),times=5)[1:length(unique(spe$pg_clusters_seurat))],
+                sort(unique(spe$pg_clusters_seurat)))
+
 dittoHeatmap(spe[,cur_cells], 
              genes = rownames(spe)[rowData(spe)$use_channel],
              assay = "exprs", scale = "none",
+             cluster_cols = FALSE,
+             order.by = c("pg_clusters_seurat"),
              heatmap.colors = viridis(100), 
-             annot.by = "pg_clusters",
+             annot.by = c("pg_clusters_seurat"),
              annotation_legend = FALSE,
-             fontsize=5,
-             annot.colors = dittoColors(1)[1:length(unique(spe$pg_clusters))])
+             fontsize=10,
+             annotation_colors = list(clusters=clusters_col))
+```
+
+```{r rphenograph-barplot-clusters-per-sample, message=FALSE, fig.width=40}
+# by sample_id
+
+clusters_col <- setNames(rep(dittoColors(1),times=5)[1:length(unique(spe$pg_clusters_seurat))],
+                sort(unique(spe$pg_clusters_seurat)))
+
+dittoBarPlot(spe, var = spe$pg_clusters_seurat, group.by = "sample", color.panel=clusters_col) #+
+    #scale_fill_manual(values = metadata(spe)$color_vectors$celltype)
+```
+
+```{r rphenograph-barplot-samples-per-cluster, message=FALSE, fig.width=40}
+# by clusters
+dittoBarPlot(spe, var = spe$sample, group.by = "pg_clusters_fastMNN") #+
+    #scale_fill_manual(values = metadata(spe)$color_vectors$celltype)
 ```
 
 We will also look at all cells to avoid missing rare cell types. This is not shown in html due to large size plots. 
@@ -323,7 +349,7 @@ delta_area(spe)
 spe$som_clusters <- cluster_ids(spe, "meta13")
 ```
 
-```{r flowSOM-clusteirng-1, message=FALSE}
+```{r flowSOM-clusteirng-1, message=FALSE, fig.width=20}
 dittoDimPlot(spe, var = "som_clusters", 
              reduction.use = "UMAP", size = 0.2,
              do.label = TRUE) +
@@ -363,7 +389,7 @@ reached at a `k` of 25 and we will store the final cluster IDs within the
 
 ```{r flowSOM-2, message=FALSE, results='hide', fig.show='hide'}
 # Select integrated cells
-mat <- reducedDim(spe, "harmony")
+mat <- reducedDim(spe, "fastMNN")
 
 # Perform SOM clustering
 som.out <- clusterRows(mat, SomParam(100), full = TRUE)
@@ -385,9 +411,9 @@ som.cluster <- ccp[[25]][["consensusClass"]][som.out$clusters]
 spe$som_clusters_corrected <- as.factor(som.cluster)
 
 dittoDimPlot(spe, var = "som_clusters_corrected", 
-             reduction.use = "UMAP_harmony", size = 0.2,
+             reduction.use = "UMAP_mnnCorrected", size = 0.2,
              do.label = TRUE) +
-    ggtitle("SOM clusters expression on UMAP, integrated cells")
+    ggtitle("SOM clusters expression on UMAP-mnnCorrected")
 ```
 
 ```{r flowSOM-2-heatmap, fig.height=8}

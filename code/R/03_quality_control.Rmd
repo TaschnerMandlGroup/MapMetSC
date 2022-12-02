@@ -391,7 +391,7 @@ potential staining differences can be crucial to assess data quality.
 We will use ridgeline visualizations to check differences in staining patterns:
 
 ```{r ridges, message=FALSE, fig.width=7, fig.height=35}
-pdf(file.path(path,"data/PT_multi-ridgeplot.pdf"), height=35, width=7)
+pdf(file.path(path,"data/BM-PT_multi-ridgeplot.pdf"), height=35, width=7)
 multi_dittoPlot(spe, vars = rownames(spe)[rowData(spe)$use_channel],
                group.by = "year", plots = c("ridgeplot"), 
                assay = "exprs"#,
@@ -468,19 +468,55 @@ p1
 
 ```{r visualizing-umap-by-samples, message=FALSE, fig.height=20}
 
-p3 <- dittoDimPlot(spe, var = "tissue", reduction.use = "UMAP", size = 0.2, legend.show = T, opacity=1) +
+p3 <- dittoDimPlot(spe, var = "timepoint", reduction.use = "UMAP", size = 0.2, legend.show = T, opacity=1) +
     #scale_color_manual(values = metadata(spe)$color_vectors$sample) +
     #scale_color_manual(values = col_vector_433) +
-    ggtitle("tissue")
-p4 <- dittoDimPlot(spe, var = "sample", reduction.use = "TSNE", size = 0.2, legend.size=2) + 
-    scale_color_manual(values = metadata(spe)$color_vectors$sample) +
-    ggtitle("sample on TSNE") + 
-    theme(legend.text=element_text(size=2))
-
-(p3 + p4)
+    ggtitle("timepoint")
+# p4 <- dittoDimPlot(spe, var = "sample", reduction.use = "TSNE", size = 0.2, legend.size=2) + 
+#     scale_color_manual(values = metadata(spe)$color_vectors$sample) +
+#     ggtitle("sample on TSNE") + 
+#     theme(legend.text=element_text(size=2))
+# 
+# (p3 + p4)
 p3
 ```
+We will now look at a multi-umap plot, visualizing one sample per plot while graying out the others. 
 
+```{r visualizing-multiumap-by-samples, message=FALSE, fig.width=7, fig.height=20}
+
+spe <- spe_bm
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased/data/BM"
+
+library(viridis)
+library(cowplot)
+
+samples <- unique(spe$sample)
+
+bin_col <- setNames(c(adjustcolor("gray90",alpha.f=1), "palegreen4"), c(FALSE,TRUE))
+
+plot_list <- list()
+
+for(i in 1: length(samples)){
+  spe$sample_binary <- spe$sample == samples[i] 
+  
+  plot_list[[i]] <- dittoDimPlot(spe, var = "sample_binary", reduction.use = "UMAP", size = 0.04, legend.show = F, opacity=0.2) +
+    scale_color_manual(values = bin_col) + 
+    ggtitle(samples[i]) +
+    theme(plot.title = element_text(size = 8), axis.title = element_text(size=8))
+}
+
+spe$sample_binary <- NULL
+
+plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33))
+
+save_tiff <- function(sublist, j){
+  plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
+  ggsave(filename=file.path(path, paste("PT_UMAP_singlesample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+}
+
+mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
+
+```
 
 ```{r visualizing-umap-by-markers, message=FALSE, fig.width=7, fig.height=25}
 library(viridis)

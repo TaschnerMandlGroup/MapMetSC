@@ -468,10 +468,12 @@ p1
 
 ```{r visualizing-umap-by-samples, message=FALSE, fig.height=20}
 
-p3 <- dittoDimPlot(spe, var = "timepoint", reduction.use = "UMAP", size = 0.2, legend.show = T, opacity=1) +
+spe <- spe[, sample(1:length(colnames(spe)))]
+
+p3 <- dittoDimPlot(spe, var = "imc_date", reduction.use = "UMAP", size = 0.2, legend.show = T, opacity=1, order="randomize") +
     #scale_color_manual(values = metadata(spe)$color_vectors$sample) +
     #scale_color_manual(values = col_vector_433) +
-    ggtitle("timepoint")
+    ggtitle("imc_date")
 # p4 <- dittoDimPlot(spe, var = "sample", reduction.use = "TSNE", size = 0.2, legend.size=2) + 
 #     scale_color_manual(values = metadata(spe)$color_vectors$sample) +
 #     ggtitle("sample on TSNE") + 
@@ -484,22 +486,24 @@ We will now look at a multi-umap plot, visualizing one sample per plot while gra
 
 ```{r visualizing-multiumap-by-samples, message=FALSE, fig.width=7, fig.height=20}
 
-spe <- spe_bm
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased/data/BM"
-
 library(viridis)
 library(cowplot)
 
-samples <- unique(spe$sample)
+tissue <- "PT"
+var <- "imc_date"
+
+path <- paste("/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased/data/", tissue, sep="")
+
+samples <- unique(spe[[var]])
 
 bin_col <- setNames(c(adjustcolor("gray90",alpha.f=1), "palegreen4"), c(FALSE,TRUE))
 
 plot_list <- list()
 
 for(i in 1: length(samples)){
-  spe$sample_binary <- spe$sample == samples[i] 
+  spe$sample_binary <- spe[[var]] == samples[i] 
   
-  plot_list[[i]] <- dittoDimPlot(spe, var = "sample_binary", reduction.use = "UMAP", size = 0.04, legend.show = F, opacity=0.2) +
+  plot_list[[i]] <- dittoDimPlot(spe, var = "sample_binary", reduction.use = "UMAP", size = 0.04, legend.show = F, opacity=1, order = "increasing") +
     scale_color_manual(values = bin_col) + 
     ggtitle(samples[i]) +
     theme(plot.title = element_text(size = 8), axis.title = element_text(size=8))
@@ -511,7 +515,7 @@ plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33))
 
 save_tiff <- function(sublist, j){
   plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
-  ggsave(filename=file.path(path, paste("PT_UMAP_singlesample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste(tissue, "_UMAP_single", var, "_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
 }
 
 mapply(save_tiff, plot_sublists, 1:length(plot_sublists))

@@ -75,7 +75,7 @@ stored in the `counts` slot. Columns represent cells and rows represent channels
 
 ```{r counts}
 rowData(spe)
-counts(spe)[1:47,1:5]
+counts(spe)[1:47,1:9]
 ```
 
 Metadata associated to individual cells are stored in the `colData` slot. After

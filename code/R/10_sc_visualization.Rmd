@@ -297,18 +297,27 @@ Now we will highlight expression similarities between samples.
 
 ```{r celltype pbmds, message=FALSE, fig.width=20}
 # MDS pseudobulk by cell type
-spe_cat <- spe_bm
-#spe_cat$sample_id <- spe$sample
+library(RColorBrewer)
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+
+condition = "staining_date"
+
+spe_cat <- spe
+col_condition = setNames(sample(col_vector_74, length(unique(spe_cat[[condition]]))), unique(spe_cat[[condition]]))
+
 spe_cat$sample_id <- factor(spe_cat$sample_id)
-#spe_cat$cluster_id <- factor(spe_cat$pg_clusters_fastMNN)
-spe_cat$cluster_id <- factor(spe_cat$year)
-spe_cat$condition <- factor(spe_cat$tissue)
+spe_cat$cluster_id <- factor(spe_cat$stainer)
+spe_cat$condition <- factor(spe_cat[[condition]])
 
-# pbMDS(spe_cat, by = "sample_id", 
-#       features = rownames(spe)[rowData(spe_cat)$use_channel],
-#       color_by="condition") 
+pbMDS(spe_cat, by = "sample_id", 
+       features = rownames(spe)[rowData(spe_cat)$use_channel],
+       color_by="condition") + 
+  scale_color_manual(values = col_condition)
 
-clrDR(spe_cat, by = "sample_id")
+#clrDR(spe_cat, by = "sample_id")
 ```
 
 

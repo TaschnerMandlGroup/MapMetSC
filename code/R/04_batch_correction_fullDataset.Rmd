@@ -43,7 +43,7 @@ However cache=TRUE did not work and was computing batch correction anyway. Thus 
 
 ```{r read-data-batch-correction}
 path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased"
-spe <- readRDS(file.path(path,"data/spe_bm.rds")) # change this if you want to use the full dataset (with sticky cells)
+spe <- readRDS(file.path(path,"data/BM/spe_bm.rds")) # change this if you want to use the full dataset (with sticky cells)
 ```
 
 ## fastMNN correction
@@ -88,8 +88,6 @@ out <- fastMNN(spe, batch = spe$sample,
                BPPARAM = MulticoreParam())
 # Transfer the correction results to the main spe object
 reducedDim(spe, "fastMNN") <- reducedDim(out, "corrected")
-
-saveRDS(spe, file.path(path, "data/spe_bm.rds"))
 ```
 
 ```{r, echo=FALSE}
@@ -146,15 +144,15 @@ library(dittoSeq)
 library(viridis)
 library(RColorBrewer)
 
-p1 <- dittoDimPlot(spe, var = "sample", 
+p1 <- dittoDimPlot(spe, var = "tissue", 
                    reduction.use = "UMAP", size = 0.2, legend.size=2, legend.show=FALSE) + 
     #scale_color_manual(values = col_samples) +
-    ggtitle("Sample on UMAP before correction") + 
+    ggtitle("Tissue on UMAP before correction") + 
     theme(legend.text=element_text(size=4))
-p2 <- dittoDimPlot(spe, var = "sample", 
+p2 <- dittoDimPlot(spe, var = "tissue", 
                    reduction.use = "UMAP_mnnCorrected", size = 0.2, legend.size=2, legend.show=FALSE) + 
     #scale_color_manual(values = col_samples) +
-    ggtitle("Sample on UMAP after correction") + 
+    ggtitle("Tissue on UMAP after correction") + 
     theme(legend.text=element_text(size=4))
 
 plot_grid(p1)
@@ -214,8 +212,7 @@ mat <- t(assay(spe, "exprs")[rowData(spe)$use_channel,])
 
 harmony_emb <- HarmonyMatrix(mat, spe$sample, do_pca = TRUE)
 
-reducedDim(spe, "harmony") <- harmony_emb
-
+unique <- harmony_emb
 ```
 
 ```{r, echo=FALSE}
@@ -233,6 +230,8 @@ We will now again visualize the cells in low dimensions after UMAP embedding.
 set.seed(220228)
 detectCores(all.tests = FALSE, logical = TRUE) # find out how many logical cores available
 spe <- runUMAP(spe, dimred = "harmony", name = "UMAP_harmony", BPPARAM = MulticoreParam()) 
+
+saveRDS(spe, file.path(path, "data/spe.rds"))
 ```
 
 ```{r visualizing-batch-correction-harmony-1, message=FALSE, warning=FALSE, fig.width=12}
@@ -256,12 +255,12 @@ library(RColorBrewer)
 p1 <- dittoDimPlot(spe, var = "sample", 
                    reduction.use = "UMAP", size = 0.2, legend.size=2, legend.show=FALSE) + 
     #scale_color_manual(values = col_samples) +
-    ggtitle("Sample on UMAP before correction") + 
+    ggtitle("Samples on UMAP before correction") + 
     theme(legend.text=element_text(size=4))
 p2 <- dittoDimPlot(spe, var = "sample", 
                    reduction.use = "UMAP_harmony", size = 0.2, legend.size=2, legend.show=FALSE) + 
     #scale_color_manual(values = col_samples) +
-    ggtitle("Sample on UMAP after correction") + 
+    ggtitle("Samples on UMAP after correction") + 
     theme(legend.text=element_text(size=4))
 
 plot_grid(p1)
@@ -275,10 +274,10 @@ And we visualize selected marker expression as defined above.
 ```{r visualizing-batch-correction-harmony-2, warning=FALSE, message=FALSE, fig.width=7, fig.height=25}
 
 # Before correction
-plot_list <- multi_dittoDimPlot(spe, var = rownames(spe)[rowData(spe)$use_channel], reduction.use = "UMAP", 
-                   assay = "exprs", size = 0.2, list.out = TRUE) 
-plot_list <- lapply(plot_list, function(x) x + scale_color_viridis())
-plot_grid(plotlist = plot_list, nrow=13, ncol=3) 
+# plot_list <- multi_dittoDimPlot(spe, var = rownames(spe)[rowData(spe)$use_channel], reduction.use = "UMAP", 
+#                    assay = "exprs", size = 0.2, list.out = TRUE) 
+# plot_list <- lapply(plot_list, function(x) x + scale_color_viridis())
+# plot_grid(plotlist = plot_list, nrow=13, ncol=3) 
 
 # After correction
 plot_list <- multi_dittoDimPlot(spe, var = rownames(spe)[rowData(spe)$use_channel], reduction.use = "UMAP_harmony", 

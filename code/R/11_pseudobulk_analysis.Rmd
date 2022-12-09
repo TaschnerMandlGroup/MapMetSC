@@ -1,0 +1,204 @@
+---
+title: "Pseudobulk analysis"
+output: html_document
+date: '2022-12-09'
+---
+
+```{r setup, include=FALSE, cache=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "120%")
+
+library(scuttle)
+library("FactoMineR")
+library("factoextra")
+```
+
+```{r read-data-batch-correction}
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased"
+spe <- readRDS(file.path(path,"data/BM/spe_bm.rds")) # change this if you want to use the full dataset (with sticky cells)
+```
+
+## Aggregate counts across samples
+
+```{r generate-pseudobulk}
+
+sce <- as(spe, "SingleCellExperiment")
+
+pseudobulk <- aggregateAcrossCells(sce,
+                                    ids = sce$sample,
+                                    statistics="mean",
+                                    use.assay.type = "exprs")
+
+#Convert expressions to matrix
+exprs_df <- t(as.data.frame(assay(pseudobulk, "exprs")))
+exprs_df <- exprs_df[,!colnames(exprs_df) %in% c("136Ba", "131Xe", "134Xe")]
+exprs_mat <- as.matrix(exprs_df)
+
+#Get metadata as matrix
+meta_df <- as.data.frame(colData(pseudobulk))
+meta_df <- meta_df[,colnames(meta_df) %in% c("sample", "study_id", "timepoint", "control", "year", "staining_date", "IMC_date", "stainer", "imc_score")]
+meta_mat <- as.matrix(meta_df)
+
+
+#Concatenate into one matrix
+pseudo_mat <- cbind(exprs_mat, meta_mat)
+```
+
+## PCA analysis
+
+Now we perform dimensionality reduction on the pseudobulk data and look at the contribution of the technical variables to PC1 and 2 according to The [FactoMineR and factoextra](http://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/112-pca-principal-component-analysis-essentials/).
+
+We start by subsetting active individuals and active variables for the principal component analysis:
+
+```{r pressure, echo=FALSE}
+pseudo_mat.active <- pseudo_mat[,colnames(exprs_df)]
+pseudo_mat.active <- data.frame(apply(pseudo_mat.active, 2, function(x) as.numeric(as.character(x))))
+```
+
+The R code below, computes principal component analysis on the active individuals/variables. PCA function scales the data by default.
+```{r PCA, echo=FALSE}
+library("FactoMineR")
+res.pca <- PCA(pseudo_mat.active, graph = FALSE)
+
+print(res.pca)
+```
+## Eigenvalues/Variances
+
+As described in previous sections, the eigenvalues measure the amount of variation retained by each principal component. Eigenvalues are large for the first PCs and small for the subsequent PCs. That is, the first PCs corresponds to the directions with the maximum amount of variation in the data set.
+
+We examine the eigenvalues to determine the number of principal components to be considered. The eigenvalues and the proportion of variances (i.e., information) retained by the principal components (PCs) can be extracted using the function get_eigenvalue() [factoextra package].
+
+```{r compute-eigenvalues, echo=FALSE}
+library("factoextra")
+eig.val <- get_eigenvalue(res.pca)
+eig.val
+```
+Eigenvalues can be used to determine the number of principal components to retain after PCA. In our analysis, the first five principal components explain 72% of the variation. This is an acceptably large percentage.
+
+An alternative method to determine the number of principal components is to look at a Scree Plot, which is the plot of eigenvalues ordered from largest to the smallest. The number of component is determined at the point, beyond which the remaining eigenvalues are all relatively small and of comparable size (Jollife 2002, Peres-Neto, Jackson, and Somers (2005)).
+
+```{r screeplot-eigenvalues, echo=FALSE}
+fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 50))
+```
+## Graph of variables
+
+```{r get-pca-var, echo=FALSE}
+var <- get_pca_var(res.pca)
+var
+
+head(var$contrib)
+```
+## Correlation circle
+
+The correlation between a variable and a principal component (PC) is used as the coordinates of the variable on the PC. The representation of variables differs from the plot of the observations: The observations are represented by their projections, but the variables are represented by their correlations (Abdi and Williams 2010)
+
+```{r correlation-circle, echo=FALSE}
+fviz_pca_var(res.pca, col.var = "black")
+```
+The plot above is also known as variable correlation plots. It shows the relationships between all variables. It can be interpreted as follow:
+Positively correlated variables are grouped together.
+Negatively correlated variables are positioned on opposite sides of the plot origin (opposed quadrants).
+The distance between variables and the origin measures the quality of the variables on the factor map. Variables that are away from the origin are well represented on the factor map.
+
+## Quality of representation
+
+The quality of representation of the variables on factor map is called cos2 (square cosine, squared coordinates) . 
+
+```{r quality-of-representation, echo=FALSE, fig.width=20}
+library("corrplot")
+corrplot(var$cos2, is.corr=FALSE)
+```
+```{r quality-of-representation-2, echo=FALSE, fig.width=10}
+# Total cos2 of variables on Dim.1 and Dim.2
+fviz_cos2(res.pca, choice = "var", axes = 1:2)
+
+# Contributions of variables to PC1
+fviz_contrib(res.pca, choice = "var", axes = 1, top = 10)
+# Contributions of variables to PC2
+fviz_contrib(res.pca, choice = "var", axes = 2, top = 10)
+```
+```{r quality-of-representation-color, echo=FALSE, fig.width=20}
+# Color by cos2 values: quality on the factor map
+fviz_pca_var(res.pca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE # Avoid text overlapping
+             )
+```
+
+It’s possible to use the function corrplot() [corrplot package] to highlight the most contributing variables for each dimension:
+```{r quality-of-representation-bar, echo=FALSE, fig.width=20}
+library("corrplot")
+corrplot(var$contrib, is.corr=FALSE)  
+```
+
+## Graph of individuals
+
+The results, for individuals can be extracted using the function get_pca_ind() [factoextra package]. Similarly to the get_pca_var(), the function get_pca_ind() provides a list of matrices containing all the results for the individuals (coordinates, correlation between individuals and axes, squared cosine and contributions)
+
+```{r graph-individuals, echo=FALSE, fig.width=20}
+ind <- get_pca_ind(res.pca)
+ind
+
+```
+The fviz_pca_ind() is used to produce the graph of individuals. 
+
+```{r graph-individuals-2, echo=FALSE, fig.width=20}
+fviz_pca_ind(res.pca)
+fviz_pca_ind(res.pca, col.ind = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Avoid text overlapping (slow if many points)
+             )
+```
+## Implement groups
+
+Here, we describe how to color individuals by group. Additionally, we show how to add concentration ellipses and confidence ellipses by groups.
+
+```{r graph-groups, echo=FALSE, fig.width=20}
+library(RColorBrewer)
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+
+pseudo_mat_df <- as.data.frame(pseudo_mat)
+
+fviz_pca_ind(res.pca,
+             geom.ind = "point", # show points only (nbut not "text")
+             col.ind = pseudo_mat_df$year, # color by groups
+             palette = col_vector_74,
+             addEllipses = TRUE, # Concentration ellipses
+             legend.title = "Groups"
+             )
+```
+## Supplementary elements
+
+As described above (section @ref(pca-data-format)), the decathlon2 data sets contain supplementary continuous variables (quanti.sup, columns 11:12), supplementary qualitative variables (quali.sup, column 13) and supplementary individuals (ind.sup, rows 24:27).
+
+Supplementary variables and individuals are not used for the determination of the principal components. Their coordinates are predicted using only the information provided by the performed principal component analysis on active variables/individuals.
+
+To specify supplementary individuals and variables, the function PCA() can be used as follow:
+
+```{r suppl-variables, echo=FALSE, fig.width=20}
+
+pseudo_mat <- pseudo_mat[,!colnames(pseudo_mat) %in% c("sample", "study_id", "timepoint", "control", "year", "staining_date", "IMC_date", "stainer")]
+pseudo_mat <- data.frame(apply(pseudo_mat, 2, function(x) as.numeric(as.character(x))))
+res.pca <- PCA(pseudo_mat, quanti.sup=45, graph=FALSE)
+
+fviz_pca_var(res.pca)
+```
+
+Contributions of all samples can be summarized. In a next step, aggregate contributions of samples based on levels in meta_mat, e.g. based on stainer, and show contributions to PC 1-5 in a barplot. 
+
+```{r summarize-result, echo=FALSE, fig.width=20}
+summary <- facto_summarize(res.pca, "ind", axes=1:5)
+
+contrib_meta <- cbind(summary, meta_mat)
+
+stainer_contrib <- aggregate(contrib~stainer,contrib_meta,mean)
+
+year_contrib <- aggregate(contrib~year,contrib_meta,mean)
+
+year_contrib
+
+```
+
+

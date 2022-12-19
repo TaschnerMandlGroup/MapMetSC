@@ -400,10 +400,14 @@ multi_dittoPlot(spe, vars = rownames(spe)[rowData(spe)$use_channel],
 dev.off()
 ```
 
-```{r ridges, message=FALSE, fig.width=7, fig.height=35}
-pdf(file.path(path,"data/multi-ridgeplot_tissue.pdf"), height=35, width=7)
-multi_dittoPlot(spe, vars = rownames(spe)[rowData(spe)$use_channel],
-               group.by = "tissue", plots = c("ridgeplot"), 
+```{r ridges, message=FALSE, fig.width=14, fig.height=35}
+pdf(file.path(path,"data/PT/outlier_samples_multi-ridgeplot_tissue.pdf"), height=35, width=14)
+
+#selected_samples <- c("20211227_09-0920_BM", "20220222_16-4503_BM", "20220223_06-2373_BM", "20220221_02-2370_BM", "20220303_18-4528_BM", "20221019_19-5754_BM", "20220421_21-0850_BM")
+selected_samples <- c("20220804_18-1061_TU", "20220816_11-1208_TU", "20220907_05-3231_TU", "20220906_03-0170_TU", "20220809_16-1927_TU")
+
+multi_dittoPlot(spe[,spe$sample%in%selected_samples], vars = rownames(spe)[rowData(spe)$use_channel],
+               group.by = "sample", plots = c("ridgeplot"), 
                assay = "exprs"#,
                #color.panel = metadata(spe)$color_vectors$year
                )

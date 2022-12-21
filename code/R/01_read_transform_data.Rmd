@@ -58,11 +58,9 @@ The `read_steinbock` function provided by `imcRtools` can now be used to read in
 `?read_steinbock`.
 
 ```{r read-steinbock}
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased"
 
-spe_pt <- read_steinbock(path=file.path(path, 'PT'), image_file=NULL, panel_file = file.path(path, 'PT', 'NB_Panel.csv')) 
-spe_bm_pos <- read_steinbock(path=file.path(path, 'BM', 'pos'), image_file=NULL, panel_file = file.path(path, 'BM', 'pos', 'NB_Panel.csv')) 
-spe_bm_neg <- read_steinbock(path=file.path(path, 'BM', 'neg'), image_file=NULL, panel_file = file.path(path, 'BM', 'neg', 'NB_Panel.csv'))
+spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv')) 
 
 spe <- cbind(spe_pt, spe_bm_pos, spe_bm_neg)
 #spe <- readRDS(file.path(path,"data/BM_spe.rds"))

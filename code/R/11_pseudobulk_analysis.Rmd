@@ -21,9 +21,17 @@ spe <- readRDS(file.path(path,"data/spe.rds")) # change this if you want to use 
 
 ```{r generate-pseudobulk}
 
-morph_features <- names(colData(spe))[3:17]
+library(Matrix)
 
-mat <- cbind(assay(spe, "exprs"), t(colData(spe)[,morph_features]))
+morph_names <- names(colData(spe))[3:16]
+morph_df <- as.data.frame(colData(spe)[,morph_names])
+morph_df_scaled <- as.data.frame(apply(colData(spe)[,morph_names], 2, RESCALE, to=0:1))
+
+features_mat <- cbind(t(assay(spe, "exprs")), morph_df_scaled, colData(spe)[17])
+features_df <- as.data.frame(features_mat)
+
+features_pseudobulk <- aggregate(features_df[1:(ncol(features_df)-1)], list(features_df$sample), mean)
+morph_pseudobulk <- features_pseudobulk[, c(1, 49:62)]
 
 #sce <- as(spe, "SingleCellExperiment")
 
@@ -33,17 +41,25 @@ mat <- cbind(assay(spe, "exprs"), t(colData(spe)[,morph_features]))
 #                                     use.assay.type = "exprs")
 
 #Convert expressions to matrix
-exprs_df <- t(as.data.frame(assay(pseudobulk, "exprs")))
-exprs_mat <- as.matrix(exprs_df)
+#exprs_df <- t(as.data.frame(assay(pseudobulk, "exprs")))
+#exprs_mat <- as.matrix(exprs_df)
 
 #Get metadata as matrix
-meta_df <- as.data.frame(colData(pseudobulk))
-meta_df <- meta_df[,colnames(meta_df) %in% c("sample", "study_id", "timepoint", "control", "year", "staining_date", "imc_date", "stainer", "imc_score")]
-meta_mat <- as.matrix(meta_df)
+
+#meta_df <- as.data.frame(colData(pseudobulk))
+#meta_df <- meta_df[,colnames(meta_df) %in% c("sample", "study_id", "timepoint", "control", "year", "staining_date", "imc_date", "stainer", "imc_score")]
+#meta_mat <- as.matrix(meta_df)
+
+# Group by mean of multiple columns
+meta_pseudobulk <- as.data.frame(colData(spe)) %>% group_by(sample, study_id, timepoint, control, year, staining_date, imc_date, stainer, imc_score) %>% 
+    summarise() %>%
+    as.data.frame()
 
 
 #Concatenate into one matrix
-pseudo_mat <- cbind(exprs_mat, meta_mat)
+features_pseudobulk <- features_pseudobulk[,!names(features_pseudobulk) %in% c("Group.1")]
+meta_pseudobulk <- meta_pseudobulk[,!names(meta_pseudobulk) %in% c("Group.1")]
+pseudo_mat <- as.matrix(cbind(features_pseudobulk, meta_pseudobulk[]))
 ```
 
 ## PCA analysis
@@ -53,15 +69,18 @@ Now we perform dimensionality reduction on the pseudobulk data and look at the c
 We start by subsetting active individuals and active variables for the principal component analysis:
 
 ```{r pressure, echo=FALSE}
-active_var <- colnames(exprs_df[,!colnames(exprs_df) %in% c("136Ba", "131Xe", "134Xe", "Histone H3K9Ac", "H4K12Ac", "Iridium191", "Iridium193", "DAPI", "CD56-IF", "GD2-IF")])
+#active_var <- colnames(features_pseudobulk[,!colnames(features_pseudobulk) %in% c("136Ba", "131Xe", "134Xe", "Histone H3K9Ac", "H4K12Ac", "Iridium191", "Iridium193", "DAPI", "CD56-IF", "GD2-IF")])
+active_var <- colnames(features_pseudobulk[,!colnames(features_pseudobulk) %in% c("136Ba", "131Xe", "134Xe")])
 pseudo_mat.active <- pseudo_mat[,active_var]
 pseudo_mat.active <- data.frame(apply(pseudo_mat.active, 2, function(x) as.numeric(as.character(x))))
 ```
 
 The R code below, computes principal component analysis on the active individuals/variables. PCA function scales the data by default.
 ```{r PCA, echo=FALSE}
+unloadNamespace("bruceR") # because this library also has a PCA function that causes interference
 library("FactoMineR")
-res.pca <- PCA(pseudo_mat.active, graph = FALSE)
+
+res.pca <- PCA(pseudo_mat.active, graph=F)
 
 print(res.pca)
 ```

@@ -13,20 +13,24 @@ library("factoextra")
 ```
 
 ```{r read-data-batch-correction}
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased"
-spe_bm <- readRDS(file.path(path,"data/BM/spe_bm.rds")) # change this if you want to use the full dataset (with sticky cells)
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased"
+spe <- readRDS(file.path(path,"data/spe.rds")) # change this if you want to use the full dataset (with sticky cells)
 ```
 
 ## Aggregate counts across samples
 
 ```{r generate-pseudobulk}
 
-sce <- as(spe, "SingleCellExperiment")
+morph_features <- names(colData(spe))[3:17]
 
-pseudobulk <- aggregateAcrossCells(sce,
-                                    ids = sce$sample,
-                                    statistics="mean",
-                                    use.assay.type = "exprs")
+mat <- cbind(assay(spe, "exprs"), t(colData(spe)[,morph_features]))
+
+#sce <- as(spe, "SingleCellExperiment")
+
+# pseudobulk <- aggregateAcrossCells(sce,
+#                                     ids = sce$sample,
+#                                     statistics="mean",
+#                                     use.assay.type = "exprs")
 
 #Convert expressions to matrix
 exprs_df <- t(as.data.frame(assay(pseudobulk, "exprs")))

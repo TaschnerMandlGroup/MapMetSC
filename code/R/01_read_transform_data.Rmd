@@ -62,7 +62,7 @@ path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/
 
 spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv')) 
 
-spe <- cbind(spe_pt, spe_bm_pos, spe_bm_neg)
+#spe <- cbind(spe_pt, spe_bm_pos, spe_bm_neg)
 #spe <- readRDS(file.path(path,"data/BM_spe.rds"))
 spe
 ```
@@ -132,14 +132,12 @@ More information on how to extract matching patterns from a string can be found 
 ```{r add-indication}
 library(stringr)
 
-base_path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased"
-
 spe$sample <- gsub(spe$sample_id, pattern="([UM]).*", replacement="\\1")
 spe$fm_id <- str_match(spe$sample, "_(.*)_")[,2]  
 spe$tissue <- str_match(spe$sample, "^.*_.*_(.*)")[,2] 
 spe$tissue[spe$tissue=="TU"] = "PT"
 
-meta <- read.csv(file.path(base_path, '20221031_metadata_complete.csv'))
+meta <- read.csv(file.path(path, '20221031_metadata_complete.csv'))
 #meta <- meta[meta$Tissue == 'BM',]
 
 spe$puncture_side <- meta$Puncture_side[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
@@ -403,7 +401,7 @@ processing and analysis.
 
 # spe <- spe[,!spe$exclude%in%c("maybe")]
 
-saveRDS(spe, file.path(base_path, "data/spe.rds"))
+saveRDS(spe, file.path(path, "data/spe.rds"))
 ```
 
 ## Session Info

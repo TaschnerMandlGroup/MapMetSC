@@ -1,6 +1,6 @@
 import cv2 as cv
 import numpy as np
-from utils import additive_blend
+from Registration.utils import additive_blend
 import matplotlib.pyplot as plt
 
 class FeatureExtractor():
@@ -73,7 +73,10 @@ class FeatureExtractor():
                 im0 = np.expand_dims(im0, axis=0)
                 im1 = np.expand_dims(im1, axis=0)
             self.fixed=im0
-            self.warped = np.asarray([cv.warpAffine(im1[i], self.h, (self.fixed.shape[2], self.fixed.shape[1])) for i in range(im1.shape[0])])
+            #when registering discrete images (e.g. masks)
+            #self.warped = np.asarray([cv.warpAffine(im1[i], self.h, (self.fixed.shape[2], self.fixed.shape[1]), flags=cv.INTER_NEAREST) for i in range(im1.shape[0])]) 
+            self.warped = np.asarray([cv.warpAffine(im1[i], self.h, (self.fixed.shape[2], self.fixed.shape[1])) for i in range(im1.shape[0])]) 
+
             if dim < 3:
                 self.warped = np.squeeze(self.warped)
                 self.fixed = np.squeeze(self.fixed)

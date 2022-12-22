@@ -6,6 +6,8 @@ import cv2
 from skimage.measure import regionprops_table
 from typing import Union
 from .intensity_functions import mean_intensity, mean_80_intensity
+from Registration._02_register import FeatureExtractor
+from Registration._01_preprocess import preprocess
 from sklearn.preprocessing import MinMaxScaler
 import logging
 import pandas as pd
@@ -55,6 +57,7 @@ def main_function(I: 'np.ndarray[np.uint8]',
     # segment the given image I using a network from cellpose, give cellpose the network u want to use as a parameter cellpose_net = "CPx"
     logger.debug(f"Start segmentation of image with size: {I.shape}")
     masks, _, _ = model.eval(I, **eval_kwargs)
+
     logger.debug(f"Finished segmentation found {len(np.unique(masks))} masks")
 
     # give a flag if you want to correct the masks or not refine = False / True
@@ -72,12 +75,12 @@ def main_function(I: 'np.ndarray[np.uint8]',
         morph_features = pd.DataFrame(morph_features)
         morph_features = morph_features.rename(columns={"label": "Object"})
 
-        objects = morph_features["Object"]
-        morph_features = morph_features.drop("Object", axis=1)
-        morph_columns = morph_features.columns
+        #objects = morph_features["Object"]
+        #morph_features = morph_features.drop("Object", axis=1)
+        #morph_columns = morph_features.columns
 
-        morph_features = pd.DataFrame(MinMaxScaler().fit_transform(morph_features), columns=morph_columns)
-        morph_features["Object"] = objects
+        #morph_features = pd.DataFrame(MinMaxScaler().fit_transform(morph_features), columns=morph_columns)
+        #morph_features["Object"] = objects
         morph_features = morph_features.set_index("Object")
 
         logger.debug(f"Done Extracting Morphology")
@@ -90,8 +93,18 @@ def main_function(I: 'np.ndarray[np.uint8]',
         if out_sz != I.shape:
             
             logger.debug(f"Reshaping input image and masks to size: {out_sz}")
-            masks = cv2.resize(masks, out_sz, interpolation=cv2.INTER_NEAREST)
-            I = cv2.resize(I, out_sz, interpolation=cv2.INTER_LINEAR)
+            #Write a method that estimate the affine transformation of I onto intenstiy image[-3] and then uses h to warp the mask - I does not need to be warped!!
+            pp_I = preprocess(I)
+            pp_intensity_image = preprocess(intensity_image[-3])
+
+            ex = FeatureExtractor("sift")
+            ex(pp_intensity_image, pp_I)
+            ex.match()
+            ex.estimate()
+
+            _, masks = ex.warp(im0=intensity_image[-3], im1=masks)
+            #masks = cv2.resize(masks, out_sz, interpolation=cv2.INTER_NEAREST)
+            #I = cv2.resize(I, out_sz, interpolation=cv2.INTER_LINEAR)
   
     # give the function a parameter if you want to extract features (regionprops) and a list of the features you want to extract
     if extract_intensity_features and not isinstance(intensity_image, type(None)):

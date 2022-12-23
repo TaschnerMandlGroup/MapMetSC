@@ -132,12 +132,12 @@ corrplot(var$cos2, is.corr=FALSE)
 ```
 ```{r quality-of-representation-2, echo=FALSE, fig.width=10}
 # Total cos2 of variables on Dim.1 and Dim.2
-fviz_cos2(res.pca, choice = "ind", axes = 2, top = 10)
+fviz_cos2(res.pca, choice = "var", axes = 2, top = 10)
 
 # Contributions of variables to PC1
 fviz_contrib(res.pca, choice = "var", axes = 1, top = 10)
 # Contributions of variables to PC2
-fviz_contrib(res.pca, choice = "ind", axes = 2, top = 10)
+fviz_contrib(res.pca, choice = "var", axes = 2, top = 10)
 ```
 ```{r quality-of-representation-color, echo=FALSE, fig.width=20}
 # Color by cos2 values: quality on the factor map
@@ -205,7 +205,7 @@ Supplementary variables and individuals are not used for the determination of th
 To specify supplementary individuals and variables, the function PCA() can be used as follow:
 
 ```{r suppl-variables, echo=FALSE, fig.width=20}
-pseudo_mat_quant <- cbind(exprs_mat, "imc_score"=meta_mat[,"imc_score"])
+pseudo_mat_quant <- cbind(features_pseudobulk, "imc_score"=meta_pseudobulk[,"imc_score"])
 indices <- match(c("136Ba", "131Xe", "134Xe", "Histone H3K9Ac", "H4K12Ac", "Iridium191", "Iridium193", "DAPI", "CD56-IF", "GD2-IF","imc_score"), colnames(pseudo_mat_quant))
 pseudo_mat_quant <- data.frame(apply(pseudo_mat_quant, 2, function(x) as.numeric(as.character(x))))
 res.pca <- PCA(pseudo_mat_quant, quanti.sup=indices, graph=FALSE)
@@ -218,7 +218,7 @@ Contributions of all samples can be summarized. In a next step, aggregate contri
 ```{r summarize-result, echo=FALSE, fig.width=20}
 summary <- facto_summarize(res.pca, "ind", axes=2)
 
-contrib_meta <- cbind(summary, meta_mat)
+contrib_meta <- cbind(summary, meta_pseudobulk)
 
 year_contrib <- aggregate(contrib~year,contrib_meta,mean)
 
@@ -228,5 +228,63 @@ ggplot(data=year_contrib, aes(x=reorder(year,(-contrib)), y=contrib)) +
   theme_minimal()
 
 ```
+Now let's have a look at PCA on single-cell data:
+
+```{r quality-of-representation-color-singlecell, echo=FALSE, fig.width=20}
+features_df_red <- features_df[, 1:(ncol(features_df)-1)]
+indices <- match(c("136Ba", "131Xe", "134Xe", "Histone H3K9Ac", "H4K12Ac", "Iridium191", "Iridium193", "DAPI", "CD56-IF", "GD2-IF"), colnames(features_df_red))
+features_df_red <- data.frame(apply(features_df_red, 2, function(x) as.numeric(as.character(x))))
+res.pca <- PCA(features_df_red, quanti.sup=indices, graph=FALSE)
+
+fviz_pca_var(res.pca)
+
+# Color by cos2 values: quality on the factor map
+fviz_pca_var(res.pca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE # Avoid text overlapping
+             )
+```
+```{r quality-of-representation-color-singlecell-allactive, echo=FALSE, fig.width=20}
+features_df_red <- features_df[, 1:(ncol(features_df)-1)]
+indices <- match(c("136Ba", "131Xe", "134Xe"), colnames(features_df_red))
+features_df_red <- data.frame(apply(features_df_red, 2, function(x) as.numeric(as.character(x))))
+res.pca <- PCA(features_df_red, quanti.sup=indices, graph=FALSE)
+
+fviz_pca_var(res.pca)
+
+# Color by cos2 values: quality on the factor map
+fviz_pca_var(res.pca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE # Avoid text overlapping
+             )
+```
+
+```{r quality-of-representation-color-singlecell-intensity, echo=FALSE, fig.width=20}
+features_df_red <- as.data.frame(t(assay(spe, "exprs")))
+indices <- match(c("136Ba", "131Xe", "134Xe", "Histone H3K9Ac", "H4K12Ac", "Iridium191", "Iridium193", "DAPI", "CD56-IF", "GD2-IF"), colnames(features_df_red))
+features_df_red <- data.frame(apply(features_df_red, 2, function(x) as.numeric(as.character(x))))
+res.pca <- PCA(features_df_red, quanti.sup=indices, graph=FALSE)
+
+fviz_pca_var(res.pca)
+
+# Color by cos2 values: quality on the factor map
+fviz_pca_var(res.pca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE # Avoid text overlapping
+             )
+```
 
 
+```{r quality-of-representation-color-singlecell-morphology, echo=FALSE, fig.width=20}
+features_df_red <- morph_df_scaled
+features_df_red <- data.frame(apply(features_df_red, 2, function(x) as.numeric(as.character(x))))
+res.pca <- PCA(features_df_red, graph=FALSE)
+
+fviz_pca_var(res.pca)
+
+# Color by cos2 values: quality on the factor map
+fviz_pca_var(res.pca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE # Avoid text overlapping
+             )
+```

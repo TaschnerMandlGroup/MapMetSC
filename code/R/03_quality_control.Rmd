@@ -100,14 +100,14 @@ library(viridis)
 
 cur_cells <- sample(seq_len(ncol(spe)), 20000)
 
-pdf(file.path(path,"data/sc_heatmap_combined.pdf"), height=7, width=12)
+#pdf(file.path(path,"data/sc_heatmap_combined.pdf"), height=7, width=12)
 dittoHeatmap(spe[,cur_cells], genes = rownames(spe)[rowData(spe)$use_channel],
              assay = "exprs", cluster_cols = TRUE, scale = "none",
-             heatmap.colors = viridis(100), annot.by = "tissue",
+             heatmap.colors = viridis(100), annot.by = "sample",
              annotation_legend = FALSE
              #annotation_colors = list(sample = metadata(spe)$color_vectors$sample)
              )
-dev.off()
+#dev.off()
 ```
 
 ```{r segmentation-heatmap-2, message=FALSE, fig.height=7}
@@ -303,10 +303,10 @@ mixture model across the transformed counts of all cells contained in the
 
 ```{r cell-snr, message=FALSE, warning=FALSE, results="hide", fig.keep="all"}
 library(mclust)
-
+library(dplyr)
 
 set.seed(220224)
-mat <- apply(assay(spe, "exprs"), 1, function(x){
+mat <- apply(assay(spe, "compexprs"), 1, function(x){
     cur_model <- Mclust(x, G = 2)
     mean1 <- mean(x[cur_model$classification == 1])
     mean2 <- mean(x[cur_model$classification == 2])
@@ -391,13 +391,13 @@ potential staining differences can be crucial to assess data quality.
 We will use ridgeline visualizations to check differences in staining patterns:
 
 ```{r ridges, message=FALSE, fig.width=7, fig.height=35}
-pdf(file.path(path,"data/BM-PT_multi-ridgeplot.pdf"), height=35, width=7)
+#pdf(file.path(path,"data/BM-PT_multi-ridgeplot.pdf"), height=35, width=7)
 multi_dittoPlot(spe, vars = rownames(spe)[rowData(spe)$use_channel],
                group.by = "year", plots = c("ridgeplot"), 
                assay = "exprs"#,
                #color.panel = metadata(spe)$color_vectors$year
                )
-dev.off()
+#dev.off()
 ```
 
 ```{r ridges, message=FALSE, fig.width=14, fig.height=35}
@@ -437,7 +437,8 @@ library(scater)
 gc() #free unused space
 
 set.seed(220225)
-spe <- runUMAP(spe, subset_row = rowData(spe)$use_channel, exprs_values = "exprs", BPPARAM = MulticoreParam()) 
+spe <- runUMAP(spe, subset_row = rowData(spe)$use_channel, exprs_values = "compexprs", BPPARAM = MulticoreParam()) 
+#spe <- runUMAP(spe, subset_row = rowData(spe)$use_channel, exprs_values = "exprs", name="UMAP_asinh", BPPARAM = MulticoreParam()) 
 spe <- runTSNE(spe, subset_row = rowData(spe)$use_channel, exprs_values = "exprs", BPPARAM = MulticoreParam()) 
 ```
 
@@ -458,10 +459,10 @@ can be further modified.
 library(patchwork)
 library(viridis)
 
-p1 <- dittoDimPlot(spe, var = "year", reduction.use = "UMAP", size = 0.2, legend.show = FALSE) + 
+p1 <- dittoDimPlot(spe, var = "sample", reduction.use = "UMAP", size = 0.2, legend.show = FALSE) + 
     #scale_color_manual(values = metadata(spe)$color_vectors$year) +
     ggtitle("year on UMAP")
-p2 <- dittoDimPlot(spe, var = "year", reduction.use = "TSNE", size = 0.2, legend.size=2) + 
+p2 <- dittoDimPlot(spe, var = "sample", reduction.use = "TSNE", size = 0.2, legend.size=2) + 
     #scale_color_manual(values = metadata(spe)$color_vectors$year) +
     ggtitle("year on TSNE") +
     theme(legend.text=element_text(size=5))
@@ -474,10 +475,10 @@ p1
 
 spe <- spe[, sample(1:length(colnames(spe)))]
 
-p3 <- dittoDimPlot(spe, var = "imc_date", reduction.use = "UMAP", size = 0.2, legend.show = T, opacity=1, order="randomize") +
+p3 <- dittoDimPlot(spe, var = "staining_date", reduction.use = "UMAP", size = 0.2, legend.show = T, opacity=1, order="randomize") +
     #scale_color_manual(values = metadata(spe)$color_vectors$sample) +
     #scale_color_manual(values = col_vector_433) +
-    ggtitle("imc_date")
+    ggtitle("staining_date")
 # p4 <- dittoDimPlot(spe, var = "sample", reduction.use = "TSNE", size = 0.2, legend.size=2) + 
 #     scale_color_manual(values = metadata(spe)$color_vectors$sample) +
 #     ggtitle("sample on TSNE") + 
@@ -493,10 +494,11 @@ We will now look at a multi-umap plot, visualizing one sample per plot while gra
 library(viridis)
 library(cowplot)
 
-tissue <- "PT"
-var <- "imc_date"
+tissue <- "BM"
+var <- "year"
 
-path <- paste("/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased/data/", tissue, sep="")
+#path <- paste("/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased/data/", tissue, sep="")
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased/data/"
 
 samples <- unique(spe[[var]])
 
@@ -532,7 +534,7 @@ library(cowplot)
 plot_list <- multi_dittoDimPlot(
   spe,
   vars = rownames(spe)[rowData(spe)$use_channel],
-  reduction.use="UMAP",
+  reduction.use="UMAP_asinh",
   assay="exprs",
   legend.size=0.2,
   size=0.2,

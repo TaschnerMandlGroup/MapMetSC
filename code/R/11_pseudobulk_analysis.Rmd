@@ -55,11 +55,14 @@ meta_pseudobulk <- as.data.frame(colData(spe)) %>% group_by(sample, study_id, ti
     summarise() %>%
     as.data.frame()
 
+write.csv(features_df, file.path(path,"data/features_singlecell.csv"))
+write.csv(features_pseudobulk, file.path(path,"data/features_pseudobulk.csv"))
 
 #Concatenate into one matrix
 features_pseudobulk <- features_pseudobulk[,!names(features_pseudobulk) %in% c("Group.1")]
 meta_pseudobulk <- meta_pseudobulk[,!names(meta_pseudobulk) %in% c("Group.1")]
-pseudo_mat <- as.matrix(cbind(features_pseudobulk, meta_pseudobulk[]))
+pseudo_mat <- as.matrix(cbind(features_pseudobulk, meta_pseudobulk))
+
 ```
 
 ## PCA analysis

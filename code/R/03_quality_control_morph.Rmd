@@ -16,6 +16,7 @@ In this RMD file, we will write code for generating heatmaps and UMAPs for matri
 path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased"
 
 spe <- readRDS(file.path(path,"data/spe.rds"))
+
 ```
 
 
@@ -87,9 +88,11 @@ Then, we will perform dimensionality reduction by a UMAP.
 library(scater)
 library(BiocParallel)
 
-mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
+#mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
 
-saveRDS(mat_red, file.path(path, "data/mat_red_int-morph.rds"))
+#saveRDS(mat_red, file.path(path, "data/mat_red_int-morph.rds"))
+
+mat_red <- readRDS(file.path(path,"data/mat_red_int-morph.rds"))
 ```
 
 Now we will visualize the data in the dimensionality reduced space and color the dots by marker expression. 
@@ -105,8 +108,7 @@ plot_list <- list()
 
 mat_red_df <- as.data.frame(mat_red)
 
-#for(i in 1: nrow(mat)){
-for(i in 1: 2){
+for(i in 1: nrow(mat)){
   
   mat_red_df$expr <- mat[i,]
   mat_red_df <- mat_red_df[order(mat_red_df$expr),]
@@ -132,18 +134,18 @@ Finally, we will visualize the data in the dimensionality reduced space and colo
 
 ```{r visualizing-umap-by-sample}
 
-samples <- unique(rownames(mat))
+samples <- unique(colnames(mat))
 
 bin_col <- setNames(c(adjustcolor("gray90",alpha.f=1), "palegreen4"), c(FALSE,TRUE))
 
 plot_list <- list()
 
-#for(i in 1: length(samples)){
-for(i in 1: 1){
-  sample_binary <- rownames(mat) == samples[i] 
+for(i in 1: length(samples)){
+
+  sample_binary <- colnames(mat) == samples[i] 
   
-  background <- as.data.frame(mat_red[,!sample_binary])
-  foreground <- as.data.frame(mat_red[,sample_binary])
+  background <- as.data.frame(mat_red[!sample_binary,])
+  foreground <- as.data.frame(mat_red[sample_binary,])
   plot_list[[i]] <- ggplot(background, aes(x=V1, y=V2) ) +
     geom_point(color="gray90", size=0.05) + 
     #geom_bin2d(data=foreground, size=0.05, bins=70, show.legend=F) +

@@ -437,8 +437,8 @@ library(scater)
 gc() #free unused space
 
 set.seed(220225)
-spe <- runUMAP(spe, subset_row = rowData(spe)$use_channel, exprs_values = "compexprs", BPPARAM = MulticoreParam()) 
-#spe <- runUMAP(spe, subset_row = rowData(spe)$use_channel, exprs_values = "exprs", name="UMAP_asinh", BPPARAM = MulticoreParam()) 
+spe <- runUMAP(spe, subset_row = rowData(spe)$use_channel, exprs_values = "compexprs", name="UMAP_asinh_comp", BPPARAM = MulticoreParam()) 
+spe <- runUMAP(spe, subset_row = rowData(spe)$use_channel, exprs_values = "exprs", name="UMAP_asinh", BPPARAM = MulticoreParam()) 
 spe <- runTSNE(spe, subset_row = rowData(spe)$use_channel, exprs_values = "exprs", BPPARAM = MulticoreParam()) 
 ```
 
@@ -459,7 +459,7 @@ can be further modified.
 library(patchwork)
 library(viridis)
 
-p1 <- dittoDimPlot(spe, var = "sample", reduction.use = "UMAP", size = 0.2, legend.show = FALSE) + 
+p1 <- dittoDimPlot(spe, var = "sample", reduction.use = "UMAP_asinh_comp", size = 0.2, legend.show = FALSE) + 
     #scale_color_manual(values = metadata(spe)$color_vectors$year) +
     ggtitle("year on UMAP")
 p2 <- dittoDimPlot(spe, var = "sample", reduction.use = "TSNE", size = 0.2, legend.size=2) + 
@@ -495,7 +495,7 @@ library(viridis)
 library(cowplot)
 
 tissue <- "BM"
-var <- "year"
+var <- "staining_date"
 
 #path <- paste("/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased/data/", tissue, sep="")
 path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased/data/"
@@ -509,7 +509,7 @@ plot_list <- list()
 for(i in 1: length(samples)){
   spe$sample_binary <- spe[[var]] == samples[i] 
   
-  plot_list[[i]] <- dittoDimPlot(spe, var = "sample_binary", reduction.use = "UMAP", size = 0.04, legend.show = F, opacity=1, order = "increasing") +
+  plot_list[[i]] <- dittoDimPlot(spe, var = "sample_binary", reduction.use = "UMAP_asinh_comp", size = 0.04, legend.show = F, opacity=1, order = "increasing") +
     scale_color_manual(values = bin_col) + 
     ggtitle(samples[i]) +
     theme(plot.title = element_text(size = 8), axis.title = element_text(size=8))
@@ -528,13 +528,67 @@ mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
 
 ```
 
+Let's now look at density plots for better visualization.
+
+```{r visualizing-density-by-samples, message=FALSE, fig.width=7, fig.height=20}
+
+library(viridis)
+library(cowplot)
+
+spe$old_new <- NA
+spe[,as.integer(spe$year) <= 11]$old_new <- "old" 
+spe[,as.integer(spe$year) > 11]$old_new <- "new" 
+
+tissue <- "BM"
+var <- "staining_date"
+
+#path <- paste("/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased/data/", tissue, sep="")
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased/data/"
+
+samples <- unique(spe[[var]])
+
+plot_list <- list()
+
+for(i in 1: length(samples)){
+  spe$sample_binary <- spe[[var]] == samples[i] 
+  
+  background <- as.data.frame(reducedDim(spe[,spe$sample_binary == FALSE], "UMAP_asinh_comp"))
+  foreground <- as.data.frame(reducedDim(spe[,spe$sample_binary == TRUE], "UMAP_asinh_comp"))
+  plot_list[[i]] <- ggplot(background, aes(x=V1, y=V2) ) +
+    geom_point(color="gray90", size=0.05) + 
+    #geom_bin2d(data=foreground, size=0.05, bins=70, show.legend=F) +
+    #stat_density_2d_filled(data=foreground, show.legend=F) +
+    stat_density_2d(mapping=aes(fill = ..level..), data=foreground, geom = "polygon", show.legend=F) +
+    ggtitle(samples[i]) +
+    scale_fill_continuous(type = "viridis") +
+    theme(plot.title = element_text(size = 5), 
+          axis.title = element_text(size=5), 
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), 
+          axis.line = element_line(colour = "black"))
+}
+
+spe$sample_binary <- NULL
+
+plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33))
+
+save_tiff <- function(sublist, j){
+  plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
+  ggsave(filename=file.path(path, paste(tissue, "_density_stat2d-filled_single_", var, "_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+}
+
+mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
+
+```
+
 ```{r visualizing-umap-by-markers, message=FALSE, fig.width=7, fig.height=25}
 library(viridis)
 library(cowplot)
 plot_list <- multi_dittoDimPlot(
   spe,
-  vars = rownames(spe)[rowData(spe)$use_channel],
-  reduction.use="UMAP_asinh",
+  vars = rownames(spe)[!rowData(spe)$use_channel],
+  reduction.use="UMAP_asinh_comp",
   assay="exprs",
   legend.size=0.2,
   size=0.2,
@@ -612,7 +666,7 @@ As there is no improvement, we will stick with the arcsinh transformation.
 The modified `SpatialExperiment` object is saved for further downstream analysis.
 
 ```{r save-objects-quality-control}
-saveRDS(spe, file.path(path,"data/spe_reduced.rds"))
+saveRDS(spe, file.path(path,"data/spe.rds"))
 ```
 
 ## Session Info

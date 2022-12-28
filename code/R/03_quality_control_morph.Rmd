@@ -1,0 +1,176 @@
+---
+title: "UMAP and histogram on matrices"
+output: html_document
+date: '2022-12-28'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+```
+
+In this RMD file, we will write code for generating heatmaps and UMAPs for matrices (instead of Seurat or SCE objects). First, we will read our SPE.
+
+```{r read-data}
+
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased"
+
+spe <- readRDS(file.path(path,"data/spe.rds"))
+```
+
+
+Then we will generate matrices from morphological and intensity features alone and combined. 
+
+```{r generate-dataframes, message=FALSE, fig.height=7}
+library(bruceR)
+
+morph_names <- c("area", 
+                 "area_convex", 
+                 "area_filled", 
+                 "axis_major_length", 
+                 "axis_minor_length", 
+                 "eccentricity", 
+                 "equivalent_diameter_area", 
+                 "perimeter", 
+                 "solidity", 
+                 "assymetry", 
+                 "concavity", 
+                 "fill", 
+                 "aspect_ratio-0", 
+                 "perimeter_ratio-0")
+
+morph_mat <- as.matrix(t(colData(spe)[,morph_names]))
+morph_mat_scaled <- t(apply(morph_mat, 1, RESCALE, to=0:1))
+
+intensity_mat <- assay(spe, "compexprs")
+intensity_mat_scaled <- t(apply(intensity_mat, 1, RESCALE, to=0:1))
+intensity_mat_scaled <- intensity_mat_scaled[!grepl("Histone|H4|Iridium|DAPI|136Ba|131Xe|134Xe|GD2-IF|CD56-IF", rownames(intensity_mat_scaled)),]
+
+features_mat <- rbind(intensity_mat_scaled, morph_mat_scaled)
+colnames(features_mat) <- spe$sample
+
+```
+
+In a next step, we will plot a single-cell heatmap using complex heatmap. 
+
+```{r single-cell-heatmap, message=FALSE, fig.height=17}
+library(ComplexHeatmap)
+library(viridis)
+library(circlize)
+library(RColorBrewer)
+library(paletteer)
+
+mat <- features_mat
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+
+col_sample = setNames(sample(col_vector_433, length(unique(spe$sample))), unique(spe$sample))
+
+set.seed(221228)
+rand_cells <- sample(seq_len(ncol(mat)), 2000)
+
+column_ha = HeatmapAnnotation(sample = colnames(mat[,rand_cells]), col=list(sample=col_sample), show_legend=F)
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap",
+        top_annotation = column_ha, 
+        show_column_dend = F,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
+
+Then, we will perform dimensionality reduction by a UMAP. 
+
+```{r UMAP, message=FALSE}
+library(scater)
+library(BiocParallel)
+
+mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
+
+saveRDS(mat_red, file.path(path, "data/mat_red_int-morph.rds"))
+```
+
+Now we will visualize the data in the dimensionality reduced space and color the dots by marker expression. 
+
+```{r visualizing-umap-by-marker}
+
+library(viridis)
+library(cowplot)
+
+out_path <- file.path(path, "data")
+
+plot_list <- list()
+
+mat_red_df <- as.data.frame(mat_red)
+
+#for(i in 1: nrow(mat)){
+for(i in 1: 2){
+  
+  mat_red_df$expr <- mat[i,]
+  mat_red_df <- mat_red_df[order(mat_red_df$expr),]
+
+  plot_list[[i]] <- ggplot(mat_red_df, aes(x=V1, y=V2, colour=expr)) +
+    geom_point(size=0.05, alpha=0.5, show.legend=F) + 
+    ggtitle(rownames(mat)[i]) +
+    scale_colour_viridis_c() +
+    theme(plot.title = element_text(size = 5), 
+          axis.title = element_text(size=5), 
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), 
+          axis.line = element_line(colour = "black"))
+}
+
+plot <- plot_grid(plotlist = plot_list, nrow=as.integer(nrow(mat)/3), ncol=3) #change this to the number of morphological features
+ggsave(filename=file.path(out_path, "BM_UMAP_single_marker_int-morph.tiff"), width = 7, height = 30, units = "in", device='tiff', dpi=500)
+
+```
+
+Finally, we will visualize the data in the dimensionality reduced space and color the dots by the sample they belong to. 
+
+```{r visualizing-umap-by-sample}
+
+samples <- unique(rownames(mat))
+
+bin_col <- setNames(c(adjustcolor("gray90",alpha.f=1), "palegreen4"), c(FALSE,TRUE))
+
+plot_list <- list()
+
+#for(i in 1: length(samples)){
+for(i in 1: 1){
+  sample_binary <- rownames(mat) == samples[i] 
+  
+  background <- as.data.frame(mat_red[,!sample_binary])
+  foreground <- as.data.frame(mat_red[,sample_binary])
+  plot_list[[i]] <- ggplot(background, aes(x=V1, y=V2) ) +
+    geom_point(color="gray90", size=0.05) + 
+    #geom_bin2d(data=foreground, size=0.05, bins=70, show.legend=F) +
+    #stat_density_2d_filled(data=foreground, show.legend=F) +
+    stat_density_2d(mapping=aes(fill = ..level..), data=foreground, geom = "polygon", show.legend=F) +
+    ggtitle(samples[i]) +
+    scale_fill_continuous(type = "viridis") +
+    theme(plot.title = element_text(size = 5), 
+          axis.title = element_text(size=5), 
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), 
+          axis.line = element_line(colour = "black"))
+}
+
+spe$sample_binary <- NULL
+
+plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33)) 
+
+save_tiff <- function(sublist, j){
+  plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
+  ggsave(filename=file.path(out_path, paste("BM_intensity_morph_UMAP_single_sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+}
+
+mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
+```
+
+
+
+

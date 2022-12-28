@@ -63,7 +63,7 @@ path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/
 spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv')) 
 
 #spe <- cbind(spe_pt, spe_bm_pos, spe_bm_neg)
-#spe <- readRDS(file.path(path,"data/BM_spe.rds"))
+#spe <- readRDS(file.path(path,"data/spe.rds"))
 spe
 ```
 

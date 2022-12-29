@@ -40,16 +40,50 @@ morph_names <- c("area",
                  "aspect_ratio-0", 
                  "perimeter_ratio-0")
 
-morph_mat <- as.matrix(t(colData(spe)[,morph_names]))
-morph_mat_scaled <- t(apply(morph_mat, 1, RESCALE, to=0:1))
+robustScaler <- function(data, upper, lower) {
+  scaled_data <- (data-median(data))/(quantile(data, probs = c(upper)) - quantile(data, probs = c(lower)))
+  return(scaled_data)
+}
+
+zscore_Scaler <- function(data) {
+  scaled_data <- (data-mean(data))/sd(data)
+  return(scaled_data)
+}
+
+clipScaler <- function(data, upper, lower, min, max) {
+  data[data > quantile(data, probs = c(upper))] <- quantile(data, probs = c(upper))
+  data[data < quantile(data, probs = c(lower))] <- quantile(data, probs = c(lower))
+  scaled_data <- RESCALE(data, to=min:max)
+  return(scaled_data)
+}
 
 intensity_mat <- assay(spe, "compexprs")
-intensity_mat_scaled <- t(apply(intensity_mat, 1, RESCALE, to=0:1))
+#intensity_mat_scaled <- t(apply(intensity_mat, 1, RESCALE, to=0:1))
+intensity_mat_scaled <- intensity_mat
 intensity_mat_scaled <- intensity_mat_scaled[!grepl("Histone|H4|Iridium|DAPI|136Ba|131Xe|134Xe|GD2-IF|CD56-IF", rownames(intensity_mat_scaled)),]
+colnames(intensity_mat_scaled) <- spe$sample
+
+morph_mat <- as.matrix(t(colData(spe)[,morph_names]))
+#morph_mat_scaled <- t(apply(morph_mat, 1, RESCALE, to=0:1))
+#morph_mat_scaled <- t(apply(morph_mat, 1, robustScaler, upper=0.95, lower=0.05))
+#morph_mat_scaled <- t(apply(morph_mat, 1, zscore_Scaler))
+#morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=mean(apply(intensity_mat_scaled,1,max))))
+morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=1))
+colnames(morph_mat_scaled) <- spe$sample
 
 features_mat <- rbind(intensity_mat_scaled, morph_mat_scaled)
-colnames(features_mat) <- spe$sample
 
+```
+
+Let's do some quality control on outlier cells.
+
+```{r}
+feat <- "solidity"
+
+morph_mat_order <- morph_mat[feat,order(morph_mat[feat,], decreasing=T)]
+outlier_cell <- names(morph_mat_order[1])
+position <- spatialCoords(spe[,outlier_cell])
+print(paste("The outlier cell is in sample", outlier_cell, "at position x=", position[1], "and y=", position[2], "."))
 ```
 
 In a next step, we will plot a single-cell heatmap using complex heatmap. 
@@ -61,7 +95,7 @@ library(circlize)
 library(RColorBrewer)
 library(paletteer)
 
-mat <- features_mat
+mat <- morph_mat_scaled
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -89,13 +123,14 @@ library(scater)
 library(BiocParallel)
 
 #mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
+#rownames(mat_red) <- colnames(mat)
 
 #saveRDS(mat_red, file.path(path, "data/mat_red_int-morph.rds"))
 
 mat_red <- readRDS(file.path(path,"data/mat_red_int-morph.rds"))
 ```
 
-Now we will visualize the data in the dimensionality reduced space and color the dots by marker expression. 
+Next, we will visualize the data in the dimensionality reduced space and color the dots by marker expression. 
 
 ```{r visualizing-umap-by-marker}
 
@@ -106,16 +141,19 @@ out_path <- file.path(path, "data")
 
 plot_list <- list()
 
+mat_red <- cbind(mat_red, t(mat))
 mat_red_df <- as.data.frame(mat_red)
+mat_red_df <- mat_red_df[sample(1:nrow(mat_red_df)),]
 
-for(i in 1: nrow(mat)){
+for(i in 3: ncol(mat_red_df)){
+
+  feature <- colnames(mat_red_df)[i]
+  mat_red_df_short <- mat_red_df[, c("V1", "V2", feature)]
+  colnames(mat_red_df_short) <- c("V1", "V2", "f")
   
-  mat_red_df$expr <- mat[i,]
-  mat_red_df <- mat_red_df[order(mat_red_df$expr),]
-
-  plot_list[[i]] <- ggplot(mat_red_df, aes(x=V1, y=V2, colour=expr)) +
+  plot_list[[i-2]] <- ggplot(mat_red_df_short, aes(x=V1, y=V2, colour=f)) +
     geom_point(size=0.05, alpha=0.5, show.legend=F) + 
-    ggtitle(rownames(mat)[i]) +
+    ggtitle(feature) +
     scale_colour_viridis_c() +
     theme(plot.title = element_text(size = 5), 
           axis.title = element_text(size=5), 
@@ -125,16 +163,55 @@ for(i in 1: nrow(mat)){
           axis.line = element_line(colour = "black"))
 }
 
-plot <- plot_grid(plotlist = plot_list, nrow=as.integer(nrow(mat)/3), ncol=3) #change this to the number of morphological features
+plot <- plot_grid(plotlist = plot_list, nrow=as.integer((ncol(mat_red_df)-2)/3), ncol=3) #change this to the number of morphological features
 ggsave(filename=file.path(out_path, "BM_UMAP_single_marker_int-morph.tiff"), width = 7, height = 30, units = "in", device='tiff', dpi=500)
 
 ```
 
+Now, we will plot all samples in the dim-red space. 
+
+```{r visualizing-umap-by-sample, message=F, fig.width=20}
+
+library(RColorBrewer)
+
+n <- length(unique(spe$sample))
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)] 
+col_sample <- setNames(sample(col_vector_433, n), unique(spe$sample))
+
+mat_red_df <- as.data.frame(mat_red)
+mat_red_df["sample"] <- rownames(mat_red)
+mat_red_df_rand <- mat_red_df[sample(1:nrow(mat_red_df)),]
+  
+plot <- ggplot(mat_red_df_rand, aes(x=V1, y=V2, colour=sample)) +
+    geom_point(size=0.05, alpha=0.5, show.legend=T) + 
+    ggtitle("Sample") +
+    scale_colour_manual(values = col_sample) +
+    theme(plot.title = element_text(size = 5), 
+          axis.title = element_text(size=5), 
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), 
+          axis.line = element_line(colour = "black"),
+          legend.text = element_text(size=5))
+
+plot
+```
+
+
 Finally, we will visualize the data in the dimensionality reduced space and color the dots by the sample they belong to. 
 
-```{r visualizing-umap-by-sample}
+```{r visualizing-umap-by-sample-single}
 
-samples <- unique(colnames(mat))
+#samples <- unique(colnames(mat))
+
+var <- "year"
+
+meta <- colData(spe)[match(colnames(mat), spe$sample),var]
+
+#meta[as.integer(meta) <= 11] <- "old"
+#meta[as.integer(meta) > 11] <- "new"
+
+samples <- unique(meta)
 
 bin_col <- setNames(c(adjustcolor("gray90",alpha.f=1), "palegreen4"), c(FALSE,TRUE))
 
@@ -142,7 +219,8 @@ plot_list <- list()
 
 for(i in 1: length(samples)){
 
-  sample_binary <- colnames(mat) == samples[i] 
+  #sample_binary <- colnames(mat) == samples[i] 
+  sample_binary <- meta == samples[i] 
   
   background <- as.data.frame(mat_red[!sample_binary,])
   foreground <- as.data.frame(mat_red[sample_binary,])

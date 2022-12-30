@@ -64,11 +64,12 @@ intensity_mat_scaled <- intensity_mat_scaled[!grepl("Histone|H4|Iridium|DAPI|136
 colnames(intensity_mat_scaled) <- spe$sample
 
 morph_mat <- as.matrix(t(colData(spe)[,morph_names]))
+rownames(morph_mat) <- gsub('-0','',rownames(morph_mat))
 #morph_mat_scaled <- t(apply(morph_mat, 1, RESCALE, to=0:1))
 #morph_mat_scaled <- t(apply(morph_mat, 1, robustScaler, upper=0.95, lower=0.05))
 #morph_mat_scaled <- t(apply(morph_mat, 1, zscore_Scaler))
-#morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=mean(apply(intensity_mat_scaled,1,max))))
-morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=1))
+morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=mean(apply(intensity_mat_scaled,1,max))))
+#morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=1))
 colnames(morph_mat_scaled) <- spe$sample
 
 features_mat <- rbind(intensity_mat_scaled, morph_mat_scaled)
@@ -95,7 +96,7 @@ library(circlize)
 library(RColorBrewer)
 library(paletteer)
 
-mat <- morph_mat_scaled
+mat <- features_mat
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -125,6 +126,7 @@ df <- as.data.frame(morph_mat_scaled)
 df["feature"] <- rownames(df)
 
 df_long <- pivot_longer(df, cols=colnames(df)[1:(ncol(df)-1)], names_to = "cell", values_to = "value")
+#df_long <- df_long[df_long[,"feature"]=="area",]
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -139,7 +141,28 @@ ggplot(df_long, aes(x = value, y = feature, fill = feature, height = ..density..
   scale_fill_manual(values = col_feature) +
   theme_ridges() + theme(legend.position = "none")
 ```
+Next, we will plot a density plot for each feature separately to have separate x-axis ranges.
 
+```{r histograms-separate-x-axis, message=FALSE, fig.height=10, fig.width=7}
+
+out_path <- file.path(path, "data")
+
+plot_list <- list()
+
+df <- as.data.frame(t(morph_mat_scaled))
+
+for(i in 1: ncol(df)){
+
+  feature <- colnames(df)[i]
+  
+  plot_list[[i]] <- ggplot(df, aes_string(feature)) +
+  geom_density(adjust = 5, color="darkblue", fill="lightblue")
+}
+
+plot <- plot_grid(plotlist = plot_list, nrow=ceiling(ncol(df)/3), ncol=3) #change this to the number of morphological features
+ggsave(filename=file.path(out_path, "BM_morph_clipped-mean-int_sep_ridges.tiff"), width = 7, height = 10, units = "in", device='tiff', dpi=500)
+
+```
 
 Then, we will perform dimensionality reduction by a UMAP. 
 
@@ -149,12 +172,12 @@ library(BiocParallel)
 
 set.seed(221228)
 
-#mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
-#rownames(mat_red) <- colnames(mat)
+mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
+rownames(mat_red) <- colnames(mat)
 
-#saveRDS(mat_red, file.path(path, "data/mat_red_morph.rds"))
+saveRDS(mat_red, file.path(path, "data/mat_red_morph.rds"))
 
-mat_red <- readRDS(file.path(path,"data/mat_red_morph.rds"))
+#mat_red <- readRDS(file.path(path,"data/mat_red_morph.rds"))
 ```
 
 Next, we will visualize the data in the dimensionality reduced space and color the dots by marker expression. 
@@ -168,7 +191,7 @@ out_path <- file.path(path, "data")
 
 plot_list <- list()
 
-mat_red <- cbind(mat_red, t(features_mat)) # change this later!!!!!
+mat_red <- cbind(mat_red, t(mat)) 
 mat_red_df <- as.data.frame(mat_red)
 
 set.seed(221228)
@@ -193,7 +216,7 @@ for(i in 3: ncol(mat_red_df)){
 }
 
 plot <- plot_grid(plotlist = plot_list, nrow=as.integer((ncol(mat_red_df)-2)/3), ncol=3) #change this to the number of morphological features
-ggsave(filename=file.path(out_path, "BM_UMAP_single_marker_morph_clipped_0-1.tiff"), width = 7, height = 30, units = "in", device='tiff', dpi=500)
+ggsave(filename=file.path(out_path, "BM_UMAP_single_marker_int-morph_clipped_0-mean.tiff"), width = 7, height = 30, units = "in", device='tiff', dpi=500)
 
 ```
 
@@ -295,7 +318,7 @@ plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33))
 
 save_tiff <- function(sublist, j){
   plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
-  ggsave(filename=file.path(out_path, paste("BM_morph_UMAP_single_sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(out_path, paste("BM_int-morph-clipped_mean-intens_UMAP_single_sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
 }
 
 mapply(save_tiff, plot_sublists, 1:length(plot_sublists))

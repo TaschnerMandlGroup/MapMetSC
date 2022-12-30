@@ -116,18 +116,45 @@ Heatmap(mat[,rand_cells],
         )
 ```
 
+Now, we will plot the histograms for the morphological features.
+
+```{r histograms, message=FALSE, fig.height=10, fig.width=7}
+library(ggridges)
+
+df <- as.data.frame(morph_mat_scaled)
+df["feature"] <- rownames(df)
+
+df_long <- pivot_longer(df, cols=colnames(df)[1:(ncol(df)-1)], names_to = "cell", values_to = "value")
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+
+set.seed(20221227)
+col_feature = setNames(sample(col_vector_74, nrow(df)), rownames(df))
+
+ggplot(df_long, aes(x = value, y = feature, fill = feature, height = ..density..)) +
+  geom_density_ridges(scale = 4, stat = "density") +
+  scale_y_discrete(expand = c(0.01, 0)) +
+  scale_x_continuous(expand = c(0.01, 0)) +
+  scale_fill_manual(values = col_feature) +
+  theme_ridges() + theme(legend.position = "none")
+```
+
+
 Then, we will perform dimensionality reduction by a UMAP. 
 
 ```{r UMAP, message=FALSE}
 library(scater)
 library(BiocParallel)
 
+set.seed(221228)
+
 #mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
 #rownames(mat_red) <- colnames(mat)
 
-#saveRDS(mat_red, file.path(path, "data/mat_red_int-morph.rds"))
+#saveRDS(mat_red, file.path(path, "data/mat_red_morph.rds"))
 
-mat_red <- readRDS(file.path(path,"data/mat_red_int-morph.rds"))
+mat_red <- readRDS(file.path(path,"data/mat_red_morph.rds"))
 ```
 
 Next, we will visualize the data in the dimensionality reduced space and color the dots by marker expression. 
@@ -141,8 +168,10 @@ out_path <- file.path(path, "data")
 
 plot_list <- list()
 
-mat_red <- cbind(mat_red, t(mat))
+mat_red <- cbind(mat_red, t(features_mat)) # change this later!!!!!
 mat_red_df <- as.data.frame(mat_red)
+
+set.seed(221228)
 mat_red_df <- mat_red_df[sample(1:nrow(mat_red_df)),]
 
 for(i in 3: ncol(mat_red_df)){
@@ -164,7 +193,7 @@ for(i in 3: ncol(mat_red_df)){
 }
 
 plot <- plot_grid(plotlist = plot_list, nrow=as.integer((ncol(mat_red_df)-2)/3), ncol=3) #change this to the number of morphological features
-ggsave(filename=file.path(out_path, "BM_UMAP_single_marker_int-morph.tiff"), width = 7, height = 30, units = "in", device='tiff', dpi=500)
+ggsave(filename=file.path(out_path, "BM_UMAP_single_marker_morph_clipped_0-1.tiff"), width = 7, height = 30, units = "in", device='tiff', dpi=500)
 
 ```
 
@@ -196,20 +225,42 @@ plot <- ggplot(mat_red_df_rand, aes(x=V1, y=V2, colour=sample)) +
 
 plot
 ```
+Now, we will plot specific markers in the dim-red space. 
 
+```{r visualizing-umap-by-marker, message=F}
+
+marker <- "Myeloperoxidase MPO"
+mat_red_df <- as.data.frame(mat_red)
+mat_red_df["marker"] <- features_mat[marker,]
+mat_red_df_rand <- mat_red_df[sample(1:nrow(mat_red_df)),]
+#mat_red_df_rand <- mat_red_df[order(features_mat[marker,], decreasing=F),]
+  
+plot <- ggplot(mat_red_df_rand, aes(x=V1, y=V2, colour=marker)) +
+    geom_point(size=0.05, alpha=0.2, show.legend=T) + 
+    ggtitle(marker) +
+    scale_colour_viridis_c() +
+    theme(plot.title = element_text(size = 5), 
+          axis.title = element_text(size=5), 
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), 
+          axis.line = element_line(colour = "black"),
+          legend.text = element_text(size=5))
+
+plot
+```
 
 Finally, we will visualize the data in the dimensionality reduced space and color the dots by the sample they belong to. 
 
 ```{r visualizing-umap-by-sample-single}
 
-#samples <- unique(colnames(mat))
 
 var <- "year"
 
-meta <- colData(spe)[match(colnames(mat), spe$sample),var]
+meta <- colData(spe)[match(rownames(mat_red), spe$sample),var]
 
-#meta[as.integer(meta) <= 11] <- "old"
-#meta[as.integer(meta) > 11] <- "new"
+meta[as.integer(meta) <= 11] <- "old"
+meta[as.integer(meta) > 11] <- "new"
 
 samples <- unique(meta)
 
@@ -219,7 +270,6 @@ plot_list <- list()
 
 for(i in 1: length(samples)){
 
-  #sample_binary <- colnames(mat) == samples[i] 
   sample_binary <- meta == samples[i] 
   
   background <- as.data.frame(mat_red[!sample_binary,])
@@ -245,7 +295,7 @@ plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33))
 
 save_tiff <- function(sublist, j){
   plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
-  ggsave(filename=file.path(out_path, paste("BM_intensity_morph_UMAP_single_sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(out_path, paste("BM_morph_UMAP_single_sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
 }
 
 mapply(save_tiff, plot_sublists, 1:length(plot_sublists))

@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"]= "1"
+
 import numpy as np
 import scipy.io as sio
-import os
 from os.path import join, exists, abspath
 import gc
 
@@ -19,7 +22,10 @@ from ..Anscombe_transform.Anscombe_transform_functions import Anscombe_forward, 
 
 import tensorflow as tf
 
+
+print(tf.config.list_physical_devices('GPU'))
 gpus = tf.config.list_physical_devices('GPU')
+
 if gpus:
     try:
         # Currently, memory growth needs to be the same across GPUs

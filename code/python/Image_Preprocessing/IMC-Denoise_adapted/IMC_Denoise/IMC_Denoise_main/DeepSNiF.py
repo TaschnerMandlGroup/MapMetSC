@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from keras import optimizers
 from keras.models import Model
 from keras.layers import Input
-from keras.callbacks import Callback, ModelCheckpoint, ReduceLROnPlateau
+from keras.callbacks import Callback, ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 
 from .DIMR import DIMR
 from .DeepSNiF_model import DeepSNiF_net
@@ -18,9 +18,9 @@ from ..DeepSNiF_utils.DeepSNiF_TrainGenerator import DeepSNiF_Training_DataGener
 from ..Anscombe_transform.Anscombe_transform_functions import Anscombe_forward, Anscombe_inverse_exact_unbiased, Anscombe_inverse_direct
 
 import tensorflow as tf
+
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
-    print("Using GPUs")
     try:
         # Currently, memory growth needs to be the same across GPUs
         for gpu in gpus:
@@ -160,7 +160,7 @@ class DeepSNiF():
             
         return model
     
-    def train(self, X):
+    def train(self, X, patience=10):
         
         """
         Train a DeepSNiF model for a specific marker.
@@ -217,12 +217,15 @@ class DeepSNiF():
         change_lr = ReduceLROnPlateau(monitor = 'val_loss', factor = self.lr_decay_rate, patience = 20, min_lr = 0.0000005, verbose = 1)
         
         # Save the model weights after each epoch
+        early_stopper = EarlyStopping(monitor='val_loss', patience=patience, verbose=1, restore_best_weights=True)
+        print(early_stopper)
+        
         if self.weights_name is not None: 
             np.savez(join(self.weights_dir, self.weights_name.replace('.hdf5','_range_val.npz')), range_val = self.range_val)
             checkpointer = ModelCheckpoint(filepath = join(self.weights_dir, self.weights_name), verbose = 1, save_best_only = False)
-            callback_list = [history, checkpointer, change_lr]
+            callback_list = [history, checkpointer, change_lr, early_stopper]
         else:
-            callback_list = [history, change_lr]
+            callback_list = [history, change_lr, early_stopper]
            
         training_data = DeepSNiF_Training_DataGenerator(X_train, self.train_batch_size, self.mask_perc_pix, (p_row_size, p_col_size))
         X_test, Y_test = DeepSNiF_Validation_DataGenerator(X_test, self.mask_perc_pix, (p_row_size, p_col_size))

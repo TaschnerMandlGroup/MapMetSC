@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+from tqdm import tqdm
 import tifffile as tp
 import os
 from os import listdir
@@ -8,6 +9,24 @@ from os.path import isfile, join, abspath, exists
 from glob import glob
 from ..IMC_Denoise_main.DIMR import DIMR
 from ..Anscombe_transform.Anscombe_transform_functions import Anscombe_forward, Anscombe_inverse_direct
+
+from functools import wraps
+import time
+
+def timeit(func):
+    @wraps(func)
+    def timeit_wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        total_time = end_time - start_time
+        print(f'Function {func.__name__} took {total_time:.4f} seconds')
+        return result
+    return timeit_wrapper
+
+##DEBUG
+
+import matplotlib.pyplot as plt
 
 class DeepSNiF_DataGenerator():
     
@@ -115,6 +134,7 @@ class DeepSNiF_DataGenerator():
             raise ValueError('Single image should be 2d!')
         return Img_in
     
+    @timeit
     def generate_patches(self, Img_collect):
         
         """
@@ -131,7 +151,7 @@ class DeepSNiF_DataGenerator():
         """
         patch_collect = np.zeros((1, self.patch_row_size, self.patch_col_size), dtype = np.float32)
         dimr = DIMR(n_neighbours = self.n_neighbours, n_iter = self.n_iter, window_size = self.window_size)
-        for Img in Img_collect:
+        for Img in tqdm(Img_collect):
             Img_Anscombe = Anscombe_forward(Img)
             Img_DIMR = np.array(dimr.predict_augment(Img_Anscombe))
             Img_DIMR = Anscombe_inverse_direct(Img_DIMR)
@@ -147,7 +167,7 @@ class DeepSNiF_DataGenerator():
             patch_collect = np.concatenate((patch_collect, patch_collect_sub), axis = 0)
         
         patch_collect = patch_collect[1:]
-        del Img_collect
+        #del Img_collect
         
         if self.is_augment:
             patch_collect = self.__augment_patches__(patch_collect)
@@ -158,7 +178,7 @@ class DeepSNiF_DataGenerator():
         
         return patch_collect
     
-    def load_imgs_from_directory(self, load_directory):
+    def load_imgs_from_directory(self, load_directory, n):
         
         """
         Load images from a directory
@@ -177,10 +197,11 @@ class DeepSNiF_DataGenerator():
                     Img_collect.append(Img_read)
                     break
         
-        print('\n' + 'Image data loading completed!'  + str(Img_collect.shape))
         if not Img_collect:
             print('No such channels! Please check the channel name again!')
             return
+        
+        Img_collect = Img_collect[:n]
                 
         return Img_collect
     
@@ -193,11 +214,13 @@ class DeepSNiF_DataGenerator():
         kk = 0
         patch_collect = np.zeros((len(Rows_range)*len(Cols_range), self.patch_row_size, self.patch_col_size), dtype = np.float32)
         for ii in Rows_range:
-                for jj in Cols_range:
-                    sub_Img = Img[ii-self.patch_row_size//2:ii+self.patch_row_size//2, jj-self.patch_col_size//2:jj+self.patch_col_size//2]
-                    if np.sum(sub_Img < 1.0) / np.prod(np.shape(sub_Img)) < self.ratio_thresh:
-                        patch_collect[kk, :, :] = sub_Img
-                        kk += 1
+            for jj in Cols_range:
+                sub_Img = Img[ii-self.patch_row_size//2:ii+self.patch_row_size//2, jj-self.patch_col_size//2:jj+self.patch_col_size//2]
+
+                if np.sum(sub_Img < 1.0) / np.prod(np.shape(sub_Img)) < self.ratio_thresh:
+                    patch_collect[kk, :, :] = sub_Img
+                    kk += 1
+                    
         return patch_collect[0:kk]
         
     
@@ -214,7 +237,7 @@ class DeepSNiF_DataGenerator():
         return patch_augmented
         
             
-    def generate_patches_from_directory(self, load_directory):
+    def generate_patches_from_directory(self, load_directory, n=None):
         
         """
         Generate training set from a specific directory
@@ -247,7 +270,8 @@ class DeepSNiF_DataGenerator():
         Generated training set
 
         """
-        Img_collect = self.load_imgs_from_directory(load_directory)
+        
+        Img_collect = self.load_imgs_from_directory(load_directory, n=n)
                 
         return self.generate_patches(Img_collect)
     

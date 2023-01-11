@@ -230,7 +230,7 @@ class DIMR():
                 d_mat = np.expand_dims(d_mat, axis = -1)
             if np.shape(d_mat)[0] < np.shape(d_mat)[1]:
                 d_mat = d_mat.transpose()
-                
+
             ff, xx1 = KernelDensityEstimation(d_mat, Bandwidth = nBandWidth, NumPoints = nPoint)
             ff = ff[0,:]
             xx1 = xx1[0,:]
@@ -238,9 +238,11 @@ class DIMR():
             if self.is_moving_mean_filter:
                 ff = uniform_filter1d(ff, size = self.mmf_window_size)
                 
+
             ff_smoothed = np.prod(np.shape(d_mat)) * ff * binWidth
             peaks_loc, _ = find_peaks(ff_smoothed, height = np.mean(ff_smoothed))
-            
+
+
             if np.prod(np.shape(peaks_loc)) == 0:
                 break
             ii_max = peaks_loc[0]
@@ -270,6 +272,7 @@ class DIMR():
             Img_med = sps.medfilt2d(X, kernel_size = self.window_size)
             DIMR_output[idx2] = Img_med[idx2]
                   
+
         return DIMR_output
     
     def perform_DIMR(self, X):

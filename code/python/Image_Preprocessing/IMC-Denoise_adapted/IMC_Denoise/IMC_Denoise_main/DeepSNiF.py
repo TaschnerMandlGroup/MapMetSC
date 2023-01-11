@@ -20,6 +20,7 @@ from ..Anscombe_transform.Anscombe_transform_functions import Anscombe_forward, 
 import tensorflow as tf
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
+    print("Using GPUs")
     try:
         # Currently, memory growth needs to be the same across GPUs
         for gpu in gpus:

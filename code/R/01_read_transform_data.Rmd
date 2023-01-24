@@ -207,19 +207,19 @@ Low (negative) values are being are reduced and stretched (not as much as high d
 
 ```{r plot by sample}
 selected_samples <- unique(spe$sample)[10:20]
-marker <- 'CD15'
+marker <- 'GD2'
 
 library(dittoSeq)
 dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "counts") +
     ggtitle(paste(marker,  "- before transformation"))
 
-dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "exprs") +
+dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "exprs", max=3) +
     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "log") +
+dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "log", max=1) +
     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "log10") +
+dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "log10", max=1) +
     ggtitle(paste(marker,  "- after transformation"))
 ```
 
@@ -362,8 +362,8 @@ saved as 16-bit images. To correctly scale pixel values of the segmentation
 masks when reading them in set `as.is = TRUE`.
 
 ```{r read-images}
-#images <- loadImages(file.path(path,"img"))
-#masks <- loadImages(file.path(path, "masks/nuclear"), as.is = TRUE)
+images <- loadImages(file.path(path,"img"))
+masks <- loadImages(file.path(path, "masks"), as.is = TRUE)
 ```
 
 In the case of multi-channel images, it is beneficial to set the `channelNames`
@@ -372,7 +372,7 @@ single-cell data matches the channel order of the multi-channel images. However,
 it is recommended to make sure that the channel order is known.
 
 ```{r set-channelNames}
-#channelNames(images) <- rownames(spe)
+channelNames(images) <- rownames(spe)
 ```
 
 For visualization shown in Section \@ref(image-visualization) we will need to

@@ -62,7 +62,7 @@ class FeatureExtractor():
             if isinstance(self.fixed, np.ndarray):
                 return additive_blend(self.fixed, self.warped)
 
-    def warp(self, im0 = None, im1 = None) -> None:
+    def warp(self, im0 = None, im1 = None, discrete = False) -> None:
         if isinstance(self.h, np.ndarray):
             if im0 is None:
                 im0 = self.im0
@@ -73,9 +73,12 @@ class FeatureExtractor():
                 im0 = np.expand_dims(im0, axis=0)
                 im1 = np.expand_dims(im1, axis=0)
             self.fixed=im0
-            #when registering discrete images (e.g. masks)
-            #self.warped = np.asarray([cv.warpAffine(im1[i], self.h, (self.fixed.shape[2], self.fixed.shape[1]), flags=cv.INTER_NEAREST) for i in range(im1.shape[0])]) 
-            self.warped = np.asarray([cv.warpAffine(im1[i], self.h, (self.fixed.shape[2], self.fixed.shape[1])) for i in range(im1.shape[0])]) 
+
+            if discrete:
+                #when registering discrete images (e.g. masks)
+                self.warped = np.asarray([cv.warpAffine(im1[i], self.h, (self.fixed.shape[2], self.fixed.shape[1]), flags=cv.INTER_NEAREST) for i in range(im1.shape[0])]) 
+            else:
+                self.warped = np.asarray([cv.warpAffine(im1[i], self.h, (self.fixed.shape[2], self.fixed.shape[1])) for i in range(im1.shape[0])]) 
 
             if dim < 3:
                 self.warped = np.squeeze(self.warped)

@@ -13,7 +13,7 @@ In this RMD file, we will write code for generating heatmaps and UMAPs for matri
 
 ```{r read-data}
 
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/sc_data"
 
 spe <- readRDS(file.path(path,"data/spe.rds"))
 
@@ -56,11 +56,11 @@ clipScaler <- function(data, upper, lower, min, max) {
   scaled_data <- RESCALE(data, to=min:max)
   return(scaled_data)
 }
-
-intensity_mat <- assay(spe, "compexprs")
+intensity_mat <- assay(spe, "exprs")
+# intensity_mat <- assay(spe, "compexprs")
 #intensity_mat_scaled <- t(apply(intensity_mat, 1, RESCALE, to=0:1))
 intensity_mat_scaled <- intensity_mat
-intensity_mat_scaled <- intensity_mat_scaled[!grepl("Histone|H4|Iridium|DAPI|136Ba|131Xe|134Xe|GD2-IF|CD56-IF", rownames(intensity_mat_scaled)),]
+intensity_mat_scaled <- intensity_mat_scaled[!grepl("CD274|IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac", rownames(intensity_mat_scaled)),]
 colnames(intensity_mat_scaled) <- spe$sample
 
 morph_mat <- as.matrix(t(colData(spe)[,morph_names]))
@@ -68,8 +68,8 @@ rownames(morph_mat) <- gsub('-0','',rownames(morph_mat))
 #morph_mat_scaled <- t(apply(morph_mat, 1, RESCALE, to=0:1))
 #morph_mat_scaled <- t(apply(morph_mat, 1, robustScaler, upper=0.95, lower=0.05))
 #morph_mat_scaled <- t(apply(morph_mat, 1, zscore_Scaler))
-morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=mean(apply(intensity_mat_scaled,1,max))))
-#morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=1))
+#morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=mean(apply(intensity_mat_scaled,1,max))))
+morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=1))
 colnames(morph_mat_scaled) <- spe$sample
 
 features_mat <- rbind(intensity_mat_scaled, morph_mat_scaled)
@@ -96,7 +96,7 @@ library(circlize)
 library(RColorBrewer)
 library(paletteer)
 
-mat <- features_mat
+mat <- intensity_mat_scaled
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -172,12 +172,20 @@ library(BiocParallel)
 
 set.seed(221228)
 
-mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
-rownames(mat_red) <- colnames(mat)
+mat <- intensity_mat_scaled
+mat_wo_zeros <- mat[,as.logical(colSums(mat)!=0)]
 
-saveRDS(mat_red, file.path(path, "data/mat_red_morph.rds"))
+mat_wo_zeros_red <- calculateUMAP(mat_wo_zeros, BPPARAM = MulticoreParam()) 
+rownames(mat_wo_zeros_red) <- colnames(mat_wo_zeros)
 
-#mat_red <- readRDS(file.path(path,"data/mat_red_morph.rds"))
+saveRDS(mat_wo_zeros_red, file.path(path, "data/mat_wo_zeros_red_int.rds"))
+
+# mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
+# rownames(mat_red) <- colnames(mat)
+# 
+# saveRDS(mat_red, file.path(path, "data/mat_red_int.rds"))
+
+#mat_red <- readRDS(file.path(path,"data/mat_red_int.rds"))
 ```
 
 Next, we will visualize the data in the dimensionality reduced space and color the dots by marker expression. 
@@ -216,7 +224,7 @@ for(i in 3: ncol(mat_red_df)){
 }
 
 plot <- plot_grid(plotlist = plot_list, nrow=as.integer((ncol(mat_red_df)-2)/3), ncol=3) #change this to the number of morphological features
-ggsave(filename=file.path(out_path, "BM_UMAP_single_marker_int-morph_clipped_0-mean.tiff"), width = 7, height = 30, units = "in", device='tiff', dpi=500)
+ggsave(filename=file.path(out_path, "BM_UMAP_single_marker_int.tiff"), width = 7, height = 30, units = "in", device='tiff', dpi=500)
 
 ```
 
@@ -250,13 +258,13 @@ plot
 ```
 Now, we will plot specific markers in the dim-red space. 
 
-```{r visualizing-umap-by-marker, message=F}
+```{r visualizing-umap-by-marker, message=F, fig.width=20}
 
-marker <- "Myeloperoxidase MPO"
+marker <- "155Gd-GD2_Gd155"
 mat_red_df <- as.data.frame(mat_red)
-mat_red_df["marker"] <- features_mat[marker,]
-mat_red_df_rand <- mat_red_df[sample(1:nrow(mat_red_df)),]
-#mat_red_df_rand <- mat_red_df[order(features_mat[marker,], decreasing=F),]
+mat_red_df["marker"] <- mat[marker,]
+#mat_red_df_rand <- mat_red_df[sample(1:nrow(mat_red_df)),]
+mat_red_df_rand <- mat_red_df[order(mat[marker,], decreasing=F),]
   
 plot <- ggplot(mat_red_df_rand, aes(x=V1, y=V2, colour=marker)) +
     geom_point(size=0.05, alpha=0.2, show.legend=T) + 
@@ -277,13 +285,14 @@ Finally, we will visualize the data in the dimensionality reduced space and colo
 
 ```{r visualizing-umap-by-sample-single}
 
+mat_red <- readRDS(file.path(path,"data/mat_red_int.rds"))
 
-var <- "year"
+var <- "sample"
 
 meta <- colData(spe)[match(rownames(mat_red), spe$sample),var]
 
-meta[as.integer(meta) <= 11] <- "old"
-meta[as.integer(meta) > 11] <- "new"
+# meta[as.integer(meta) <= 11] <- "old"
+# meta[as.integer(meta) > 11] <- "new"
 
 samples <- unique(meta)
 
@@ -301,9 +310,10 @@ for(i in 1: length(samples)){
     geom_point(color="gray90", size=0.05) + 
     #geom_bin2d(data=foreground, size=0.05, bins=70, show.legend=F) +
     #stat_density_2d_filled(data=foreground, show.legend=F) +
-    stat_density_2d(mapping=aes(fill = ..level..), data=foreground, geom = "polygon", show.legend=F) +
+    #stat_density_2d(mapping=aes(fill = ..level..), data=foreground, geom = "polygon", show.legend=F) +
+    geom_point(data=foreground, color="palegreen4", show.legend=F, size=0.05, alpha=0.25) +
     ggtitle(samples[i]) +
-    scale_fill_continuous(type = "viridis") +
+    #scale_fill_continuous(type = "viridis") +
     theme(plot.title = element_text(size = 5), 
           axis.title = element_text(size=5), 
           panel.grid.major = element_blank(), 
@@ -318,12 +328,69 @@ plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33))
 
 save_tiff <- function(sublist, j){
   plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
-  ggsave(filename=file.path(out_path, paste("BM_int-morph-clipped_mean-intens_UMAP_single_sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste("/data/BM-int_UMAP_single_sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
 }
 
 mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
 ```
+```{r phenograph-clustering}
+library(FastPG)
+library(parallel)
+
+n_threads <- detectCores()
+mat <- t(intensity_mat_scaled)
+mat_wo_zeros <- mat[as.logical(rowSums(mat)!=0),]
+out <- FastPG::fastCluster(data=mat_wo_zeros, k=45, num_threads=n_threads)
+clusters <- factor(out$communities)
+
+```
+
+```{r visualizing-umap-by-phenograph-cluster, message=F, fig.width=20}
 
 
+n <- length(unique(clusters))
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)] 
+col_clusters <- setNames(sample(col_vector_433, n), unique(clusters))
 
+
+mat_red_df["clusters"] <- clusters
+mat_red_df_rand <- mat_red_df[sample(1:nrow(mat_red_df)),]
+  
+plot <- ggplot(mat_red_df_rand, aes(x=V1, y=V2, colour=clusters)) +
+    geom_point(size=0.05, alpha=0.5, show.legend=T) + 
+    ggtitle("Phenograph cluster") +
+    scale_colour_manual(values = col_clusters) +
+    theme(plot.title = element_text(size = 5), 
+          axis.title = element_text(size=5), 
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), 
+          axis.line = element_line(colour = "black"),
+          legend.text = element_text(size=5))
+
+plot
+```
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+library(ComplexHeatmap)
+library(viridis)
+library(circlize)
+library(RColorBrewer)
+library(paletteer)
+
+
+set.seed(221228)
+rand_cells <- sample(seq_len(ncol(mat_wo_zeros)), 2000)
+
+column_ha = HeatmapAnnotation(cluster = clusters[rand_cells], col=list(cluster=col_clusters), show_legend=F)
+Heatmap(mat_wo_zeros[,rand_cells], 
+        column_title = "Single-cell heatmap with phenograph clusters",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(clusters[rand_cells], decreasing=F),
+        show_column_dend = F,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
 

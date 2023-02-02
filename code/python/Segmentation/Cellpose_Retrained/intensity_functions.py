@@ -24,10 +24,10 @@ def mean_intensity(I, masks, channel_names=None):
     for n, val in enumerate(vals):
         
         if isinstance(channel_names, (list, tuple)):
-            results[f"{channel_names[n]}"] = val
+            results[f"{channel_names[n]}" + "_mean"] = val
             
         else:
-            results[f"{n}"] = val
+            results[f"{n}" + "_mean"] = val
     
     return results
 
@@ -57,9 +57,9 @@ def mean_80_intensity(I, masks, channel_names=None):
     for n, val in enumerate(vals):
         
         if isinstance(channel_names, (list, tuple)):
-            results[f"{channel_names[n]}"] = val
+            results[f"{channel_names[n]}"  + "_mean-80"] = val
             
         else:
-            results[f"{n}"] = val
+            results[f"{n}" + "_mean-80"] = val
     
     return results

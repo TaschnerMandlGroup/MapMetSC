@@ -4,6 +4,7 @@ import cellpose.models
 import torch
 import cv2
 from skimage.measure import regionprops_table
+from skimage.morphology import dilation, square
 from typing import Union
 from .intensity_functions import mean_intensity, mean_80_intensity
 from Registration._02_register import FeatureExtractor
@@ -25,7 +26,7 @@ def main_function(I: 'np.ndarray[np.uint8]',
                   extract_morph_features: bool=False, 
                   extract_intensity_features: bool=False,
                   channel_names=None,
-                  intensity_function=mean_intensity,
+                  #intensity_function=mean_intensity,
                   additional_morphology_functions=[],
                   debug_msg=True
                   ): 
@@ -57,25 +58,6 @@ def main_function(I: 'np.ndarray[np.uint8]',
     # segment the given image I using a network from cellpose, give cellpose the network u want to use as a parameter cellpose_net = "CPx"
     logger.debug(f"Start segmentation of image with size: {I.shape}")
 
-    #Since the IF-IMC stack has been cut by 2 pixels, we have to re-register the lowres onto high-res IF DAPI image and cut it accordingly (this can be deleted once images are saved but make sure to read IF_cut_2px.tiff then)
-    pp_I = preprocess(I)
-    pp_intensity_image = preprocess(intensity_image[-3])
-
-    ex = FeatureExtractor("sift")
-    ex(pp_I, pp_intensity_image)
-    ex.match()
-    ex.estimate()
-
-    _, warped = ex.warp(im0=I, im1=intensity_image[-3])
-
-    tmp = np.argwhere(warped > 0.0)
-    max_y = tmp[:, 0].max()
-    min_y = tmp[:, 0].min()
-    min_x = tmp[:, 1].min()
-    max_x = tmp[:, 1].max()
-
-    I = I[min_y:max_y, min_x:max_x]
-
     masks, _, _ = model.eval(I, **eval_kwargs)
 
     logger.debug(f"Finished segmentation found {len(np.unique(masks))} masks")
@@ -95,12 +77,6 @@ def main_function(I: 'np.ndarray[np.uint8]',
         morph_features = pd.DataFrame(morph_features)
         morph_features = morph_features.rename(columns={"label": "Object"})
 
-        #objects = morph_features["Object"]
-        #morph_features = morph_features.drop("Object", axis=1)
-        #morph_columns = morph_features.columns
-
-        #morph_features = pd.DataFrame(MinMaxScaler().fit_transform(morph_features), columns=morph_columns)
-        #morph_features["Object"] = objects
         morph_features = morph_features.set_index("Object")
 
         logger.debug(f"Done Extracting Morphology")
@@ -125,24 +101,37 @@ def main_function(I: 'np.ndarray[np.uint8]',
             _, masks = ex.warp(im0=intensity_image[-3], im1=masks, discrete=True)
             #masks = cv2.resize(masks, out_sz, interpolation=cv2.INTER_NEAREST)
             #I = cv2.resize(I, out_sz, interpolation=cv2.INTER_LINEAR)
+
+            masks_dilated_1px = dilation(masks, square(3))
+            masks_dilated_2px = dilation(masks, square(5))
   
     # give the function a parameter if you want to extract features (regionprops) and a list of the features you want to extract
     if extract_intensity_features and not isinstance(intensity_image, type(None)):
         
-        logger.debug(f"Extracting Intensity for intensity image with functions: {intensity_function}")
-        intensity_features = extract_intensity(intensity_image, masks, intensity_function=intensity_function, channel_names=channel_names)
+        #logger.debug(f"Extracting Intensity for intensity image with functions: {intensity_function}")
+        logger.debug(f"Extracting Intensity")
+        mean = extract_intensity(intensity_image, masks, intensity_function=mean_intensity, channel_names=channel_names)
+        mean_80 = extract_intensity(intensity_image, masks, intensity_function=mean_80_intensity, channel_names=channel_names)
+        intensity_features = pd.concat([mean, mean_80], axis=1)
+        #logger.debug(f"Done Extracting Intensity")
+
+        #logger.debug(f"Extracting Intensity for intensity image with expanded masks with functions: {intensity_function}")
+        mean = extract_intensity(intensity_image, masks_dilated_1px, intensity_function=mean_intensity, channel_names=channel_names)
+        mean_80 = extract_intensity(intensity_image, masks_dilated_1px, intensity_function=mean_80_intensity, channel_names=channel_names)
+        intensity_features_dilated_1px = pd.concat([mean, mean_80], axis=1)
+        #logger.debug(f"Done Extracting Intensity")
+
+        #logger.debug(f"Extracting Intensity for intensity image with expanded masks with functions: {intensity_function}")
+        mean = extract_intensity(intensity_image, masks_dilated_2px, intensity_function=mean_intensity, channel_names=channel_names)
+        mean_80 = extract_intensity(intensity_image, masks_dilated_2px, intensity_function=mean_80_intensity, channel_names=channel_names)
+        intensity_features_dilated_2px = pd.concat([mean, mean_80], axis=1)
         logger.debug(f"Done Extracting Intensity")
         
-    elif extract_intensity_features and isinstance(intensity_image, type(None)):
-        
-        logger.debug(f"Extracting Intensity only for I with functions: {intensity_function}")
-        intensity_features = extract_intensity(I, masks, intensity_function=intensity_function, channel_names=channel_names)
-        logger.debug(f"Done Extracting Intensity")
     
     
     logger.debug(f"Finished!")
     
-    return I, masks, morph_features, intensity_features
+    return masks, masks_dilated_1px, masks_dilated_2px, intensity_features, intensity_features_dilated_1px, intensity_features_dilated_2px, morph_features
 
 
 def extract_morphology(masks, additional_morphology_functions=None):

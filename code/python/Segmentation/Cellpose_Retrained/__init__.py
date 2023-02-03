@@ -4,7 +4,7 @@ import cellpose.models
 import torch
 import cv2
 from skimage.measure import regionprops_table
-from skimage.morphology import dilation, square
+from skimage.segmentation import expand_labels
 from typing import Union
 from .intensity_functions import mean_intensity, mean_80_intensity
 from Registration._02_register import FeatureExtractor
@@ -102,8 +102,8 @@ def main_function(I: 'np.ndarray[np.uint8]',
             #masks = cv2.resize(masks, out_sz, interpolation=cv2.INTER_NEAREST)
             #I = cv2.resize(I, out_sz, interpolation=cv2.INTER_LINEAR)
 
-            masks_dilated_1px = dilation(masks, square(3))
-            masks_dilated_2px = dilation(masks, square(5))
+            masks_dilated_1px = expand_labels(masks, 1)
+            masks_dilated_2px = expand_labels(masks, 2)
   
     # give the function a parameter if you want to extract features (regionprops) and a list of the features you want to extract
     if extract_intensity_features and not isinstance(intensity_image, type(None)):

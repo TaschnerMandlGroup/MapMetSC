@@ -355,7 +355,7 @@ Now, we will plot specific markers in the dim-red space.
 ```{r visualizing-umap-by-marker, message=F, fig.width=20}
 
 mat_tmp <- rbind(intensity_mat_hq_wo_zeros, intensity_mat_lq_wo_zeros)
-for (i in 1: 1){
+for (i in 1: nrow(mat_tmp)){
   marker <- rownames(mat_tmp)[i]
   mat_red_df <- as.data.frame(mat_red)
   mat_red_df["marker"] <- mat_tmp[i,]

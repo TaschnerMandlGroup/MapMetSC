@@ -17,7 +17,7 @@ library(BiocParallel)
 ```
 
 ```{r read-steinbock}
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased/PT"
 
 spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv')) 
 colnames(spe) <- paste0(spe$sample_id, "_", spe$ObjectNumber)
@@ -239,6 +239,7 @@ write.csv(adapted_sm, file.path(path,"data/spillover_matrix_no-binning_all-inter
 
 ```{r image-compensation-loop, message = FALSE}
 library(tiff)
+library(BiocParallel)
 
 rowData(spe)$channel_name <- paste0(rowData(spe)$channel, "Di")
 files <- list.files(file.path(path, "img"))
@@ -256,7 +257,7 @@ for (i in 1: length(files)){
   channelNames(images_stacked) <- rownames(spe)
   
 
-  dir.create(file.path(path, "comp_img"))
+  #dir.create(file.path(path, "comp_img"))
   lapply(names(images_stacked), function(x){
     writeImage(as.array(images_stacked[[x]])/(2^32 - 1), 
               paste0(file.path(path, "comp_img/"), x, ".tiff"),

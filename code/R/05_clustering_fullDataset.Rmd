@@ -57,7 +57,7 @@ sample 2000 cells to visualize cluster membership.
 library(SpatialExperiment)
 library(bruceR)
 
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221102_Steinbock_Mesmer_IFbased/data/PT"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/sc_data/data"
 spe_all <- readRDS(file.path(path,"spe.rds"))
 
 # Sample cells
@@ -121,22 +121,22 @@ reported to be more accurate than FlowSOM.
 
 n_threads <- detectCores()
 
-mat <- reducedDim(spe, "fastMNN")
-#mat <- t(assay(spe, "exprs"))
+#mat <- reducedDim(spe, "fastMNN")
+mat <- t(assay(spe, "exprs"))
 
 #out <- Rphenograph(mat, k = 45)
 out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
 
 clusters <- factor(out$communities)
 
-spe$pg_clusters_fastMNN <- clusters
+spe$pg_clusters <- clusters
 ```
 
 ```{r rphenograph-clustering-1, message=FALSE, fig.width=20}
-dittoDimPlot(spe, var = "pg_clusters_fastMNN", 
-             reduction.use = "UMAP_mnnCorrected", size = 0.2,
+dittoDimPlot(spe, var = "pg_clusters", 
+             reduction.use = "UMAP", size = 0.2,
              do.label = TRUE) +
-    ggtitle("Phenograph clusters expression on UMAP_mnnCorrected")
+    ggtitle("Phenograph clusters expression on UMAP")
 ```
 
 ```{r phenograph-heatmap-1, fig.width=20}

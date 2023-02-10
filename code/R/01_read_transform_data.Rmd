@@ -58,11 +58,10 @@ The `read_steinbock` function provided by `imcRtools` can now be used to read in
 `?read_steinbock`.
 
 ```{r read-steinbock}
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20221220_Cellpose_IFbased"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230202_sc_data"
 
 spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv')) 
 
-#spe <- cbind(spe_pt, spe_bm_pos, spe_bm_neg)
 #spe <- readRDS(file.path(path,"data/spe.rds"))
 spe
 ```
@@ -73,7 +72,7 @@ stored in the `counts` slot. Columns represent cells and rows represent channels
 
 ```{r counts}
 rowData(spe)
-counts(spe)[1:47,1:9]
+counts(spe)[1:44,1:9]
 ```
 
 Metadata associated to individual cells are stored in the `colData` slot. After
@@ -196,9 +195,11 @@ tested when analysing IMC data.
 
 ```{r transform-counts, message=FALSE}
 
-assay(spe, "exprs") <- asinh(counts(spe)/1)
-assay(spe, "log") <- log(counts(spe) + 0.1)
-assay(spe, "log10") <- log10(counts(spe) + 0.1)
+#assay(spe, "exprs") <- asinh(counts(spe)/1)
+#assay(spe, "log") <- log(counts(spe) + 0.1)
+#assay(spe, "log10") <- log10(counts(spe) + 0.1)
+
+assay(spe, "exprs") <- counts(spe)
 ```
 
 Low (negative) values are being are reduced and stretched (not as much as high data), while high values are given more similar y values (stretched), and are increased. Co-factor is used to scale down data before transforming it.
@@ -207,31 +208,31 @@ Low (negative) values are being are reduced and stretched (not as much as high d
 
 ```{r plot by sample}
 selected_samples <- unique(spe$sample)[10:20]
-marker <- 'CD15'
+marker <- '152Sm-CD3_Sm152_mean-80'
 
 library(dittoSeq)
 dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "counts") +
     ggtitle(paste(marker,  "- before transformation"))
 
-dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "exprs") +
-    ggtitle(paste(marker,  "- after transformation"))
+# dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "exprs", max=3) +
+#     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "log") +
-    ggtitle(paste(marker,  "- after transformation"))
-
-dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "log10") +
-    ggtitle(paste(marker,  "- after transformation"))
+# dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "log", max=1) +
+#     ggtitle(paste(marker,  "- after transformation"))
+# 
+# dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "log10", max=1) +
+#     ggtitle(paste(marker,  "- after transformation"))
 ```
 
 ```{r plot by staining date}
 
-marker <- 'HLA-DR'
+marker <- '152Sm-CD3_Sm152'
 selecting_staining_dates <- unique(spe$staining_date)[1:5]
 dittoRidgePlot(spe[,spe$staining_date%in%selecting_staining_dates], var = marker, group.by = "staining_date", assay = "exprs") +
     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe[,spe$staining_date%in%selecting_staining_dates], var = marker, group.by = "staining_date", assay = "log") +
-    ggtitle(paste(marker,  "- after transformation"))
+# dittoRidgePlot(spe[,spe$staining_date%in%selecting_staining_dates], var = marker, group.by = "staining_date", assay = "log") +
+#     ggtitle(paste(marker,  "- after transformation"))
 
 ```
 
@@ -242,8 +243,8 @@ marker <- 'HLA-DR'
 dittoRidgePlot(spe, var = marker, group.by = "year", assay = "exprs") +
     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe, var = marker, group.by = "year", assay = "log") +
-    ggtitle(paste(marker,  "- after transformation"))
+# dittoRidgePlot(spe, var = marker, group.by = "year", assay = "log") +
+#     ggtitle(paste(marker,  "- after transformation"))
 
 ```
 
@@ -254,9 +255,10 @@ selected_roi <- unique(spe$sample)[3]
 dittoRidgePlot(spe[,spe$sample%in%selected_roi], var = marker, group.by = "ROI", assay = "exprs") +
     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe[,spe$sample%in%selected_roi], var = marker, group.by = "ROI", assay = "log") +
-    ggtitle(paste(marker,  "- after transformation"))
+# dittoRidgePlot(spe[,spe$sample%in%selected_roi], var = marker, group.by = "ROI", assay = "log") +
+#     ggtitle(paste(marker,  "- after transformation"))
 ```
+
 ```{r plot by patient}
 
 selected_patients <- unique(spe$study_id)[10:20]
@@ -265,28 +267,34 @@ marker <- 'CD45'
 dittoRidgePlot(spe[,spe$study_id%in%selected_patients], var = marker, group.by = "study_id", assay = "exprs") +
     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe[,spe$study_id%in%selected_patients], var = marker, group.by = "study_id", assay = "log") +
-    ggtitle(paste(marker,  "- after transformation"))
+# dittoRidgePlot(spe[,spe$study_id%in%selected_patients], var = marker, group.by = "study_id", assay = "log") +
+#     ggtitle(paste(marker,  "- after transformation"))
 
 ```
+
+
 ```{r plot by stainer}
 
 marker <- 'HLA-DR'
 dittoRidgePlot(spe, var = marker, group.by = "stainer", assay = "exprs") +
     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe, var = marker, group.by = "stainer", assay = "log") +
-    ggtitle(paste(marker,  "- after transformation"))
+# dittoRidgePlot(spe, var = marker, group.by = "stainer", assay = "log") +
+#     ggtitle(paste(marker,  "- after transformation"))
 ```
+
+
 ```{r plot by IMC date}
 
 marker <- 'HLA-DR'
 dittoRidgePlot(spe, var = marker, group.by = "imc_date", assay = "exprs") +
     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe, var = marker, group.by = "imc_date", assay = "log") +
-    ggtitle(paste(marker,  "- after transformation"))
+# dittoRidgePlot(spe, var = marker, group.by = "imc_date", assay = "log") +
+#     ggtitle(paste(marker,  "- after transformation"))
 ```
+
+
 ```{r plot by tissue}
 
 marker <- 'Ki-67'
@@ -294,8 +302,8 @@ marker <- 'Ki-67'
 dittoRidgePlot(spe, var = marker, group.by = "tissue", assay = "exprs") +
     ggtitle(paste(marker,  "- after transformation"))
 
-dittoRidgePlot(spe, var = marker, group.by = "tissue", assay = "log") +
-    ggtitle(paste(marker,  "- after transformation"))
+# dittoRidgePlot(spe, var = marker, group.by = "tissue", assay = "log") +
+#     ggtitle(paste(marker,  "- after transformation"))
 
 ```
 
@@ -362,8 +370,8 @@ saved as 16-bit images. To correctly scale pixel values of the segmentation
 masks when reading them in set `as.is = TRUE`.
 
 ```{r read-images}
-#images <- loadImages(file.path(path,"img"))
-#masks <- loadImages(file.path(path, "masks/nuclear"), as.is = TRUE)
+images <- loadImages(file.path(path,"img"))
+masks <- loadImages(file.path(path, "masks"), as.is = TRUE)
 ```
 
 In the case of multi-channel images, it is beneficial to set the `channelNames`
@@ -372,7 +380,7 @@ single-cell data matches the channel order of the multi-channel images. However,
 it is recommended to make sure that the channel order is known.
 
 ```{r set-channelNames}
-#channelNames(images) <- rownames(spe)
+channelNames(images) <- rownames(spe)
 ```
 
 For visualization shown in Section \@ref(image-visualization) we will need to
@@ -401,7 +409,7 @@ processing and analysis.
 
 # spe <- spe[,!spe$exclude%in%c("maybe")]
 
-saveRDS(spe, file.path(path, "data/spe.rds"))
+saveRDS(spe, file.path(path, "data/spe_2px.rds"))
 ```
 
 ## Session Info

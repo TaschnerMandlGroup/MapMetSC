@@ -9,6 +9,7 @@ import tifffile
 import io
 
 def read_channel_names(path):
+    
     tiff = tifffile.TiffFile(path)
     omexml_string = tiff.pages[0].description
 

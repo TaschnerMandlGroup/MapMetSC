@@ -13,9 +13,9 @@ In this RMD file, we will perform clustering on the curated data (after excludin
 
 ```{r read-data}
 
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230202_sc_data"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/PT/20230308_sc_data/simple_segmentation"
 
-spe <- readRDS(file.path(path,"data/spe_1px_wo-ghosts.rds"))
+spe <- readRDS(file.path(path,"data/spe_1px_wo-zeros.rds"))
 
 ```
 
@@ -62,18 +62,18 @@ clipScaler <- function(data, upper, lower, min, max) {
 }
 intensity_mat <- assay(spe, "exprs")
 colnames(intensity_mat) <- spe$sample
-intensity_mat <- intensity_mat[!grepl("mean-80", rownames(intensity_mat)),]
+intensity_mat <- intensity_mat[grepl("mean-80", rownames(intensity_mat)),]
 
 
-intensity_mat_hq <- intensity_mat[!grepl("CD274|IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
-intensity_mat_lq <- intensity_mat[grepl("CD274|IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
+intensity_mat_hq <- intensity_mat[!grepl("DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|PNMT", rownames(intensity_mat)),]
+intensity_mat_lq <- intensity_mat[grepl("DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|PNMT", rownames(intensity_mat)),]
 
 #Make sure to exclude cells that are zero for all markers as PG won't work otherwise
-non_zeros <- as.logical(colSums(intensity_mat_hq)!=0)
+#non_zeros <- as.logical(colSums(intensity_mat_hq)!=0)
 
-intensity_mat_hq_wo_zeros <- intensity_mat_hq[,non_zeros]
-intensity_mat_lq_wo_zeros <- intensity_mat_lq[,non_zeros]
-spe <- spe[,non_zeros]
+#intensity_mat_hq_wo_zeros <- intensity_mat_hq[,non_zeros]
+#intensity_mat_lq_wo_zeros <- intensity_mat_lq[,non_zeros]
+#spe <- spe[,non_zeros]
 
 
 cell_id <- colnames(spe)
@@ -193,7 +193,7 @@ mat <- t(intensity_mat_hq_wo_zeros)
 
 out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
 clusters <- factor(out$communities)
-saveRDS(clusters, file.path(path, "data/clusters-int-1px-mean_post-curation.rds"))
+saveRDS(clusters, file.path(path, "data/clusters-int-1px-mean80_post-curation.rds"))
 
 ```
 
@@ -217,7 +217,7 @@ mat <- t(mat)
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells], 
-                              DNA = intensity_mat_lq_wo_zeros["193Ir-DNA1_Ir193_mean", rand_cells],
+                              DNA = intensity_mat_lq["193Ir-DNA1_Ir193_mean", rand_cells],
                               col=list(cluster=col_clusters, DNA=col_marker), 
                               show_legend=F)
 
@@ -481,14 +481,14 @@ data <- data.frame(sample=colnames(mat), clusters)
 data$freq <- 1
 
 data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
-data_long <- data_wide[101:150,] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
+data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
 data_long$cluster <- factor(data_long$cluster, levels=levels(clusters))
 
  
 # Stacked + percent
 ggplot(data_long, aes(fill=cluster, y=count, x=sample)) + 
-  ggtitle("Clusters per sample 101:150") +
+  ggtitle("Clusters per sample") +
   geom_bar(position="fill", stat="identity") + 
   scale_fill_manual(values = col_clusters) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 

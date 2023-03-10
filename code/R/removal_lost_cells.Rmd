@@ -46,8 +46,8 @@ spe <- spe[, non_zeros]
 mat <- intensity_mat_mean_80[, non_zeros]
 cell_id <- colnames(spe)
 
-#Consideration of only nuclear channels for identification of further lost cells
-mat <- mat[!grepl("CD274|2IF_GD2|3IF_CD56", rownames(mat)),]
+#Consideration of only nuclear channels for IF for identification of further lost cells
+mat <- mat[!grepl("2IF_GD2|3IF_CD56", rownames(mat)),]
 
 ```
 
@@ -144,6 +144,7 @@ library(scuttle)
 
 
 mean <- aggregate(t(mat), list(clusters), mean)
+mean_t <- t(mean)
 colnames(mean_t) <- mean[,"Group.1"]
 
 column_ha = HeatmapAnnotation(cluster = mean[,"Group.1"], 

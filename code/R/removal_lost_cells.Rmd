@@ -20,7 +20,7 @@ spe <- readRDS(file.path(path,"data/spe_no-dil.rds"))
 ```
 
 
-Then we will generate next generate a matrix for the spatial experiment object and exclude IF markers DAPI, GD2 and CD56 as well as IMC marker CD274, as this one was not background corrected and first exclude all cells that are zero for all remaining markers. Then, we will examine whether there are still "ghosts" left by clustering the reduced matrix. We will use mean-80 instead of mean intensity, because cells might have a low mean intensity due to their size, which should not be excluded. As there are sometimes cells, without nuclear staining, like clPARP+ cells, we will include all IMC markers (except for CD274) and DAPI for clustering. 
+Then we will generate next generate a matrix for the spatial experiment object and exclude IF markers DAPI, GD2 and CD56 as well as IMC marker CD274, as this one was not background corrected and first exclude all cells that are zero for all remaining markers. Then, we will examine whether there are still "ghosts" left by clustering the reduced matrix. We will use mean-80 instead of mean intensity, because cells might have a low mean intensity due to their size, which should not be excluded. As there are sometimes cells, without nuclear staining, like clPARP+ cells, we will include all IMC markers expcept for DAPI for clustering. 
 
 ```{r generate-dataframes, message=FALSE, fig.height=7}
 library(bruceR)
@@ -37,7 +37,7 @@ colnames(intensity_mat) <- spe$sample
 intensity_mat_mean_80 <- intensity_mat[grepl("mean-80", rownames(intensity_mat)),]
 
 #exclusion of all-zero cells
-intensity_mat_bg_corrected <- intensity_mat_mean_80[!grepl("CD274|2IF_GD2|3IF_CD56|DAPI", rownames(intensity_mat_mean_80)),]
+intensity_mat_bg_corrected <- intensity_mat_mean_80[!grepl("2IF_GD2|3IF_CD56|DAPI", rownames(intensity_mat_mean_80)),]
 non_zeros <- as.logical(colSums(intensity_mat_bg_corrected)!=0)
 
 length(non_zeros[non_zeros==FALSE])
@@ -96,7 +96,7 @@ mat <- t(mat)
 
 out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
 clusters <- factor(out$communities)
-saveRDS(clusters, file.path(path, "data/clusters-int-1px-mean_identify-lost-cells.rds"))
+saveRDS(clusters, file.path(path, "data/clusters-int-no-dil-mean80_identify-lost-cells.rds"))
 
 ```
 
@@ -126,7 +126,7 @@ column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
 
 
 Heatmap(mat[,rand_cells], 
-        column_title = "Single-cell heatmap with phenograph clusters (-1px -mean)",
+        column_title = "Single-cell heatmap with phenograph clusters (nodil -mean)",
         top_annotation = column_ha, 
         cluster_columns=F,
         column_order= order(clusters[rand_cells], decreasing=F),
@@ -156,7 +156,7 @@ mean_t <- t(mean[,2:ncol(mean)])
 colnames(mean_t) <- mean[,"Group.1"]
 
 Heatmap(mean_t, 
-        column_title = "Cluster-means heatmap with phenograph clusters (-1px -mean)",
+        column_title = "Cluster-means heatmap with phenograph clusters (no-dil -mean)",
         top_annotation = column_ha, 
         cluster_columns=T,
         show_column_dend = F,
@@ -243,5 +243,6 @@ spe_1px <- readRDS(file.path(path,"data/spe_1px.rds"))
 spe_1px <- spe_1px[,colnames(spe)]
 
 saveRDS(spe_1px, file.path(path, "data/spe_1px_wo-ghosts.rds"))
+
 ```
 

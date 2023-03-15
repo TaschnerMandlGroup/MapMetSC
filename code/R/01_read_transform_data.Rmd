@@ -58,11 +58,14 @@ The `read_steinbock` function provided by `imcRtools` can now be used to read in
 `?read_steinbock`.
 
 ```{r read-steinbock}
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/PT/20230308_sc_data/probabilities"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/PT/20230308_sc_data/simple_segmentation"
+
+#spe_bm <- read_steinbock(path=file.path(path, "BM/20230308_sc_data/simple_segmentation"), image_file=NULL, panel_file = file.path(path, 'BM/20230308_sc_data/simple_segmentation/NB_Panel.csv')) 
+#spe_pt <- read_steinbock(path=file.path(path, "PT/20230308_sc_data/simple_segmentation"), image_file=NULL, panel_file = file.path(path, 'PT/20230308_sc_data/simple_segmentation/NB_Panel.csv')) 
+#spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv')) 
+#spe <- cbind(spe_pt, spe_bm)
 
 spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv')) 
-
-#spe <- readRDS(file.path(path,"data/spe.rds"))
 spe
 ```
 
@@ -136,13 +139,14 @@ spe$fm_id <- str_match(spe$sample, "_(.*)_")[,2]
 spe$tissue <- str_match(spe$sample, "^.*_.*_(.*)")[,2] 
 spe$tissue[spe$tissue=="TU"] = "PT"
 
-meta <- read.csv(file.path(path, '20230308_metadata_complete.csv'))
+meta <- read.csv(file.path(path, '20230314_metadata_complete_comma.csv'))
 #meta <- meta[meta$Tissue == 'BM',]
 
 spe$puncture_side <- meta$Puncture_side[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$infiltration_right <- meta$Infiltration_right[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$infiltration_left <- meta$Infiltration_left[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$exclude <- meta$exclude[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$imc_exclude <- meta$IMC_exclude[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$sca_exclude <- meta$SCA_exclude[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$imc_score <- meta$IMC_score[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$staining_date <- meta$Staining_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$stainer <- meta$Stainer[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
@@ -407,7 +411,7 @@ processing and analysis.
 
 ```{r save-objects-read-data}
 
-# spe <- spe[,!spe$exclude%in%c("maybe")]
+spe <- spe[,!spe$sca_exclude%in%c("yes")]
 
 saveRDS(spe, file.path(path, "data/spe_1px.rds"))
 ```

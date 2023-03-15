@@ -51,10 +51,10 @@ col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual
 
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 
-meta_all = read.csv(file.path(meta_path, "metadata_complete.csv"))
+meta_all = read.csv(file.path(meta_path, "20230314_metadata_complete_comma.csv"))
 meta_all <- meta_all[order(meta_all$Study_ID),] #order by study-id
 
-exclude <- replace(x = meta_all$exclude, list =  !meta_all$exclude %in% c('maybe'), values =  'no')
+exclude <- replace(x = meta_all$imc_exclude, list =  !meta_all$exclude %in% c('maybe'), values =  'no')
 
 DE_year <- sub("-.*", "", meta_all$DE_date)
 
@@ -105,8 +105,9 @@ columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation
 ```
 Now we will visualize the available samples per patient in a tidier format.
 
-```{r meta_data-timepoint, message=FALSE, fig.height=7, fig.width=1.8}
+```{r meta_data-timepoint, message=FALSE, fig.height=17, fig.width=4}
 meta_positive <-meta_all[meta_all$control == 'no',]
+meta_positive <-meta_positive[!meta_positive$SCA_exclude == 'yes',]
 meta_pos_reduced <- meta_positive[c("Study_ID", "Tissue", "Timepoint")]
 meta_pos_reduced$new <- 1 
 meta_pos_reduced_tidy <- meta_pos_reduced %>% pivot_wider(names_from = c("Tissue", "Timepoint"), values_from = "new")

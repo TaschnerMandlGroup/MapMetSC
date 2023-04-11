@@ -195,30 +195,33 @@ mat <- t(intensity_mat_hq_wo_zeros)
 
 out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
 clusters <- factor(out$communities)
-saveRDS(clusters, file.path(path, "data/clusters-int-1px-mean_postcuration_2.rds"))
+saveRDS(clusters, file.path(path, "data/clusters-int-1px-mean_postcuration_3.rds"))
 
 ```
 
 Next we will look at the single cell heatmap ordered by the identified phenograph clusters. 
 
-```{r single-cell-heatmap-clusters, message=FALSE, fig.height=7}
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
 library(ComplexHeatmap)
 library(viridis)
 library(circlize)
 library(RColorBrewer)
 library(paletteer)
 
+#set.seed(20230324)
+#set.seed(20230327)
+#set.seed(20230342)
+set.seed(20230317)
+
 n <- length(unique(clusters))
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-#col_clusters <- setNames(sample(col_vector_433, n), unique(clusters))
+col_clusters <- setNames(sample(col_vector_433, n), unique(clusters))
 
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
-set.seed(20230324)
-#set.seed(20230327)
-#set.seed(20230342)
-#mat <- t(mat)
+
+mat <- t(mat)
 
 #Get same number of PT and BM cells
 # pt_index <- which(tissue=="PT")
@@ -255,7 +258,7 @@ Heatmap(mat[,rand_cells],
 
 Next, we will look at the mean marker expression per cluster. 
 
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=7}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=17}
 library(scuttle)
 
 set.seed(20230135)
@@ -561,7 +564,7 @@ mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
 ```
 
 Next, we will visualize the cluster per sample and the sample per cluster as described [here](https://r-graph-gallery.com/48-grouped-barplot-with-ggplot2.html).
-```{r barplot-cluster-per-sample, fig.width=8}
+```{r barplot-cluster-per-sample, fig.width=18}
  # library
 library(ggplot2)
 library(tidyverse)
@@ -572,7 +575,7 @@ data <- data.frame(sample=colnames(mat), clusters)
 data$freq <- 1
 
 data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
-data_long <- data_wide[126:175,] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
+data_long <- data_wide[126:174,] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 #data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
 data_long$cluster <- factor(data_long$cluster, levels=levels(clusters))
@@ -580,7 +583,7 @@ data_long$cluster <- factor(data_long$cluster, levels=levels(clusters))
  
 # Stacked + percent
 ggplot(data_long, aes(fill=cluster, y=count, x=sample)) + 
-  ggtitle("Clusters per BM sample 101-150") +
+  ggtitle("Clusters per BM sample 101-149") +
   geom_bar(position="fill", stat="identity") + 
   scale_fill_manual(values = col_clusters) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
@@ -603,6 +606,28 @@ ggplot(data_long, aes(fill=sample, y=count, x=clusters)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
 ```
 
+We will now visualize the tissues per cluster. 
+
+```{r barplot-tissues-per-cluster, fig.width=20}
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+#col_sample = setNames(sample(col_vector_433, length(unique(data$sample))), unique(data$sample))
+
+data <- data.frame(tissue=gsub(".*_*_", "", colnames(mat)), clusters)
+data[data$tissue%in%"TU",]$tissue <- "PT"
+data$freq <- 1
+data_wide <- data %>% pivot_wider(names_from = c("tissue"), values_from = "freq", values_fn = sum, values_fill = 0)
+data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "tissue", values_to = "count") 
+
+ 
+# Stacked + percent
+ggplot(data_long, aes(fill=tissue, y=count, x=clusters)) + 
+  ggtitle("Samples per cluster") +
+  geom_bar(position="fill", stat="identity", show.legend = T) + 
+  scale_fill_manual(values = col_tissue) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+
 We will now visualize the clusters in a few samples to see if they make sense.
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
@@ -610,19 +635,24 @@ library(cytomapper)
 
 spe$pg_clusters <- clusters
 
-masks <- loadImages(file.path(path, "masks_temp"), as.is = TRUE)
+files <- list.files(file.path(path, "masks_temp"))
 
-mcols(masks) <- DataFrame(sample_id = names(masks))
+for(i in 1: length(files)){
+  masks <- loadImages(file.path(path, "masks_temp", files[i]), as.is = TRUE)
+  
+  mcols(masks) <- DataFrame(sample_id = names(masks))
+  
+  
+  plotCells(masks,
+            object = spe, 
+            cell_id = "ObjectNumber", img_id = "sample_id",
+            colour_by = "pg_clusters",
+            colour = list(pg_clusters = col_clusters),
+            display = "single",
+            save_plot = list(filename = file.path(path, "data/", files[i])),
+            legend = NULL)
 
-
-plotCells(masks,
-          object = spe, 
-          cell_id = "ObjectNumber", img_id = "sample_id",
-          colour_by = "pg_clusters",
-          colour = list(pg_clusters = col_clusters),
-          display = "single",
-          save_plot = list(filename = file.path(path, "data/20220222_16-4503_BM_ROI_001_allclusters.png")),
-          legend = NULL)
+}
 
 c = "12"
 celltype <- spe[,spe$pg_clusters == c]

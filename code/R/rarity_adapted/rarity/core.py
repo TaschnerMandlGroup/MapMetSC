@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.distributions.normal import Normal
+from tqdm import tqdm
 from torch.distributions.relaxed_bernoulli import LogitRelaxedBernoulli
 
 from rarity.helpers import summarise_binary_profiles
@@ -89,8 +90,9 @@ def fit_Rarity(Y, n_iter=20000, batch_size=1024, optimise_params=False, verbose=
     temperature_grid = torch.linspace(4.0, 0.2, steps=n_iter)
     m = RelaxedBernoulliAutoEncoder(data_dim=Y.shape[1], optimise_params=optimise_params)
     opt = torch.optim.Adam(m.parameters(), lr=1e-3)
-
-    for i in range(n_iter):
+    
+    progress_bar = tqdm(range(n_iter))
+    for i in progress_bar:
         subsample_idx = np.random.permutation(N)[:batch_size]
         Y_sub = Y[subsample_idx, :]
         mu, sigma, logits = m.forward(Y_sub, temperature_grid[i])
@@ -101,6 +103,7 @@ def fit_Rarity(Y, n_iter=20000, batch_size=1024, optimise_params=False, verbose=
         opt.step()
         if verbose and (i % 1000 == 0):
             print(f"iter {i:5d} loss {loss.item():1.2f}")
+        progress_bar.set_postfix({"loss": loss.item()})
 
     with torch.no_grad():
         _, _, logits = m.forward(Y, temperature_grid[-1])

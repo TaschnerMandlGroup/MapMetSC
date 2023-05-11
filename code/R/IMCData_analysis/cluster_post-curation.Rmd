@@ -91,7 +91,7 @@ morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.995, lower=0.005, 
 colnames(morph_mat_scaled) <- spe$sample
 
 
-features_mat <- rbind(intensity_mat_hq, morph_mat_scaled)
+#features_mat <- rbind(intensity_mat_hq, morph_mat_scaled)
 
 ```
 

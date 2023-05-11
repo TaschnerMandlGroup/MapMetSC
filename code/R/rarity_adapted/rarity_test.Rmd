@@ -91,7 +91,7 @@ morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.995, lower=0.005, 
 colnames(morph_mat_scaled) <- spe$sample
 
 
-features_mat <- rbind(intensity_mat_hq, morph_mat_scaled)
+#features_mat <- rbind(intensity_mat_hq, morph_mat_scaled)
 
 ```
 
@@ -104,7 +104,7 @@ library(circlize)
 library(RColorBrewer)
 library(paletteer)
 
-mat <- intensity_mat_hq
+mat <- intensity_mat_hq_wo_zeros
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -125,23 +125,211 @@ Heatmap(mat[,rand_cells],
         )
 ```
 
+### Install reticulate package
 
-Now that we have the single-cell matrix, we will test rarity for clustering. 
-
-```{r phenograph-clustering}
-library(tidyverse)
+```{r libraries-reticulate}
+if (!"reticulate" %in% installed.packages())
+  install.packages("reticulate")
 library(reticulate)
-use_python("/usr/bin/python3")
+```
+
+### Creating a conda environment with reticulate
+
+```{r create-environment}
+# Path to conda binary
+options(reticulate.conda_binary = "/home/rstudio/anaconda3/bin/conda")
+
+# I had to indicate the path to python with
+RETICULATE_PYTHON = "/home/rstudio/anaconda3/envs/rarity/bin/python3.9"
+
+# Activate the environment
+Sys.setenv(PYTHONPATH = "/home/rstudio/anaconda3/envs/rarity/lib/python3.9/site-packages")
+use_condaenv(condaenv = "rarity", required = TRUE)
+py_config()
+
+```
+
+Subsample the data.
+
+```{r subsample, message=FALSE, fig.height=17}
+
+set.seed(20230317)
+
+#Get same number of PT and BM cells
+pt_index <- which(tissue=="PT")
+bm_index <- which(tissue=="BM")
+rand_cells_pt <- sample(seq_len(length(pt_index)), 8192)
+rand_cells_bm <- sample(seq_len(length(bm_index)), 8192)
+pt_index_rand <- pt_index[rand_cells_pt]
+bm_index_rand <- bm_index[rand_cells_bm]
+rand_cells <- c(pt_index_rand, bm_index_rand)
+
+mat <- t(intensity_mat_hq_wo_zeros)
+subset <- mat[rand_cells,]
+```
+
+### Clustering with rarity
+
+More information can be found [here](https://rstudio.github.io/reticulate/articles/versions.html).
+
+```{r phenograph-clustering, fig.height=33}
+library(tidyverse)
+
+use_python("/home/rstudio/anaconda3/envs/rarity/bin/python3")
 
 source("R/core.R")
 source("R/helpers.R")
 
 Y <- t(intensity_mat_hq_wo_zeros)
 
+start <- Sys.time()
 m <- Rarity_fit(Y, n_iter = 20000L, batch_size = 512)
+saveRDS(m, file.path(path, "data/rarity-clusters.rds"))
 
-plot_binary_signatures(m, n_cells = 30)
+Sys.time() - start
 
-plot_heatmap_with_observations(Y, m, n_cells = 30)
+plot_binary_signatures(m, n_cells = 2500, column_names_gp = grid::gpar(fontsize = 16), row_names_gp = grid::gpar(fontsize = 18), column_names_rot = 45)
+# ggsave(filename=file.path(path, "data/rarity_heatmap.tiff"), device='tiff')
+# 
+plot_heatmap_with_observations(Y, m, n_cells = 5000)
 
+clusters <- m$cluster_allocations
+
+```
+
+Now we will look at these clusters in a single-cell heatmap ordered by clusters. 
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+library(ComplexHeatmap)
+library(viridis)
+library(circlize)
+library(RColorBrewer)
+library(paletteer)
+
+#set.seed(20230324)
+#set.seed(20230327)
+#set.seed(20230342)
+set.seed(20230317)
+
+mat <- intensity_mat_hq_wo_zeros
+clusters <- m$cluster_allocations
+tissue <- spe$tissue
+
+clusters[clusters %in% which(m$counts<2500)] <- 0 #only look at clusters with a minimum of 5000 cells
+
+n <- length(unique(clusters))
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+#just for rarity
+#col_clusters <- setNames(sample(col_vector_433, n), unique(clusters))
+col_clusters <- setNames(sample(rep(col_vector_433, ceiling(n/433)), n), unique(clusters))
+
+col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
+
+
+mat <- mat[, clusters!=0]
+
+tissue = tissue[clusters!=0]
+clusters = clusters[clusters!=0]
+
+#Get same number of PT and BM cells
+pt_index <- which(tissue=="PT")
+bm_index <- which(tissue=="BM")
+rand_cells_pt <- sample(seq_len(length(pt_index)), 4000)
+rand_cells_bm <- sample(seq_len(length(bm_index)), 4000)
+pt_index_rand <- pt_index[rand_cells_pt]
+bm_index_rand <- bm_index[rand_cells_bm]
+rand_cells <- c(pt_index_rand, bm_index_rand)
+
+#rand_cells <- sample(seq_len(ncol(mat)), 2000)
+
+column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
+                              tissue = tissue[rand_cells],
+                              col=list(cluster=col_clusters, 
+                                       tissue=col_tissue 
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap with phenograph clusters (1-px mean)",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(clusters[rand_cells], decreasing=F),
+        show_column_dend = F,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
+
+We will now cluster the data.
+
+```{r phenograph-clustering}
+library(FastPG)
+library(parallel)
+
+set.seed(221228)
+n_threads <- detectCores()
+
+mat <- t(intensity_mat_hq_wo_zeros)
+
+out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
+clusters <- factor(out$communities)
+saveRDS(clusters, file.path(path, "data/clusters-int-1px-mean_postcuration.rds"))
+
+```
+
+Now we will look at these clusters in a single-cell heatmap ordered by clusters. 
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+library(ComplexHeatmap)
+library(viridis)
+library(circlize)
+library(RColorBrewer)
+library(paletteer)
+
+#set.seed(20230324)
+#set.seed(20230327)
+set.seed(20230342)
+#set.seed(20230317)
+
+mat <- intensity_mat_hq_wo_zeros
+clusters <- factor(out$communities)
+tissue <- spe$tissue
+
+n <- length(unique(clusters))
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+col_clusters <- setNames(sample(col_vector_433, n), unique(clusters))
+
+col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
+
+#Get same number of PT and BM cells
+pt_index <- which(tissue=="PT")
+bm_index <- which(tissue=="BM")
+rand_cells_pt <- sample(seq_len(length(pt_index)), 4000)
+rand_cells_bm <- sample(seq_len(length(bm_index)), 4000)
+pt_index_rand <- pt_index[rand_cells_pt]
+bm_index_rand <- bm_index[rand_cells_bm]
+rand_cells <- c(pt_index_rand, bm_index_rand)
+
+#rand_cells <- sample(seq_len(ncol(mat)), 2000)
+
+column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
+                              tissue = tissue[rand_cells],
+                              col=list(cluster=col_clusters, 
+                                       tissue=col_tissue 
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap with phenograph clusters (1-px mean)",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(clusters[rand_cells], decreasing=F),
+        show_column_dend = F,
+        show_column_names=F,
+        col=viridis(100)
+        )
 ```

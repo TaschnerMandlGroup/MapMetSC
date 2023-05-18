@@ -13,64 +13,28 @@ In this RMD file, we will perform clustering on the curated data (after excludin
 
 ```{r read-data}
 
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230312_sc_data_combined"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230517_sc_data_combined"
 
 spe <- readRDS(file.path(path,"data/spe_1px_wo-ghosts.rds"))
 
 ```
 
 
-Then we will generate matrices from morphological and intensity features alone and combined. 
+Then we will generate a matrix from intensity features and exclude low-quality markers such as IDO, PNMT, FN1, CXCR2 and all IF and nuclear markers. We will then use mean intensity for clustering, because the effect of lateral spillover or artifacts is diminished in this metric as compared to mean-80.
 
 ```{r generate-dataframes, message=FALSE, fig.height=7}
 library(bruceR)
 library(SpatialExperiment)
-# morph_names <- c("area", 
-#                  "area_convex", 
-#                  "area_filled", 
-#                  "axis_major_length", 
-#                  "axis_minor_length", 
-#                  "eccentricity", 
-#                  "equivalent_diameter_area", 
-#                  "perimeter", 
-#                  "solidity", 
-#                  "assymetry", 
-#                  "concavity", 
-#                  "fill", 
-#                  "aspect_ratio-0", 
-#                  "perimeter_ratio-0")
 
-morph_names <- c("area",
-                 "eccentricity"
-)
-
-robustScaler <- function(data, upper, lower) {
-  scaled_data <- (data-median(data))/(quantile(data, probs = c(upper)) - quantile(data, probs = c(lower)))
-  return(scaled_data)
-}
-
-zscore_Scaler <- function(data) {
-  scaled_data <- (data-mean(data))/sd(data)
-  return(scaled_data)
-}
-
-clipScaler <- function(data, upper, lower, min, max) {
-  data[data > quantile(data, probs = c(upper))] <- quantile(data, probs = c(upper))
-  data[data < quantile(data, probs = c(lower))] <- quantile(data, probs = c(lower))
-  scaled_data <- RESCALE(data, to=min:max)
-  return(scaled_data)
-}
 intensity_mat <- assay(spe, "exprs")
 colnames(intensity_mat) <- spe$sample
 intensity_mat <- intensity_mat[!grepl("mean-80", rownames(intensity_mat)),]
 
 
-#intensity_mat_hq <- intensity_mat[!grepl("CD274|IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
-#intensity_mat_lq <- intensity_mat[grepl("CD274|IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
 intensity_mat_hq <- intensity_mat[!grepl("IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
 intensity_mat_lq <- intensity_mat[grepl("IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
 
-#Make sure to exclude cells that are zero for all markers as PG won't work otherwise
+#Make sure to exclude cells that are zero for all markers as PG won't work otherwise 
 non_zeros <- as.logical(colSums(intensity_mat_hq)!=0)
 
 intensity_mat_hq_wo_zeros <- intensity_mat_hq[,non_zeros]
@@ -81,29 +45,6 @@ spe <- spe[,non_zeros]
 cell_id <- colnames(spe)
 tissue <- spe$tissue
 
-morph_mat <- as.matrix(t(colData(spe)[,morph_names]))
-rownames(morph_mat) <- gsub('-0','',rownames(morph_mat))
-#morph_mat_scaled <- t(apply(morph_mat, 1, RESCALE, to=0:1))
-#morph_mat_scaled <- t(apply(morph_mat, 1, robustScaler, upper=0.95, lower=0.05))
-#morph_mat_scaled <- t(apply(morph_mat, 1, zscore_Scaler))
-#morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=mean(apply(intensity_mat_scaled,1,max))))
-morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.995, lower=0.005, min=0, max=1))
-colnames(morph_mat_scaled) <- spe$sample
-
-
-#features_mat <- rbind(intensity_mat_hq, morph_mat_scaled)
-
-```
-
-Let's do some quality control on outlier cells.
-
-```{r}
-feat <- "area"
-
-morph_mat_order <- morph_mat[feat,order(morph_mat[feat,], decreasing=F)]
-outlier_cell <- names(morph_mat_order[1])
-position <- spatialCoords(spe[,outlier_cell])
-print(paste("The outlier cell is in sample", outlier_cell, "at position x=", position[1], "and y=", position[2], "."))
 ```
 
 In a next step, we will plot a single-cell heatmap using complex heatmap. 
@@ -115,7 +56,8 @@ library(circlize)
 library(RColorBrewer)
 library(paletteer)
 
-mat <- intensity_mat_hq
+mat <- intensity_mat_hq_wo_zeros
+set.seed(221228)
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -123,7 +65,6 @@ col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 
 col_sample = setNames(sample(col_vector_433, length(unique(spe$sample))), unique(spe$sample))
 
-set.seed(221228)
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
 column_ha = HeatmapAnnotation(sample = colnames(mat[,rand_cells]), col=list(sample=col_sample), show_legend=F)
@@ -136,59 +77,13 @@ Heatmap(mat[,rand_cells],
         )
 ```
 
-Now, we will plot the histograms for the morphological features.
-
-```{r histograms, message=FALSE, fig.height=10, fig.width=7}
-library(ggridges)
-
-df <- as.data.frame(morph_mat_scaled)
-df["feature"] <- rownames(df)
-
-df_long <- pivot_longer(df, cols=colnames(df)[1:(ncol(df)-1)], names_to = "cell", values_to = "value")
-#df_long <- df_long[df_long[,"feature"]=="area",]
-
-qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
-col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
-
-set.seed(20221227)
-col_feature = setNames(sample(col_vector_74, nrow(df)), rownames(df))
-
-ggplot(df_long, aes(x = value, y = feature, fill = feature, height = ..density..)) +
-  geom_density_ridges(scale = 4, stat = "density") +
-  scale_y_discrete(expand = c(0.01, 0)) +
-  scale_x_continuous(expand = c(0.01, 0)) +
-  scale_fill_manual(values = col_feature) +
-  theme_ridges() + theme(legend.position = "none")
-```
-Next, we will plot a density plot for each feature separately to have separate x-axis ranges.
-
-```{r histograms-separate-x-axis, message=FALSE, fig.height=10, fig.width=7}
-
-out_path <- file.path(path, "data")
-
-plot_list <- list()
-
-df <- as.data.frame(t(morph_mat_scaled))
-
-for(i in 1: ncol(df)){
-
-  feature <- colnames(df)[i]
-  
-  plot_list[[i]] <- ggplot(df, aes_string(feature)) +
-  geom_density(adjust = 5, color="darkblue", fill="lightblue")
-}
-
-plot <- plot_grid(plotlist = plot_list, nrow=ceiling(ncol(df)/3), ncol=3) #change this to the number of morphological features
-ggsave(filename=file.path(out_path, "BM_morph_clipped-mean-int_sep_ridges.tiff"), width = 7, height = 10, units = "in", device='tiff', dpi=500)
-
-```
-
 We will now cluster the data.
 
 ```{r phenograph-clustering}
 library(FastPG)
 library(parallel)
 
+set.seed(221228)
 n_threads <- detectCores()
 
 mat <- t(intensity_mat_hq_wo_zeros)
@@ -196,12 +91,11 @@ mat <- t(intensity_mat_hq_wo_zeros)
 out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
 clusters <- factor(out$communities)
 
-out_path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230411_sc_data_combined"
-saveRDS(clusters, file.path(out_path, "data/clusters-int-1px-mean_postcuration_old-settings.rds"))
+saveRDS(clusters, file.path(path, "data/clusters-int-1px-mean_postcuration.rds"))
 
 ```
 
-Next we will look at the single cell heatmap ordered by the identified phenograph clusters. 
+Next we will look at the single cell heatmap ordered by the identified phenograph clusters for 2000 randomly selected cells. 
 
 ```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
 library(ComplexHeatmap)
@@ -210,10 +104,8 @@ library(circlize)
 library(RColorBrewer)
 library(paletteer)
 
-#set.seed(20230324)
-#set.seed(20230327)
-#set.seed(20230342)
-set.seed(20230317)
+
+set.seed(20230517)
 
 n <- length(unique(clusters))
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
@@ -222,26 +114,14 @@ col_clusters <- setNames(sample(col_vector_433, n), unique(clusters))
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
-
 mat <- t(mat)
 
-#Get same number of PT and BM cells
-pt_index <- which(tissue=="PT")
-bm_index <- which(tissue=="BM")
-rand_cells_pt <- sample(seq_len(length(pt_index)), 4000)
-rand_cells_bm <- sample(seq_len(length(bm_index)), 4000)
-pt_index_rand <- pt_index[rand_cells_pt]
-bm_index_rand <- bm_index[rand_cells_bm]
-rand_cells <- c(pt_index_rand, bm_index_rand)
-
-#rand_cells <- sample(seq_len(ncol(mat)), 2000)
+rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               tissue = tissue[rand_cells],
-                              #DNA = intensity_mat_lq_wo_zeros["193Ir-DNA1_Ir193_mean", rand_cells],
                               col=list(cluster=col_clusters, 
                                        tissue=col_tissue 
-                                       #DNA=col_marker
                                        ), 
                               show_legend=T)
 
@@ -257,6 +137,151 @@ Heatmap(mat[,rand_cells],
         )
 ```
 
+Next we will look at the single cell heatmap ordered by the identified phenograph clusters and sample the same number of cells from BM and PT samples. 
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+library(ComplexHeatmap)
+library(viridis)
+library(circlize)
+library(RColorBrewer)
+library(paletteer)
+
+
+set.seed(20230517)
+
+n <- length(unique(clusters))
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+col_clusters <- setNames(sample(col_vector_433, n), unique(clusters))
+
+col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
+
+#mat <- t(mat)
+
+#Get same number of PT and BM cells
+pt_index <- which(tissue=="PT")
+bm_index <- which(tissue=="BM")
+rand_cells_pt <- sample(seq_len(length(pt_index)), 4000)
+rand_cells_bm <- sample(seq_len(length(bm_index)), 4000)
+pt_index_rand <- pt_index[rand_cells_pt]
+bm_index_rand <- bm_index[rand_cells_bm]
+rand_cells <- c(pt_index_rand, bm_index_rand)
+
+column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
+                              tissue = tissue[rand_cells],
+                              col=list(cluster=col_clusters, 
+                                       tissue=col_tissue 
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap with phenograph clusters (1-px mean)",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(clusters[rand_cells], decreasing=F),
+        show_column_dend = F,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
+Next we will look at the single cell heatmap ordered by the identified phenograph clusters and sample the same number of cells from BM and PT samples per cluster. 
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+
+set.seed(20230517)
+
+n <- length(unique(clusters))
+
+count <- 45
+rand_cells <- c()
+
+#Get same number of PT and BM cells per cluster
+for (i in 1: length(unique(clusters))){
+  pt_index <- which(tissue=="PT" & clusters == unique(clusters)[i])
+  bm_index <- which(tissue=="BM" & clusters == unique(clusters)[i])
+  if (length(pt_index) < count){
+    pt_diff <- count-length(pt_index)
+    print(paste("PT_diff: ", pt_diff, " for cluster ", unique(clusters)[i]))
+    rand_index_pt <- sample(pt_index, length(pt_index))
+    rand_index_bm <- sample(bm_index, (count + pt_diff))
+  } else if (length(bm_index) < count){
+    bm_diff <- count-length(bm_index)
+    rand_index_pt <- sample(pt_index, (count + bm_diff))
+    rand_index_bm <- sample(bm_index, length(bm_index))
+  } else {
+      rand_index_pt <- sample(pt_index, count)
+      rand_index_bm <- sample(bm_index, count)
+  }
+
+  rand_cells <- c(rand_cells, rand_index_pt, rand_index_bm)
+}
+
+col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
+
+#mat <- t(mat)
+
+column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
+                              tissue = tissue[rand_cells],
+                              col=list(cluster=col_clusters, 
+                                       tissue=col_tissue 
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap with phenograph clusters (1-px mean)",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(clusters[rand_cells], decreasing=F),
+        show_column_dend = F,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
+
+Next we will look at the single cell heatmap ordered by the identified phenograph clusters and sample the same number of cells from each cluster
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+
+set.seed(20230517)
+
+n <- length(unique(clusters))
+
+count <- 90
+rand_cells <- c()
+
+#Get same number of PT and BM cells per cluster
+for (i in 1: length(unique(clusters))){
+  idx <- which(clusters == unique(clusters)[i])
+  rand_idx <- sample(idx, count)
+  rand_cells <- c(rand_cells, rand_idx)
+}
+
+col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
+
+#mat <- t(mat)
+
+column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
+                              tissue = tissue[rand_cells],
+                              col=list(cluster=col_clusters, 
+                                       tissue=col_tissue 
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap with phenograph clusters (1-px mean)",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(clusters[rand_cells], decreasing=F),
+        show_column_dend = F,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
 
 Next, we will look at the mean marker expression per cluster. 
 
@@ -273,33 +298,21 @@ mean_lq <- aggregate(t(mat_lq), list(clusters), mean)
 mean_t <- t(mean[,2:ncol(mean)])
 colnames(mean_t) <- mean[,"Group.1"]
 
-# dapi = mean_lq[,"1IF_DAPI_IF1_mean"]
-# ir= mean_lq[,"193Ir-DNA1_Ir193_mean"]
-# h3 = mean_lq[,"146Nd-H3K9Ac_Nd146_mean"]
-# h4 = mean_lq[,"167Er-H4K12Ac_Er167_mean"]
+# Feature-wise scaling
+#mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
 
-# col_DAPI = colorRamp2(c(min(dapi),min(dapi)+(max(dapi)-min(dapi))/2, max(dapi)), c("blue", "white", "red"))
-# col_Ir = colorRamp2(c(min(ir),min(ir)+(max(ir)-min(ir))/2, max(ir)), c("blue", "white", "red"))
-# col_H3 = colorRamp2(c(min(h3),min(h3)+(max(h3)-min(h3))/2, max(h3)), c("blue", "white", "red"))
-# col_H4 = colorRamp2(c(min(h4),min(h4)+(max(h4)-min(h4))/2, max(h4)), c("blue", "white", "red"))
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 
 column_ha = HeatmapAnnotation(cluster = mean[,"Group.1"], 
-                              #DAPI = dapi,
-                              #Ir= ir,
-                              #H3 = h3,
-                              #H4 = h4,
                               ncells=anno_barplot(as.data.frame(table(clusters))[,"Freq"], height = unit(3, "cm")),
                               col=list(cluster=col_clusters 
-                                       #DAPI=col_marker, Ir=col_marker, H3=col_marker, H4=col_marker,
                                        ), 
                               show_legend=T)
 
 Heatmap(mean_t, 
-        column_title = "Cluster-means heatmap with phenograph clusters (1px -mean80)",
+        column_title = "Cluster-means heatmap with phenograph clusters (1px -mean)-scaled",
         top_annotation = column_ha, 
         cluster_columns=T,
-        #column_order= order(clusters, decreasing=F),
         show_column_dend = F,
         show_column_names=T,
         show_row_names=T,
@@ -308,7 +321,50 @@ Heatmap(mean_t,
 
 
 ```
-We can see that cluster 42 are the sticky cells, which are positive for everything. Cluster 29 and 1 are most probably cells that swam off between IF and IMC and are hence negative for everything except for DAPI. We will exclude clusters, after we look at the distribution in the UMAP space.
+We can see that cluster 42 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
+
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=17}
+library(scuttle)
+
+set.seed(20230135)
+mat <- intensity_mat_hq_wo_zeros
+mat_lq <- intensity_mat_lq_wo_zeros
+
+#Remove sticky cells
+mat_wo_sticky <- mat[,clusters !=42]
+mat_lq_wo_sticky <- mat_lq[,clusters !=42]
+clusters_wo_sticky <-clusters[clusters !=42]
+clusters_wo_sticky <-droplevels(clusters_wo_sticky)
+
+mean <- aggregate(t(mat_wo_sticky), list(clusters_wo_sticky), mean)
+mean_lq <- aggregate(t(mat_lq_wo_sticky), list(clusters_wo_sticky), mean)
+
+mean_t <- t(mean[,2:ncol(mean)])
+colnames(mean_t) <- mean[,"Group.1"]
+
+# Feature-wise scaling
+mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
+
+col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+
+column_ha = HeatmapAnnotation(cluster = mean[,"Group.1"], 
+                              ncells=anno_barplot(as.data.frame(table(clusters_wo_sticky))[,"Freq"], height = unit(3, "cm")),
+                              col=list(cluster=col_clusters[-43] 
+                                       ), 
+                              show_legend=T)
+
+Heatmap(mean_t, 
+        column_title = "Cluster-means heatmap with phenograph clusters (1px -mean)-scaled",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = F,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+
+
+```
 
 Then, we will perform dimensionality reduction by a UMAP. 
 
@@ -321,8 +377,7 @@ set.seed(221228)
 mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
 rownames(mat_red) <- colnames(mat)
 
-saveRDS(mat_red, file.path(path, "data/mat_red_int-1px-mean80.rds"))
-
+saveRDS(mat_red, file.path(path, "data/mat_red_int-1px-mean.rds"))
 
 #mat_red <- readRDS(file.path(path,"data/mat_red_int.rds"))
 ```
@@ -430,46 +485,6 @@ for (i in 1: nrow(mat_tmp)){
   ggsave(filename=file.path(path, paste0("data/UMAP_single_marker_", marker , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
 } 
 ```
-Next, we will visualize the data in the dimensionality reduced space and color the dots by marker expression. 
-
-```{r visualizing-umap-by-marker}
-
-library(viridis)
-library(cowplot)
-
-out_path <- file.path(path, "data")
-
-plot_list <- list()
-
-mat_red <- cbind(mat_red, t(mat)) 
-mat_red_df <- as.data.frame(mat_red)
-
-set.seed(221228)
-#mat_red_df <- mat_red_df[sample(1:nrow(mat_red_df)),]
-
-for(i in 3: ncol(mat_red_df)){
-
-  feature <- colnames(mat_red_df)[i]
-  mat_red_df_short <- mat_red_df[, c("V1", "V2", feature)]
-  colnames(mat_red_df_short) <- c("V1", "V2", "f")
-  mat_red_df_short <- mat_red_df_short[order(mat_red_df_short[,"f"], decreasing=F),]
-  
-  plot_list[[i-2]] <- ggplot(mat_red_df_short, aes(x=V1, y=V2, colour=f)) +
-    geom_point(size=0.002, alpha=0.2, show.legend=F) + 
-    ggtitle(feature) +
-    scale_colour_viridis_c() +
-    theme(plot.title = element_text(size = 5), 
-          axis.title = element_text(size=5), 
-          panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(), 
-          panel.background = element_blank(), 
-          axis.line = element_line(colour = "black"))
-}
-
-plot <- plot_grid(plotlist = plot_list, nrow=as.integer((ncol(mat_red_df)-2)/3), ncol=3) #change this to the number of morphological features
-ggsave(filename=file.path(out_path, "UMAP_single_marker_int_mean-1px.tiff"), width = 7, height = 30, units = "in", device='tiff', dpi=500)
-
-```
 
 Next, we will plot the tissue type separately in the dim-red space.
 
@@ -478,9 +493,6 @@ Next, we will plot the tissue type separately in the dim-red space.
 var <- "tissue"
 
 meta <- colData(spe)[match(rownames(mat_red), spe$sample),var]
-
-# meta[as.integer(meta) <= 11] <- "old"
-# meta[as.integer(meta) > 11] <- "new"
 
 samples <- unique(meta)
 
@@ -495,13 +507,9 @@ for(i in 1: length(samples)){
   background <- as.data.frame(mat_red[!sample_binary,])
   foreground <- as.data.frame(mat_red[sample_binary,])
   plot_list[[i]] <- ggplot(background, aes(x=V1, y=V2) ) +
-    geom_point(color="gray90", size=0.02) + 
-    #geom_bin2d(data=foreground, size=0.05, bins=70, show.legend=F) +
-    #stat_density_2d_filled(data=foreground, show.legend=F) +
-    #stat_density_2d(mapping=aes(fill = ..level..), data=foreground, geom = "polygon", show.legend=F) +
+    geom_point(color="gray90", size=0.02) +
     geom_point(data=foreground, color="palegreen4", show.legend=F, size=0.02, alpha=0.25) +
     ggtitle(samples[i]) +
-    #scale_fill_continuous(type = "viridis") +
     theme(plot.title = element_text(size = 5), 
           axis.title = element_text(size=5), 
           panel.grid.major = element_blank(), 
@@ -515,6 +523,35 @@ plot_list[[1]]
 plot_list[[2]]
 ```
 
+Now, we will plot the clusters separately in the dim-red space. 
+
+```{r visualizing-umap-by-marker, message=F, fig.width=20}
+
+samples <- unique(clusters)
+
+for(i in 1: length(samples)){
+
+  sample_binary <- clusters == samples[i] 
+  
+  background <- as.data.frame(mat_red[!sample_binary,])
+  foreground <- as.data.frame(mat_red[sample_binary,])
+  plot <- ggplot(background, aes(x=V1, y=V2) ) +
+    geom_point(color="gray90", size=0.02) +
+    geom_point(data=foreground, color="palegreen4", show.legend=F, size=0.02, alpha=0.25) +
+    ggtitle(samples[i]) +
+    theme(plot.title = element_text(size = 5), 
+          axis.title = element_text(size=5), 
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), 
+          axis.line = element_line(colour = "black"))
+  
+  ggsave(filename=file.path(path, paste0("data/UMAP_single_cluster_", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
+}
+
+```
+
+
 Finally, we will visualize the data in the dimensionality reduced space and color the dots by the sample they belong to. 
 
 ```{r visualizing-umap-by-sample-single}
@@ -522,9 +559,6 @@ Finally, we will visualize the data in the dimensionality reduced space and colo
 var <- "sample"
 
 meta <- colData(spe)[match(rownames(mat_red), spe$sample),var]
-
-# meta[as.integer(meta) <= 11] <- "old"
-# meta[as.integer(meta) > 11] <- "new"
 
 samples <- unique(meta)
 
@@ -540,12 +574,8 @@ for(i in 1: length(samples)){
   foreground <- as.data.frame(mat_red[sample_binary,])
   plot_list[[i]] <- ggplot(background, aes(x=V1, y=V2) ) +
     geom_point(color="gray90", size=0.05) + 
-    #geom_bin2d(data=foreground, size=0.05, bins=70, show.legend=F) +
-    #stat_density_2d_filled(data=foreground, show.legend=F) +
-    #stat_density_2d(mapping=aes(fill = ..level..), data=foreground, geom = "polygon", show.legend=F) +
     geom_point(data=foreground, color="palegreen4", show.legend=F, size=0.05, alpha=0.25) +
     ggtitle(samples[i]) +
-    #scale_fill_continuous(type = "viridis") +
     theme(plot.title = element_text(size = 5), 
           axis.title = element_text(size=5), 
           panel.grid.major = element_blank(), 
@@ -577,15 +607,17 @@ data <- data.frame(sample=colnames(mat), clusters)
 data$freq <- 1
 
 data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
-data_long <- data_wide[126:174,] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
-#data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
+
+write.csv(data_wide, file.path(path, "/data/clusters-per-sample.csv"))
+
+data_long <- data_wide[126:175,] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
 data_long$cluster <- factor(data_long$cluster, levels=levels(clusters))
 
  
 # Stacked + percent
 ggplot(data_long, aes(fill=cluster, y=count, x=sample)) + 
-  ggtitle("Clusters per BM sample 101-149") +
+  ggtitle("Clusters per BM sample 101:150") +
   geom_bar(position="fill", stat="identity") + 
   scale_fill_manual(values = col_clusters) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
@@ -597,13 +629,16 @@ col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 #col_sample = setNames(sample(col_vector_433, length(unique(data$sample))), unique(data$sample))
 
 data_wide <- data %>% pivot_wider(names_from = c("sample"), values_from = "freq", values_fn = sum, values_fill = 0)
+
+write.csv(data_wide, file.path(path, "/data/samples-per-cluster.csv"))
+
 data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "sample", values_to = "count") 
 
  
 # Stacked + percent
 ggplot(data_long, aes(fill=sample, y=count, x=clusters)) + 
   ggtitle("Samples per cluster") +
-  geom_bar(position="fill", stat="identity", show.legend = T) + 
+  geom_bar(position="fill", stat="identity", show.legend = F) + 
   scale_fill_manual(values = col_sample) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
 ```
@@ -619,6 +654,9 @@ data <- data.frame(tissue=gsub(".*_*_", "", colnames(mat)), clusters)
 data[data$tissue%in%"TU",]$tissue <- "PT"
 data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("tissue"), values_from = "freq", values_fn = sum, values_fill = 0)
+
+write.csv(data_wide, file.path(path, "/data/tissues-per-cluster.csv"))
+
 data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "tissue", values_to = "count") 
 
  
@@ -655,22 +693,6 @@ for(i in 1: length(files)){
             legend = NULL)
 
 }
-
-c = "12"
-celltype <- spe[,spe$pg_clusters == c]
-
-#Number of excluded cells
-ncol(celltype)
-
-plotCells(masks,
-          object = celltype, 
-          cell_id = "ObjectNumber", img_id = "sample_id",
-          colour_by = "pg_clusters",
-          colour = list(celltype = c(celltype = "red")),
-          missing_colour = "white",
-          display="single",
-          save_plot = list(filename = file.path(path, paste0("data/20220809_16-1934_TU_ROI_002_cluster_", c, ".png"))),
-          legend=NULL)
 
 ```
 

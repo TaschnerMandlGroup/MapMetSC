@@ -1,0 +1,166 @@
+---
+title: "Generation of spillover matrix"
+output: html_document
+date: '2023-05-19'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Read in the data {#read-data}
+
+```{r, message=FALSE}
+library(imcRtools)
+library(cytomapper)
+library(BiocParallel)
+```
+
+
+## Generate the spillover matrix
+
+In the first step, we will generate a spillover matrix based on the single-metal
+spots and save it for later use.
+
+### Read in the data
+
+Here, we will read in the individual .txt files into a `SingleCellExperiment`
+object. This object can be used directly by the `CATALYST` package to estimate
+the spillover.
+
+For this to work, the .txt file names need to contain the spotted metal isotope
+name. By default, the first occurrence of the isotope in the format `(mt)(mass)`
+(e.g. `Sm152` for Samarium isotope with the atomic mass 152) will be used as
+spot identifier. Alternatively, a named list of already read-in pixel intensities
+can be provided. For more information, please refer to the man page `?readSCEfromTXT`.
+
+For further downstream analysis, we will asinh-transform the data using a
+cofactor of 5; a common transformation for CyTOF data [@Bendall2011].
+
+```{r read-txts, message=FALSE}
+library(imcRtools)
+
+path_to_spillover_data <- "/mnt/Multimodal_Imaging_Daria/20220518_DL_SpilloverCorrection/Extra"
+
+# Create SingleCellExperiment from .txt files
+sce <- readSCEfromTXT(path_to_spillover_data) 
+assay(sce, "exprs") <- asinh(counts(sce)/5)
+
+sce1 <- sce
+```
+
+
+### Optional pixel binning {#pixel_binning}
+
+In cases where median pixel intensities are low (< 200 counts), consecutive
+pixels can be summed to increase the robustness of the spillover estimation.
+The `imcRtools` package provides the `binAcrossPixels` function,
+which performs aggregation for each channel across `bin_size` consecutive pixels 
+per spotted metal.
+
+```{r binning, message=FALSE}
+# Define grouping
+bin_size = 10
+
+sce2 <- binAcrossPixels(sce, bin_size = bin_size)
+assay(sce2, "exprs") <- asinh(counts(sce2)/5)
+```
+
+### Filtering incorrectly assigned pixels
+
+The following step uses functions provided by the `CATALYST` package to
+"debarcode" the pixels. Based on the intensity distribution of all channel,
+pixels are assigned to their corresponding barcode; here this is the already
+known metal spot. This procedure serves the purpose to identify pixels that
+cannot be robustly assigned to the spotted metal. Pixels of such kind can be
+regarded as "noisy", "background" or "artefacts" that should be removed prior to
+spillover estimation.
+
+We will also need to specify which channels were spotted (argument `bc_key`).
+This information is directly contained in the `colData(sce)` slot.
+To facilitate visualization, we will order the `bc_key` by mass.
+
+The general workflow for pixel debarcoding is as follows:
+
+1. assign a preliminary metal mass to each pixel
+2. for each pixel, estimate a cutoff parameter for the distance between 
+positive and negative pixel sets
+3. apply the estimated cutoffs to identify truly positive pixels
+
+```{r debarcoding, message=FALSE}
+library(CATALYST)
+
+bc_key <- as.numeric(unique(sce1$sample_mass))
+bc_key <- bc_key[order(bc_key)]
+
+sce1 <- assignPrelim(sce1, bc_key = bc_key)
+sce1 <- estCutoffs(sce1)
+sce1 <- applyCutoffs(sce1)
+
+bc_key <- as.numeric(unique(sce2$sample_mass))
+bc_key <- bc_key[order(bc_key)]
+
+sce2 <- assignPrelim(sce2, bc_key = bc_key)
+sce2 <- estCutoffs(sce2)
+sce2 <- applyCutoffs(sce2)
+```
+
+The obtained `SingleCellExperiment` now contains the additional `bc_id` entry.
+For each pixel, this vector indicates the assigned mass (e.g. `161`) or
+`0`, meaning unassigned. 
+
+However, in cases where incorrect assignment occurred or where few pixels were
+measured for some spots, the `imcRtools` package exports a simple helper
+function to exclude pixels based on these criteria:
+
+```{r pixel-filtering}
+sce1 <- filterPixels(sce1, minevents = 40, correct_pixels = TRUE)
+sce2 <- filterPixels(sce2, minevents = 40, correct_pixels = TRUE)
+```
+
+### Compute spillover matrix
+
+Based on the single-positive pixels, we use the `CATALYST::computeSpillmat()`
+function to compute the spillover matrix and `CATALYST::plotSpillmat()` to
+visualize it. The `plotSpillmat` function checks the spotted and acquired
+metal isotopes against a pre-defined `CATALYST::isotope_list()`. 
+
+```{r compute-spillover}
+
+sce1_all <- computeSpillmat(sce1, interactions="all")
+sce2_all <- computeSpillmat(sce2, interactions="all")
+
+sce1 <- computeSpillmat(sce1, interactions="default")
+sce2 <- computeSpillmat(sce2, interactions="default")
+
+isotope_list <- CATALYST::isotope_list
+
+```
+
+The computeSpillMat excludes all interactions that are considered chemically and physically non-sensible, which is why we do not see the spillover from Pt196 to Lu175 anymore. Based on detailed examination, we now know that Pt196 spills into Lu175. We therefore decide to use the spillover matrix without binning and all interactions for the compensation. 
+
+Here, we will save the spillover matrix as .csv.
+
+### Save spillover matrix as csv
+
+Next, we will write out the spillover matrix as .csv file for possible later use.
+
+```{r write_sm_csv}
+path <- "/mnt/Multimodal_Imaging_Daria/20220518_DL_SpilloverCorrection/Extra/spillover_matrix"
+sm1 <- metadata(sce1)$spillover_matrix
+sm2 <- metadata(sce2)$spillover_matrix
+sm1_all <- metadata(sce1_all)$spillover_matrix
+sm2_all <- metadata(sce2_all)$spillover_matrix
+write.csv(sm1, file.path(path,"spillover_matrix_no-binning_default-interactions.csv"))
+write.csv(sm2, file.path(path,"spillover_matrix_binning_default-interactions.csv"))
+write.csv(sm1_all, file.path(path,"spillover_matrix_no-binning_all-interactions.csv"))
+write.csv(sm2_all, file.path(path,"spillover_matrix_binning_all-interactions.csv"))
+
+panel <- read.csv(file.path(path,"panel_sm.csv"))
+adapted_sm <- adaptSpillmat(sm1_all, paste0(panel$channel[panel$keep == 1], "Di"), 
+                            isotope_list = isotope_list)
+
+write.csv(adapted_sm, file.path(path,"spillover_matrix_no-binning_all-interactions_final.csv"))
+```
+
+

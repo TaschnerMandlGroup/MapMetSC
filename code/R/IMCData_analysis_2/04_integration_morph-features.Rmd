@@ -7,6 +7,9 @@ date: '2023-05-18'
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
+library(scuttle)
+library("FactoMineR")
+library("factoextra")
 ```
 
 In this RMD file, we will perform clustering on the curated data (after excluding cells that swam off between IF and IMC and segmentation artifacts) with the integration of morphological features.
@@ -24,24 +27,25 @@ Then we will generate matrices from morphological and intensity features alone a
 ```{r generate-dataframes, message=FALSE, fig.height=7}
 library(bruceR)
 library(SpatialExperiment)
-# morph_names <- c("area", 
-#                  "area_convex", 
-#                  "area_filled", 
-#                  "axis_major_length", 
-#                  "axis_minor_length", 
-#                  "eccentricity", 
-#                  "equivalent_diameter_area", 
-#                  "perimeter", 
-#                  "solidity", 
-#                  "assymetry", 
-#                  "concavity", 
-#                  "fill", 
-#                  "aspect_ratio-0", 
-#                  "perimeter_ratio-0")
 
 morph_names <- c("area",
-                 "eccentricity"
-)
+                 "area_convex",
+                 "area_filled",
+                 "axis_major_length",
+                 "axis_minor_length",
+                 "eccentricity",
+                 "equivalent_diameter_area",
+                 "perimeter",
+                 "solidity",
+                 "assymetry",
+                 "concavity",
+                 "fill",
+                 "aspect_ratio-0",
+                 "perimeter_ratio-0")
+
+# morph_names <- c("area",
+#                  "eccentricity"
+# )
 
 robustScaler <- function(data, upper, lower) {
   scaled_data <- (data-median(data))/(quantile(data, probs = c(upper)) - quantile(data, probs = c(lower)))
@@ -59,13 +63,11 @@ clipScaler <- function(data, upper, lower, min, max) {
   scaled_data <- RESCALE(data, to=min:max)
   return(scaled_data)
 }
+
 intensity_mat <- assay(spe, "exprs")
 colnames(intensity_mat) <- spe$sample
 intensity_mat <- intensity_mat[!grepl("mean-80", rownames(intensity_mat)),]
 
-
-#intensity_mat_hq <- intensity_mat[!grepl("CD274|IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
-#intensity_mat_lq <- intensity_mat[grepl("CD274|IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
 intensity_mat_hq <- intensity_mat[!grepl("IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
 intensity_mat_lq <- intensity_mat[grepl("IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
 
@@ -82,15 +84,11 @@ tissue <- spe$tissue
 
 morph_mat <- as.matrix(t(colData(spe)[,morph_names]))
 rownames(morph_mat) <- gsub('-0','',rownames(morph_mat))
-#morph_mat_scaled <- t(apply(morph_mat, 1, RESCALE, to=0:1))
-#morph_mat_scaled <- t(apply(morph_mat, 1, robustScaler, upper=0.95, lower=0.05))
-#morph_mat_scaled <- t(apply(morph_mat, 1, zscore_Scaler))
-#morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.9995, lower=0.0005, min=0, max=mean(apply(intensity_mat_scaled,1,max))))
-morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.995, lower=0.005, min=0, max=1))
+morph_mat_scaled <- t(apply(morph_mat, 1, RESCALE, to=0:1))
 colnames(morph_mat_scaled) <- spe$sample
 
 
-#features_mat <- rbind(intensity_mat_hq, morph_mat_scaled)
+features_mat <- rbind(intensity_mat_hq, morph_mat_scaled)
 
 ```
 

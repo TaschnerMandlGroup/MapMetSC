@@ -1,0 +1,53 @@
+---
+title: "Spillover compensation"
+output: html_document
+date: '2023-05-19'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###Image-based spillover compensation
+
+
+```{r read-all-data, message=FALSE}
+library(imcRtools)
+library(cytomapper)
+
+sm_path <- "/mnt/Multimodal_Imaging_Daria/20220518_DL_SpilloverCorrection/Extra/spillover_matrix"
+adapted_sm <- read.csv(file.path(sm_path, "spillover_matrix_no-binning_all-interactions_final.csv")) 
+rownames(adapted_sm) <- adapted_sm[,1]
+adapted_sm <- adapted_sm[,-1]
+adapted_sm <- as.matrix(adapted_sm)
+```
+
+```{r image-compensation-loop, message = FALSE}
+library(tiff)
+library(BiocParallel)
+
+
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE"
+
+files <- list.files(file.path(path, "tmp"), pattern="*.tif")
+
+for (i in 1: length(files)){
+  images <- loadImages(file.path(path,"tmp", files[i]))
+  channelnames <- read.csv(file.path(path, "tmp", paste0(sub(".tiff*", "", files[i]), ".csv")), header=F) 
+  channelnames_di <- paste0(channelnames, "Di")
+  channelNames(images) <- channelnames_di
+  
+  images_comp <- compImage(images, adapted_sm, BPPARAM = MulticoreParam())
+  
+  channelNames(images_comp) <- channelnames
+
+  lapply(names(images_comp), function(x){
+    writeImage(as.array(images_comp[[x]])/(2^32 - 1), 
+              paste0(file.path(path, "comp_img/"), x, ".tiff"),
+              bits.per.sample = 32)
+  })
+}
+
+```
+
+

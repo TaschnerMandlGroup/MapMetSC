@@ -13,9 +13,9 @@ In this RMD file, we will perform clustering on the curated data (after excludin
 
 ```{r read-data}
 
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230517_sc_data_combined"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230523_sc_data_combined"
 
-spe <- readRDS(file.path(path,"data/spe_1px_wo-ghosts.rds"))
+spe <- readRDS(file.path(path,"spe_1px_curated.rds"))
 
 ```
 
@@ -44,6 +44,76 @@ spe <- spe[,non_zeros]
 
 cell_id <- colnames(spe)
 tissue <- spe$tissue
+
+```
+
+We will then save morphological features in a matrix.
+```{r generate-dataframes, message=FALSE, fig.height=10, fig.width=7}
+
+clipScaler <- function(data, upper, lower, min, max) {
+  data[data > quantile(data, probs = c(upper))] <- quantile(data, probs = c(upper))
+  data[data < quantile(data, probs = c(lower))] <- quantile(data, probs = c(lower))
+  #scaled_data <- RESCALE(data, to=min:max)
+  #return(scaled_data)
+  return(data)
+}
+
+morph_names <- c("area",
+                 "area_convex",
+                 "area_filled",
+                 "axis_major_length",
+                 "axis_minor_length",
+                 "eccentricity",
+                 "equivalent_diameter_area",
+                 "perimeter",
+                 "solidity",
+                 "assymetry",
+                 "concavity",
+                 "fill",
+                 "aspect_ratio-0",
+                 "perimeter_ratio-0")
+
+morph_mat <- as.matrix(t(colData(spe)[,morph_names]))
+rownames(morph_mat) <- gsub('-0','',rownames(morph_mat))
+#morph_mat_scaled <- t(apply(morph_mat, 1, RESCALE, to=0:1))
+morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.999, lower=0.001, min=0, max=1))
+#morph_mat_scaled <- log(morph_mat_scaled + 0.1)
+colnames(morph_mat_scaled) <- spe$sample
+
+#tissue-specific scaling
+morph_mat_PT <- as.matrix(t(colData(spe)[spe$tissue=="PT",morph_names]))
+morph_mat_BM <- as.matrix(t(colData(spe)[spe$tissue=="BM",morph_names]))
+
+rownames(morph_mat_PT) <- gsub('-0','',rownames(morph_mat_PT))
+rownames(morph_mat_BM) <- gsub('-0','',rownames(morph_mat_BM))
+#morph_mat_PT_scaled <- t(apply(morph_mat_PT, 1, clipScaler, upper=0.999, lower=0.001, min=0, max=1))
+#morph_mat_BM_scaled <- t(apply(morph_mat_BM, 1, clipScaler, upper=0.999, lower=0.001, min=0, max=1))
+morph_mat_PT_scaled <- t(apply(morph_mat_PT, 1, RESCALE, to=0:1))
+morph_mat_BM_scaled <- t(apply(morph_mat_BM, 1, RESCALE, to=0:1))
+
+morph_mat_scaled_sep <- cbind(morph_mat_PT_scaled, morph_mat_BM_scaled)
+colnames(morph_mat_scaled_sep) <- spe$sample
+
+#plot distribution
+plot_list <- list()
+df <- as.data.frame(t(morph_mat_scaled))
+
+for(i in 1: ncol(df)){
+
+  feature <- colnames(df)[i]
+  
+  plot_list[[i]] <- ggplot(df, aes_string(feature)) +
+  geom_density(adjust = 5, color="darkblue", fill="lightblue")
+}
+plot <- plot_grid(plotlist = plot_list, nrow=ceiling(ncol(df)/3), ncol=3) #change this to the number of morphological features
+plot
+
+#check pseudobulk
+library(Matrix)
+colnames(morph_mat_scaled) <- spe$sample
+morph_pseudobulk <- aggregate(t(morph_mat_scaled), list(colnames(morph_mat_scaled)), mean)
+rownames(morph_pseudobulk) <- morph_pseudobulk$Group.1
+morph_pseudobulk <- morph_pseudobulk[,colnames(morph_pseudobulk) != "Group.1"]
 
 ```
 
@@ -86,12 +156,12 @@ library(parallel)
 set.seed(221228)
 n_threads <- detectCores()
 
-mat <- t(intensity_mat_hq_wo_zeros)
+mat <- t(rbind(intensity_mat_hq_wo_zeros, "soldity"=morph_mat_scaled["solidity",], "area"=morph_mat_scaled_sep["area",]))
 
 out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
 clusters <- factor(out$communities)
 
-saveRDS(clusters, file.path(path, "data/clusters-int-1px-mean_postcuration.rds"))
+saveRDS(clusters, file.path(path, "intensity_solidity-scaled_area-scaled-sep/data/clusters-int-1px-mean_postcuration.rds"))
 
 ```
 
@@ -105,7 +175,7 @@ library(RColorBrewer)
 library(paletteer)
 
 
-set.seed(20230517)
+set.seed(20230521)
 
 n <- length(unique(clusters))
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
@@ -118,10 +188,26 @@ mat <- t(mat)
 
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
+
+area = morph_mat_scaled["area",]
+solidity = morph_mat_scaled["solidity",]
+concavity = morph_mat_scaled["concavity",]
+
+#col_morph = colorRamp2(c(0,0.5, 1), c("blue", "white", "red"))
+col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
+
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               tissue = tissue[rand_cells],
+                              area = area[rand_cells],
+                              solidity = solidity[rand_cells],
+                              concavity = concavity[rand_cells],
                               col=list(cluster=col_clusters, 
-                                       tissue=col_tissue 
+                                       tissue=col_tissue,
+                                       area = col_area,
+                                       solidity = col_solidity,
+                                       concavity = col_concavity
                                        ), 
                               show_legend=T)
 
@@ -147,7 +233,7 @@ library(RColorBrewer)
 library(paletteer)
 
 
-set.seed(20230517)
+set.seed(20230521)
 
 n <- length(unique(clusters))
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
@@ -167,10 +253,20 @@ pt_index_rand <- pt_index[rand_cells_pt]
 bm_index_rand <- bm_index[rand_cells_bm]
 rand_cells <- c(pt_index_rand, bm_index_rand)
 
+col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
+
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               tissue = tissue[rand_cells],
+                              #area = area[rand_cells],
+                              #solidity = solidity[rand_cells],
+                              #concavity = concavity[rand_cells],
                               col=list(cluster=col_clusters, 
-                                       tissue=col_tissue 
+                                       tissue=col_tissue
+                                       #area = col_area,
+                                       #solidity = col_solidity,
+                                       #concavity = col_concavity
                                        ), 
                               show_legend=T)
 
@@ -217,15 +313,26 @@ for (i in 1: length(unique(clusters))){
   rand_cells <- c(rand_cells, rand_index_pt, rand_index_bm)
 }
 
+col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
+
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
 #mat <- t(mat)
-
+                                       
+                                       
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               tissue = tissue[rand_cells],
+                              area = area[rand_cells],
+                              solidity = solidity[rand_cells],
+                              concavity = concavity[rand_cells],
                               col=list(cluster=col_clusters, 
-                                       tissue=col_tissue 
+                                       tissue=col_tissue,
+                                       area = col_area,
+                                       solidity = col_solidity,
+                                       concavity = col_concavity
                                        ), 
                               show_legend=T)
 
@@ -259,6 +366,10 @@ for (i in 1: length(unique(clusters))){
   rand_cells <- c(rand_cells, rand_idx)
 }
 
+col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
+
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
@@ -266,8 +377,14 @@ col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               tissue = tissue[rand_cells],
+                              area = area[rand_cells],
+                              solidity = solidity[rand_cells],
+                              concavity = concavity[rand_cells],
                               col=list(cluster=col_clusters, 
-                                       tissue=col_tissue 
+                                       tissue=col_tissue,
+                                       area = col_area,
+                                       solidity = col_solidity,
+                                       concavity = col_concavity
                                        ), 
                               show_legend=T)
 
@@ -289,25 +406,43 @@ Next, we will look at the mean marker expression per cluster.
 library(scuttle)
 
 set.seed(20230135)
-mat <- intensity_mat_hq_wo_zeros
-mat_lq <- intensity_mat_lq_wo_zeros
-
+mat <- t(mat)
 mean <- aggregate(t(mat), list(clusters), mean)
-mean_lq <- aggregate(t(mat_lq), list(clusters), mean)
 
 mean_t <- t(mean[,2:ncol(mean)])
 colnames(mean_t) <- mean[,"Group.1"]
 
-# Feature-wise scaling
-#mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
 
-col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+mat_morph <- morph_mat_scaled
+mean_morph <- aggregate(t(mat_morph), list(clusters), mean)
+
+mean_t <- t(mean[,2:ncol(mean)])
+colnames(mean_t) <- mean[,"Group.1"]
+
+area_mean = mean_morph[,"area"]
+solidity_mean = mean_morph[,"solidity"]
+concavity_mean = mean_morph[,"concavity"]
+
+col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(area_mean))/2, max(area_mean)), c("blue", "white", "red"))
+col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c("blue", "white", "red"))
+col_mean_concavity = colorRamp2(c(min(concavity_mean),min(concavity_mean)+(max(concavity_mean)-min(concavity_mean))/2, max(concavity_mean)), c("blue", "white", "red"))
 
 column_ha = HeatmapAnnotation(cluster = mean[,"Group.1"], 
+                              #area=area_mean,
+                              #solidity = solidity_mean, 
+                              #concavity = concavity_mean, 
                               ncells=anno_barplot(as.data.frame(table(clusters))[,"Freq"], height = unit(3, "cm")),
                               col=list(cluster=col_clusters 
+                                       #area=col_mean_area,
+                                       #solidity=col_mean_solidity,
+                                       #concavity=col_mean_concavity
                                        ), 
                               show_legend=T)
+
+
+
+# Feature-wise scaling
+#mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
 
 Heatmap(mean_t, 
         column_title = "Cluster-means heatmap with phenograph clusters (1px -mean)-scaled",
@@ -321,39 +456,44 @@ Heatmap(mean_t,
 
 
 ```
-We can see that cluster 42 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
+We can see that cluster 34 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
 
 ```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=17}
 library(scuttle)
 
 set.seed(20230135)
-mat <- intensity_mat_hq_wo_zeros
-mat_lq <- intensity_mat_lq_wo_zeros
 
-#Remove sticky cells
-mat_wo_sticky <- mat[,clusters !=42]
-mat_lq_wo_sticky <- mat_lq[,clusters !=42]
-clusters_wo_sticky <-clusters[clusters !=42]
-clusters_wo_sticky <-droplevels(clusters_wo_sticky)
-
-mean <- aggregate(t(mat_wo_sticky), list(clusters_wo_sticky), mean)
-mean_lq <- aggregate(t(mat_lq_wo_sticky), list(clusters_wo_sticky), mean)
-
-mean_t <- t(mean[,2:ncol(mean)])
-colnames(mean_t) <- mean[,"Group.1"]
+sticky_cluster <- "34"
 
 # Feature-wise scaling
-mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
+mean_t_wo_sticky <- mean_t[,levels(clusters)!=sticky_cluster]
+mean_t_wo_sticky <- t(apply(mean_t_wo_sticky, 1, RESCALE, to=0:1))
+clusters_wo_sticky <- droplevels(clusters[clusters!=sticky_cluster])
 
-col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+area_mean_wo_sticky <- area_mean[levels(clusters)!=sticky_cluster]
+solidity_mean_wo_sticky <- solidity_mean[levels(clusters)!=sticky_cluster]
+concavity_mean_wo_sticky <- concavity_mean[levels(clusters)!=sticky_cluster]
 
-column_ha = HeatmapAnnotation(cluster = mean[,"Group.1"], 
+
+col_mean_area_wo_sticky = colorRamp2(c(min(area_mean_wo_sticky),min(area_mean_wo_sticky)+(max(area_mean_wo_sticky)-min(area_mean_wo_sticky))/2, max(area_mean_wo_sticky)), c("blue", "white", "red"))
+col_mean_solidity_wo_sticky = colorRamp2(c(min(solidity_mean_wo_sticky),min(solidity_mean_wo_sticky)+(max(solidity_mean_wo_sticky)-min(solidity_mean_wo_sticky))/2, max(solidity_mean_wo_sticky)), c("blue", "white", "red"))
+col_mean_concavity_wo_sticky = colorRamp2(c(min(concavity_mean_wo_sticky),min(concavity_mean_wo_sticky)+(max(concavity_mean_wo_sticky)-min(concavity_mean_wo_sticky))/2, max(concavity_mean_wo_sticky)), c("blue", "white", "red"))
+
+col_clusters_wo_sticky <- col_clusters[names(col_clusters)!=sticky_cluster]
+
+column_ha = HeatmapAnnotation(cluster = droplevels(mean[levels(clusters)!=sticky_cluster,"Group.1"]),
+                              #area=area_mean_wo_sticky,
+                              #solidity=solidity_mean_wo_sticky,
+                              #concavity=concavity_mean_wo_sticky,
                               ncells=anno_barplot(as.data.frame(table(clusters_wo_sticky))[,"Freq"], height = unit(3, "cm")),
-                              col=list(cluster=col_clusters[-43] 
+                              col=list(cluster=col_clusters_wo_sticky
+                                       #area=col_mean_area_wo_sticky,
+                                       #solidity=col_mean_solidity_wo_sticky,
+                                       #concavity=col_mean_concavity_wo_sticky
                                        ), 
                               show_legend=T)
 
-Heatmap(mean_t, 
+Heatmap(mean_t_wo_sticky, 
         column_title = "Cluster-means heatmap with phenograph clusters (1px -mean)-scaled",
         top_annotation = column_ha, 
         cluster_columns=T,
@@ -377,9 +517,9 @@ set.seed(221228)
 mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
 rownames(mat_red) <- colnames(mat)
 
-saveRDS(mat_red, file.path(path, "data/mat_red_int-1px-mean.rds"))
+saveRDS(mat_red, file.path(path, "intensity_solidity-scaled_area-scaled-sep/data/mat_red_int-1px-mean.rds"))
 
-#mat_red <- readRDS(file.path(path,"data/mat_red_int.rds"))
+#mat_red <- readRDS(file.path(path,"data/mat_red_int-1px-mean.rds"))
 ```
 
 Next we will visualize the tissue type in the UMAP space.
@@ -462,8 +602,11 @@ Now, we will plot the marker separately in the dim-red space.
 
 ```{r visualizing-umap-by-marker, message=F, fig.width=20}
 
-mat_tmp <- rbind(intensity_mat_hq_wo_zeros, intensity_mat_lq_wo_zeros)
-for (i in 1: nrow(mat_tmp)){
+int_mat <- intensity_mat_hq_wo_zeros
+colnames(int_mat) <- colnames(spe)
+mat_tmp <- rbind(morph_mat_scaled, int_mat)
+#for (i in 1: nrow(mat_tmp)){
+for (i in 1: 14){
   marker <- rownames(mat_tmp)[i]
   mat_red_df <- as.data.frame(mat_red)
   mat_red_df["marker"] <- mat_tmp[i,]
@@ -482,7 +625,7 @@ for (i in 1: nrow(mat_tmp)){
             axis.line = element_line(colour = "black"),
             legend.text = element_text(size=5))
   
-  ggsave(filename=file.path(path, paste0("data/UMAP_single_marker_", marker , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste0("intensity_solidity-scaled_area-scaled-sep/data/marker/UMAP_single_marker_", marker , ".tiff")), width = 10, height = 5) #units = "in", device='tiff', dpi=500)
 } 
 ```
 
@@ -546,7 +689,7 @@ for(i in 1: length(samples)){
           panel.background = element_blank(), 
           axis.line = element_line(colour = "black"))
   
-  ggsave(filename=file.path(path, paste0("data/UMAP_single_cluster_", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste0("data/cluster/UMAP_single_cluster_", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
 }
 
 ```
@@ -589,7 +732,7 @@ plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33))
 
 save_tiff <- function(sublist, j){
   plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
-  ggsave(filename=file.path(path, paste("/data/UMAP_1px-mean80_single_sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste("/data/sample/UMAP_1px-mean80_single_sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
 }
 
 mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
@@ -608,7 +751,7 @@ data$freq <- 1
 
 data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "/data/clusters-per-sample.csv"))
+write.csv(data_wide, file.path(path, "intensity_solidity-scaled_area-scaled-sep/data/clusters-per-sample.csv"))
 
 data_long <- data_wide[126:175,] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
@@ -617,20 +760,21 @@ data_long$cluster <- factor(data_long$cluster, levels=levels(clusters))
  
 # Stacked + percent
 ggplot(data_long, aes(fill=cluster, y=count, x=sample)) + 
-  ggtitle("Clusters per BM sample 101:150") +
+  ggtitle("Clusters per BM sample 101-150") +
   geom_bar(position="fill", stat="identity") + 
   scale_fill_manual(values = col_clusters) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
 ```
 
+
 ```{r barplot-samples-per-cluster, fig.width=20}
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-#col_sample = setNames(sample(col_vector_433, length(unique(data$sample))), unique(data$sample))
+col_sample = setNames(sample(col_vector_433, length(unique(data$sample))), unique(data$sample))
 
 data_wide <- data %>% pivot_wider(names_from = c("sample"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "/data/samples-per-cluster.csv"))
+write.csv(data_wide, file.path(path, "intensity_solidity_aspect-ratio/data/samples-per-cluster.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "sample", values_to = "count") 
 
@@ -655,7 +799,7 @@ data[data$tissue%in%"TU",]$tissue <- "PT"
 data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("tissue"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "/data/tissues-per-cluster.csv"))
+#write.csv(data_wide, file.path(path, "/data/tissues-per-cluster.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "tissue", values_to = "count") 
 

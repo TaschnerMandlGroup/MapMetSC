@@ -13,21 +13,22 @@ In this RMD file, we will identify cells that swam off between IF and IMC and ex
 
 ```{r read-data}
 
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230517_sc_data_combined"
+path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230523_sc_data_combined"
 
 spe <- readRDS(file.path(path,"data/spe_no-dil.rds"))
 
 ```
 
 
-Then we will generate next generate a matrix for the spatial experiment object and exclude IF markers DAPI, GD2 and CD56. Then, we will examine whether there are still "ghosts" left by clustering the reduced matrix. We will use mean-80 instead of mean intensity, because cells might have a low mean intensity due to their size, which should not be excluded. As there are sometimes cells, without nuclear staining, like clPARP+ cells, we will include all IMC markers and DAPI for clustering. 
+Next, we will exclude PT cells with an area< 100px and BM cells with an area <250 and >15600, as we identified the respective cells as segmentation artifacts in 02_integration_morph-features.Rmd. Then we will generate next generate a matrix for the spatial experiment object and exclude IF markers DAPI, GD2 and CD56. Then, we will examine whether there are still "ghosts" left by clustering the reduced matrix. We will use mean-80 instead of mean intensity, because cells might have a low mean intensity due to their size, which should not be excluded. As there are sometimes cells, without nuclear staining, like clPARP+ cells, we will include all IMC markers and DAPI for clustering. 
 
 ```{r generate-dataframes, message=FALSE, fig.height=7}
 library(bruceR)
 
 # Remove segmentation artifacts
-sum(spe$area < 25)
-spe <- spe[,spe$area >= 25]
+outliers <- (spe$area <= 100 & spe$tissue == "PT" | spe$area <= 250 & spe$tissue == "BM" | spe$area >= 15600 & spe$tissue == "BM")
+sum(outliers)
+spe <- spe[,!outliers]
 
 assay(spe, "exprs") <- assay(spe, "counts")
 intensity_mat <- assay(spe, "exprs")
@@ -50,7 +51,7 @@ cell_id <- colnames(spe)
 mat <- mat[!grepl("2IF_GD2|3IF_CD56", rownames(mat)),]
 
 ```
-
+We are excluding 3683 cells based on morphology and 8123 cells based due to zero intensity. 
 
 In a next step, we will plot a single-cell heatmap using complex heatmap. 
 
@@ -167,11 +168,11 @@ Heatmap(mean_t,
 
 
 ```
-We can see that cluster 47 are most probably the sticky cells, which are positive for everything. Cluster 0 are most probably cells that swam off between IF and IMC and are hence negative for everything except for DAPI. We will check which sample has the highest presence of this cluster.
+We can see that cluster 22 are most probably the sticky cells, which are positive for everything. Cluster 22 are most probably cells that swam off between IF and IMC and are hence negative for everything except for DAPI. We will check which sample has the highest presence of this cluster.
 
 ```{r identify-zeros-clusters, fig.width=20}
 
-c <- "0"
+c <- "22"
 
 data <- data.frame(sample=colnames(mat), clusters)
 data$freq <- 1
@@ -193,7 +194,7 @@ rownames(df)[df$sample==max_sample & df$cluster ==c]
 
 
 ```
-Sample 20220316_04-0169_BM_N_ROI_001 has the highest presence of cluster 0. Let's now color its mask by the clusters. Therefore we will just copy the img and mask of that sample into the "img" and "masks" folder as reading in all images takes too long. 
+Sample 20220316_04-0169_BM_N_ROI_001 has the highest presence of cluster 22. Let's now color its mask by the clusters. Therefore we will just copy the img and mask of that sample into the "img" and "masks" folder as reading in all images takes too long. 
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(cytomapper)
@@ -205,7 +206,7 @@ masks <- loadImages(file.path(path, "masks_temp"), as.is = TRUE)
 mcols(masks) <- DataFrame(sample_id = names(masks))
 
 
-c = "0"
+c = "22"
 celltype <- spe[,spe$pg_clusters == c]
 
 #Number of excluded cells
@@ -223,17 +224,17 @@ plotCells(masks,
 
 ```
 
-By overlaying the DAPI image, the Iridium image and the binary mask, we see that cluster 0 is the cluster of lost cells (n=30196 -1.46% of all (n=2095196) cells - 571images, on average 3747 cells per image  i.e. 74 cells per image). We will exclude it and then we will perform dimensionality reduction by a UMAP. We will exclude those cells in the single-cell data that was computed based on the masks expanded by 1 pixel and on those without expansion.
+By overlaying the DAPI image, the Iridium image and the binary mask, we see that cluster 22 is the cluster of lost cells (n=26515 -1.29% of all (n=2073215) cells - 571images, on average 3747 cells per image  i.e. 49 cells per image). We will exclude it and then we will perform dimensionality reduction by a UMAP. We will exclude those cells in the single-cell data that was computed based on the masks expanded by 1 pixel and on those without expansion.
 
 ```{r exclude-lost-cells-in-1-px}
 
-spe <- spe[, spe$pg_clusters!="0"]
-saveRDS(spe, file.path(path, "data/spe_no-dil_wo-ghosts.rds"))
+spe <- spe[, spe$pg_clusters!="22"]
+saveRDS(spe, file.path(path, "data/spe_no-dil_curated.rds"))
 
-spe_1px <- readRDS(file.path(path,"data/spe_1px.rds"))
+spe_1px <- readRDS(file.path(path, "data/spe_dil-1px.rds"))
 spe_1px <- spe_1px[,colnames(spe)]
 
-saveRDS(spe_1px, file.path(path, "data/spe_1px_wo-ghosts.rds"))
+saveRDS(spe_1px, file.path(path, "data/spe_1px_curated.rds"))
 
 ```
 

@@ -58,11 +58,13 @@ The `read_steinbock` function provided by `imcRtools` can now be used to read in
 `?read_steinbock`.
 
 ```{r read-steinbock}
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik"
 
-spe_bm <- read_steinbock(path=file.path(path, "BM/20230308_sc_data/simple_segmentation"), image_file=NULL, panel_file = file.path(path, 'BM/20230308_sc_data/simple_segmentation/NB_Panel.csv')) 
-spe_pt <- read_steinbock(path=file.path(path, "PT/20230308_sc_data/simple_segmentation"), image_file=NULL, panel_file = file.path(path, 'PT/20230308_sc_data/simple_segmentation/NB_Panel.csv')) 
-spe <- cbind(spe_pt, spe_bm)
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/TEMP"
+spe <- read_steinbock(path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv')) 
+
+#Rename third IF channel (CD45 for PT, CD56 for BM)
+rownames(spe)[44] <- "IF3_CD45/56_mean"
+rownames(spe)[88] <- "IF3_CD45/56_mean-80"
 
 spe
 ```
@@ -73,7 +75,7 @@ stored in the `counts` slot. Columns represent cells and rows represent channels
 
 ```{r counts}
 rowData(spe)
-counts(spe)[1:44,1:9]
+counts(spe)[45:88,1:9]
 ```
 
 Metadata associated to individual cells are stored in the `colData` slot. After
@@ -111,7 +113,6 @@ head(rowData(spe))
 rowData(spe)
 ```
 
-
 ## Single-cell processing {#cell-processing}
 
 After reading in the single-cell data, few further processing steps need to be
@@ -133,18 +134,18 @@ More information on how to extract matching patterns from a string can be found 
 library(stringr)
 
 spe$sample <- gsub(spe$sample_id, pattern="([UM]).*", replacement="\\1")
-spe$fm_id <- str_match(spe$sample, "_(.*)_")[,2]  
+spe$fm_id <- str_match(spe$sample, "_.*_(.*)_")[,2]  
 spe$tissue <- str_match(spe$sample, "^.*_.*_(.*)")[,2] 
 spe$tissue[spe$tissue=="TU"] = "PT"
 
-meta <- read.csv(file.path(path, '20230314_metadata_complete_comma.csv'))
+meta_path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/metadata"
+meta <- read.csv(file.path(meta_path, '20230531_metadata_complete.csv'))
 #meta <- meta[meta$Tissue == 'BM',]
 
 spe$puncture_side <- meta$Puncture_side[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$infiltration_right <- meta$Infiltration_right[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$infiltration_left <- meta$Infiltration_left[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$imc_exclude <- meta$IMC_exclude[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$sca_exclude <- meta$SCA_exclude[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$exclude <- meta$exclude[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$imc_score <- meta$IMC_score[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$staining_date <- meta$Staining_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$stainer <- meta$Stainer[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
@@ -173,16 +174,17 @@ spe$X1q_gain <- meta$X1q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sam
 spe$X11q_loss <- meta$X11q_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$X17q_gain <- meta$X17q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 
-spe$ROI <- str_match(spe$sample_id, "^.*_.*_.*_(.*_.*)_.*_.*$")[,2]
-spe$year <- gsub(spe$sample_id, pattern="^.*_(.*)-.*", replacement="\\1")
+spe$ROI <- str_match(spe$sample_id, "^.*_.*_.*_.*_(.*)")[,2]
+spe$year <- gsub(spe$sample_id, pattern="^.*_.*_(.*)-.*", replacement="\\1")
 ```
 
 
 **Check for technical confounders (batch effects)**
 
 ```{r plot by sample}
-selected_samples <- unique(spe$sample)[10:20]
-marker <- '152Sm-CD3_Sm152_mean-80'
+
+selected_samples <- unique(spe$sample)
+marker <- 'IF3_CD56_mean-80'
 
 library(dittoSeq)
 dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "counts") +
@@ -191,24 +193,11 @@ dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "s
 
 ```{r plot by staining date}
 
-marker <- '152Sm-CD3_Sm152_mean-80'
+marker <- 'CD3_Sm152_mean-80'
 selecting_staining_dates <- unique(spe$staining_date)[1:5]
 dittoRidgePlot(spe[,spe$staining_date%in%selecting_staining_dates], var = marker, group.by = "staining_date", assay = "counts") +
     ggtitle(paste(marker,  "- per staining batch"))
 
-```
-
-
-**Define interesting channels**
-
-For downstream analysis such as visualization, dimensionality reduction and
-clustering, only a subset of markers should be used. As convenience,
-we can store an additional entry in the `rowData` slot that specifies the 
-markers of interest. Here, we deselect the nuclear markers and keep all other
-biological targets.
-
-```{r select-features}
-rowData(spe)$use_channel <- !grepl("IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(spe))
 ```
 
 
@@ -219,11 +208,10 @@ processing and analysis.We will exclude low-quality samples.
 
 ```{r save-objects-read-data}
 
-spe <- spe[,!spe$sca_exclude%in%c("yes")]
+spe <- spe[,spe$exclude%in%c("no", "maybe")]
 assay(spe, "exprs") <- assay(spe, "counts")
 
-out_path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230517_sc_data_combined"
-saveRDS(spe, file.path(out_path, "data/spe_no-dil.rds"))
+saveRDS(spe, file.path(path, "data/spe_no-dil-refined.rds"))
 ```
 
 ## Session Info

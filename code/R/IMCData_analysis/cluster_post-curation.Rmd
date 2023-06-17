@@ -13,9 +13,9 @@ In this RMD file, we will perform clustering on the curated data (after excludin
 
 ```{r read-data}
 
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230312_sc_data_combined"
+path <- "/home/rstudio/src/MapMet/code/R/data/NEWEST_RESULTS_temp"
 
-spe <- readRDS(file.path(path,"data/spe_1px_wo-ghosts.rds"))
+spe <- readRDS(file.path(path,"results/spe_1px_non-refined_curated.rds"))
 
 ```
 

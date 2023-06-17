@@ -13,9 +13,9 @@ In this RMD file, we will identify cells that swam off between IF and IMC and ex
 
 ```{r read-data}
 
-path <- "/mnt/Multimodal_Imaging_Daria/_Data_Analysis/_tmp_daria/Image_analysis/20230112_DIMR_Ilastik/20230523_sc_data_combined"
+path <- "/home/rstudio/src/MapMet/code/R/data/NEWEST_RESULTS_temp"
 
-spe <- readRDS(file.path(path,"data/spe_no-dil.rds"))
+spe <- readRDS(file.path(path,"results/spe_no-dil_non-refined.rds"))
 
 ```
 
@@ -25,11 +25,6 @@ Next, we will exclude PT cells with an area< 100px and BM cells with an area <25
 ```{r generate-dataframes, message=FALSE, fig.height=7}
 library(bruceR)
 
-# Remove segmentation artifacts
-outliers <- (spe$area <= 100 & spe$tissue == "PT" | spe$area <= 250 & spe$tissue == "BM" | spe$area >= 15600 & spe$tissue == "BM")
-sum(outliers)
-spe <- spe[,!outliers]
-
 assay(spe, "exprs") <- assay(spe, "counts")
 intensity_mat <- assay(spe, "exprs")
 colnames(intensity_mat) <- spe$sample
@@ -38,7 +33,7 @@ colnames(intensity_mat) <- spe$sample
 intensity_mat_mean_80 <- intensity_mat[grepl("mean-80", rownames(intensity_mat)),]
 
 #exclusion of all-zero cells
-intensity_mat_bg_corrected <- intensity_mat_mean_80[!grepl("2IF_GD2|3IF_CD56|DAPI", rownames(intensity_mat_mean_80)),]
+intensity_mat_bg_corrected <- intensity_mat_mean_80[!grepl("IF2_GD2|IF3_CD45/56|DAPI", rownames(intensity_mat_mean_80)),]
 non_zeros <- as.logical(colSums(intensity_mat_bg_corrected)!=0)
 
 length(non_zeros[non_zeros==FALSE])
@@ -48,10 +43,10 @@ mat <- intensity_mat_mean_80[, non_zeros]
 cell_id <- colnames(spe)
 
 #Consideration of only nuclear channels for IF for identification of further lost cells
-mat <- mat[!grepl("2IF_GD2|3IF_CD56", rownames(mat)),]
+mat <- mat[!grepl("IF2_GD2|IF3_CD45/56", rownames(mat)),]
 
 ```
-We are excluding 3683 cells based on morphology and 8123 cells based due to zero intensity. 
+We are excluding 6031 due to zero intensity. 
 
 In a next step, we will plot a single-cell heatmap using complex heatmap. 
 
@@ -97,7 +92,7 @@ mat <- t(mat)
 
 out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
 clusters <- factor(out$communities)
-saveRDS(clusters, file.path(path, "data/clusters-int-no-dil-mean80_identify-lost-cells.rds"))
+saveRDS(clusters, file.path(path, "results/clusters-int-no-dil-mean80_identify-lost-cells.rds"))
 
 ```
 
@@ -121,7 +116,7 @@ mat <- t(mat)
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells], 
-                              DNA = mat["193Ir-DNA1_Ir193_mean-80", rand_cells],
+                              DNA = mat["DNA1_Ir193_mean-80", rand_cells],
                               col=list(cluster=col_clusters, DNA=col_marker), 
                               show_legend=F)
 
@@ -168,11 +163,11 @@ Heatmap(mean_t,
 
 
 ```
-We can see that cluster 22 are most probably the sticky cells, which are positive for everything. Cluster 22 are most probably cells that swam off between IF and IMC and are hence negative for everything except for DAPI. We will check which sample has the highest presence of this cluster.
+We can see that cluster 43 are most probably the sticky cells, which are positive for everything. Cluster 9 are most probably cells that swam off between IF and IMC and are hence negative for everything except for DAPI. We will check which sample has the highest presence of this cluster.
 
 ```{r identify-zeros-clusters, fig.width=20}
 
-c <- "22"
+c <- "9"
 
 data <- data.frame(sample=colnames(mat), clusters)
 data$freq <- 1
@@ -181,7 +176,10 @@ data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "fre
 data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
 clust <- data_long[data_long$cluster==c,]
-clust <- clust[order(clust$count, decreasing=T), ]
+cells_per_sample <- table(spe$sample)[clust$sample]
+lost_cells_perc <- clust$count/cells_per_sample
+clust$percentage <- lost_cells_perc
+clust <- clust[order(clust$percentage, decreasing=T), ]
 max_sample <- clust$sample[1]
 
 df <- as.data.frame(t(mat))
@@ -191,6 +189,8 @@ rownames(df) <- cell_id
 
 
 rownames(df)[df$sample==max_sample & df$cluster ==c]
+
+write.csv(clust, file.path(path,"results/lost_cells.csv"))
 
 
 ```
@@ -206,7 +206,7 @@ masks <- loadImages(file.path(path, "masks_temp"), as.is = TRUE)
 mcols(masks) <- DataFrame(sample_id = names(masks))
 
 
-c = "22"
+c = "9"
 celltype <- spe[,spe$pg_clusters == c]
 
 #Number of excluded cells
@@ -219,22 +219,17 @@ plotCells(masks,
           colour = list(celltype = c(celltype = "red")),
           missing_colour = "white",
           display="single",
-          save_plot = list(filename = file.path(path, paste0("data/20220316_04-0169_BM_N_ROI_001_cluster_", c, ".png"))),
+          save_plot = list(filename = file.path(path, paste0("results/20220701_20220214_11-1272_BM_001_cluster_", c, ".png"))),
           legend=NULL)
 
 ```
 
-By overlaying the DAPI image, the Iridium image and the binary mask, we see that cluster 22 is the cluster of lost cells (n=26515 -1.29% of all (n=2073215) cells - 571images, on average 3747 cells per image  i.e. 49 cells per image). We will exclude it and then we will perform dimensionality reduction by a UMAP. We will exclude those cells in the single-cell data that was computed based on the masks expanded by 1 pixel and on those without expansion.
+By overlaying the DAPI image, the Iridium image and the binary mask, we see that cluster 22 is the cluster of lost cells (n=28177 -1.38% of all (n=2034035) cells - 648images, on average 3139 cells per image  i.e. 43 cells per image). We will exclude those cells.
 
 ```{r exclude-lost-cells-in-1-px}
 
-spe <- spe[, spe$pg_clusters!="22"]
-saveRDS(spe, file.path(path, "data/spe_no-dil_curated.rds"))
-
-spe_1px <- readRDS(file.path(path, "data/spe_dil-1px.rds"))
-spe_1px <- spe_1px[,colnames(spe)]
-
-saveRDS(spe_1px, file.path(path, "data/spe_1px_curated.rds"))
+spe <- spe[, spe$pg_clusters!="9"]
+saveRDS(spe, file.path(path, "results/spe_no-dil_non-refined_curated.rds"))
 
 ```
 

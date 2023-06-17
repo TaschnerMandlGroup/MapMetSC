@@ -59,7 +59,7 @@ The `read_steinbock` function provided by `imcRtools` can now be used to read in
 
 ```{r read-steinbock}
 
-path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/TEMP"
+path <- "/home/rstudio/src/MapMet/code/R/data/NEWEST_RESULTS_temp"
 spe <- read_steinbock(path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv')) 
 
 #Rename third IF channel (CD45 for PT, CD56 for BM)
@@ -138,9 +138,7 @@ spe$fm_id <- str_match(spe$sample, "_.*_(.*)_")[,2]
 spe$tissue <- str_match(spe$sample, "^.*_.*_(.*)")[,2] 
 spe$tissue[spe$tissue=="TU"] = "PT"
 
-meta_path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/metadata"
-meta <- read.csv(file.path(meta_path, '20230531_metadata_complete.csv'))
-#meta <- meta[meta$Tissue == 'BM',]
+meta <- read.csv(file.path(path, '20230617_metadata_complete.csv'))
 
 spe$puncture_side <- meta$Puncture_side[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$infiltration_right <- meta$Infiltration_right[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
@@ -183,20 +181,22 @@ spe$year <- gsub(spe$sample_id, pattern="^.*_.*_(.*)-.*", replacement="\\1")
 
 ```{r plot by sample}
 
-selected_samples <- unique(spe$sample)
-marker <- 'IF3_CD56_mean-80'
+selected_samples <- unique(spe$sample)[170:178]
+marker <- 'IF3_CD45/56_mean-80'
 
 library(dittoSeq)
 dittoRidgePlot(spe[,spe$sample%in%selected_samples], var = marker, group.by = "sample", assay = "counts") +
     ggtitle(paste(marker,  "- per sample"))
 ```
 
-```{r plot by staining date}
+```{r plot by staining date, fig.height=10}
 
-marker <- 'CD3_Sm152_mean-80'
-selecting_staining_dates <- unique(spe$staining_date)[1:5]
-dittoRidgePlot(spe[,spe$staining_date%in%selecting_staining_dates], var = marker, group.by = "staining_date", assay = "counts") +
-    ggtitle(paste(marker,  "- per staining batch"))
+#marker <- 'CD45_Eu153_mean'
+marker <- 'GD2_Gd155_mean'
+tissue <- unique(spe$tissue)
+#tissue <- "PT"
+dittoRidgePlot(spe[,spe$tissue%in%tissue], var = marker, group.by = "tissue", assay = "counts") +
+    ggtitle(paste(marker,  "- per tissue"))
 
 ```
 
@@ -208,10 +208,9 @@ processing and analysis.We will exclude low-quality samples.
 
 ```{r save-objects-read-data}
 
-spe <- spe[,spe$exclude%in%c("no", "maybe")]
 assay(spe, "exprs") <- assay(spe, "counts")
 
-saveRDS(spe, file.path(path, "data/spe_no-dil-refined.rds"))
+saveRDS(spe, file.path(path, "results/spe_1px_non-refined.rds"))
 ```
 
 ## Session Info

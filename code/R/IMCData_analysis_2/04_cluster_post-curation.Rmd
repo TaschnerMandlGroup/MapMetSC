@@ -13,7 +13,7 @@ In this RMD file, we will perform clustering on the curated data (after excludin
 
 ```{r read-data}
 
-path <- "/home/rstudio/src/MapMet/code/R/data/NEWEST_RESULTS_temp"
+path <- "/home/rstudio/src/MapMet/data/NEWEST_RESULTS_temp"
 
 spe <- readRDS(file.path(path,"results/spe_1px_non-refined_curated.rds"))
 
@@ -31,8 +31,8 @@ colnames(intensity_mat) <- spe$sample
 intensity_mat <- intensity_mat[!grepl("mean-80", rownames(intensity_mat)),]
 
 
-intensity_mat_hq <- intensity_mat[!grepl("IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
-intensity_mat_lq <- intensity_mat[grepl("IDO|DAPI|2IF_GD2|3IF_CD56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
+intensity_mat_hq <- intensity_mat[!grepl("IDO|DAPI|IF2_GD2|IF3_CD45/56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
+intensity_mat_lq <- intensity_mat[grepl("IDO|DAPI|IF2_GD2|IF3_CD45/56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(intensity_mat)),]
 
 #Make sure to exclude cells that are zero for all markers as PG won't work otherwise 
 non_zeros <- as.logical(colSums(intensity_mat_hq)!=0)
@@ -47,74 +47,46 @@ tissue <- spe$tissue
 
 ```
 
-We will then save morphological features in a matrix.
+We will add morphological features according to the determined thresholds. 
 ```{r generate-dataframes, message=FALSE, fig.height=10, fig.width=7}
 
-clipScaler <- function(data, upper, lower, min, max) {
+#Normalization and scaling functions 
+norm_minmax <- function(x){(x- min(x)) /(max(x)-min(x))}
+
+robust_scalar<- function(x){(x- median(x)) /(quantile(x,probs = .75)-quantile(x,probs = .25))}
+
+clipper <- function(data, lower, upper) {
   data[data > quantile(data, probs = c(upper))] <- quantile(data, probs = c(upper))
   data[data < quantile(data, probs = c(lower))] <- quantile(data, probs = c(lower))
-  #scaled_data <- RESCALE(data, to=min:max)
-  #return(scaled_data)
-  return(data)
-}
+  clipped_data <- norm_minmax(data)
+  return(clipped_data)}
 
+
+#Generation of matrix with morphological features
 morph_names <- c("area",
-                 "area_convex",
-                 "area_filled",
-                 "axis_major_length",
-                 "axis_minor_length",
-                 "eccentricity",
-                 "equivalent_diameter_area",
-                 "perimeter",
                  "solidity",
-                 "assymetry",
-                 "concavity",
-                 "fill",
-                 "aspect_ratio-0",
-                 "perimeter_ratio-0")
+                 "aspect_ratio-0"
+                 )
 
 morph_mat <- as.matrix(t(colData(spe)[,morph_names]))
 rownames(morph_mat) <- gsub('-0','',rownames(morph_mat))
-#morph_mat_scaled <- t(apply(morph_mat, 1, RESCALE, to=0:1))
-morph_mat_scaled <- t(apply(morph_mat, 1, clipScaler, upper=0.999, lower=0.001, min=0, max=1))
-#morph_mat_scaled <- log(morph_mat_scaled + 0.1)
-colnames(morph_mat_scaled) <- spe$sample
 
-#tissue-specific scaling
-morph_mat_PT <- as.matrix(t(colData(spe)[spe$tissue=="PT",morph_names]))
-morph_mat_BM <- as.matrix(t(colData(spe)[spe$tissue=="BM",morph_names]))
+area_upper <- 0.99999
+solidity_lower <- 0.001
+aspect_ratio_upper <- 0.9995 
 
-rownames(morph_mat_PT) <- gsub('-0','',rownames(morph_mat_PT))
-rownames(morph_mat_BM) <- gsub('-0','',rownames(morph_mat_BM))
-#morph_mat_PT_scaled <- t(apply(morph_mat_PT, 1, clipScaler, upper=0.999, lower=0.001, min=0, max=1))
-#morph_mat_BM_scaled <- t(apply(morph_mat_BM, 1, clipScaler, upper=0.999, lower=0.001, min=0, max=1))
-morph_mat_PT_scaled <- t(apply(morph_mat_PT, 1, RESCALE, to=0:1))
-morph_mat_BM_scaled <- t(apply(morph_mat_BM, 1, RESCALE, to=0:1))
+clipped_area <- c(clipper(morph_mat[1,tissue=="BM"], 0, area_upper), clipper(morph_mat[1,tissue=="PT"], 0, area_upper))
+clipped_area <- clipped_area[colnames(spe)]
 
-morph_mat_scaled_sep <- cbind(morph_mat_PT_scaled, morph_mat_BM_scaled)
-colnames(morph_mat_scaled_sep) <- spe$sample
+morph_mat_clipped <- rbind(clipped_area, clipper(morph_mat[2,], solidity_lower, 1), clipper(morph_mat[3,], 0, aspect_ratio_upper))
 
-#plot distribution
-plot_list <- list()
-df <- as.data.frame(t(morph_mat_scaled))
+colnames(morph_mat_clipped) <- spe$sample
 
-for(i in 1: ncol(df)){
+rownames(morph_mat_clipped) <- c("area", "solidity", "aspect_ratio")
 
-  feature <- colnames(df)[i]
-  
-  plot_list[[i]] <- ggplot(df, aes_string(feature)) +
-  geom_density(adjust = 5, color="darkblue", fill="lightblue")
-}
-plot <- plot_grid(plotlist = plot_list, nrow=ceiling(ncol(df)/3), ncol=3) #change this to the number of morphological features
-plot
-
-#check pseudobulk
-library(Matrix)
-colnames(morph_mat_scaled) <- spe$sample
-morph_pseudobulk <- aggregate(t(morph_mat_scaled), list(colnames(morph_mat_scaled)), mean)
-rownames(morph_pseudobulk) <- morph_pseudobulk$Group.1
-morph_pseudobulk <- morph_pseudobulk[,colnames(morph_pseudobulk) != "Group.1"]
-
+#Concatenate intensity and morphological features
+mat <- rbind(intensity_mat_hq_wo_zeros, morph_mat_clipped)
+#mat <- intensity_mat_hq_wo_zeros
 ```
 
 In a next step, we will plot a single-cell heatmap using complex heatmap. 
@@ -126,7 +98,6 @@ library(circlize)
 library(RColorBrewer)
 library(paletteer)
 
-mat <- intensity_mat_hq_wo_zeros
 set.seed(221228)
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
@@ -153,16 +124,67 @@ We will now cluster the data.
 library(FastPG)
 library(parallel)
 
-set.seed(221228)
+set.seed(221229)
 n_threads <- detectCores()
 
-mat <- t(rbind(intensity_mat_hq_wo_zeros, "soldity"=morph_mat_scaled["solidity",], "area"=morph_mat_scaled_sep["area",]))
+mat <- t(mat)
 
 out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
 clusters <- factor(out$communities)
 
-saveRDS(clusters, file.path(path, "intensity_solidity-scaled_area-scaled-sep/data/clusters-int-1px-mean_postcuration.rds"))
+saveRDS(clusters, file.path(path, "results/clusters-1px-postcuration_intensity-morphology.rds"))
 
+```
+
+Now we will plot 41 distinct, manually selected colors.
+```{r colors, message=FALSE, fig.height=17}
+
+n <- length(unique(clusters))
+
+
+col_clusters <- c(rgb(255,255,209, maxColorValue = 255),
+                rgb(255,255,162, maxColorValue = 255),
+                rgb(255,221,57, maxColorValue = 255),
+                rgb(246,246,0, maxColorValue = 255),
+                rgb(254,217,166, maxColorValue = 255),
+                rgb(253,180,98, maxColorValue = 255),
+                rgb(255,137,0, maxColorValue = 255),
+                rgb(241,75,2, maxColorValue = 255),
+                rgb(152,78,163, maxColorValue = 255),
+                rgb(188,128,189, maxColorValue = 255),
+                rgb(190,174,212, maxColorValue = 255),
+                rgb(253,218,236, maxColorValue = 255),
+                rgb(242,3,137, maxColorValue = 255),
+                rgb(251,128,114, maxColorValue = 255),
+                rgb(254,142,175, maxColorValue = 255),
+                rgb(251,154,153, maxColorValue = 255),
+                rgb(240,0,240, maxColorValue = 255),
+                rgb(227,26,28, maxColorValue = 255),
+                rgb(147,3,0, maxColorValue = 255),
+                rgb(230,245,201, maxColorValue = 255),
+                rgb(204,235,197, maxColorValue = 255),
+                rgb(179,222,105, maxColorValue = 255),
+                rgb(198,255,72, maxColorValue = 255),
+                rgb(65,208,57, maxColorValue = 255),
+                rgb(104,180,238, maxColorValue = 255),
+                rgb(128,177,211, maxColorValue = 255),
+                rgb(51,180,180, maxColorValue = 255),
+                rgb(102,166,30, maxColorValue = 255),
+                rgb(149,144,89, maxColorValue = 255),
+                rgb(210,205,126, maxColorValue = 255),
+                rgb(27,158,119, maxColorValue = 255),
+                rgb(102,194,165, maxColorValue = 255),
+                rgb(39,130,187, maxColorValue = 255),
+                rgb(166,206,227, maxColorValue = 255),
+                rgb(212,241,240, maxColorValue = 255),
+                rgb(169,189,210, maxColorValue = 255),
+                rgb(2,0,138, maxColorValue = 255),
+                rgb(217,217,217, maxColorValue = 255),
+                rgb(113,113,113, maxColorValue = 255),
+                rgb(156,76,24, maxColorValue = 255),
+                rgb(174,129,37, maxColorValue = 255))
+
+pie(rep(1,n), col=col_clusters, labels=col_clusters)
 ```
 
 Next we will look at the single cell heatmap ordered by the identified phenograph clusters for 2000 randomly selected cells. 
@@ -177,10 +199,6 @@ library(paletteer)
 
 set.seed(20230521)
 
-n <- length(unique(clusters))
-col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-col_clusters <- setNames(sample(col_vector_433, n), unique(clusters))
-
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
@@ -189,25 +207,25 @@ mat <- t(mat)
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
 
-area = morph_mat_scaled["area",]
-solidity = morph_mat_scaled["solidity",]
-concavity = morph_mat_scaled["concavity",]
-
-#col_morph = colorRamp2(c(0,0.5, 1), c("blue", "white", "red"))
-col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
-col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
-col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
+# area = morph_mat_scaled["area",]
+# solidity = morph_mat_scaled["solidity",]
+# concavity = morph_mat_scaled["concavity",]
+# 
+# #col_morph = colorRamp2(c(0,0.5, 1), c("blue", "white", "red"))
+# col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+# col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+# col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
 
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               tissue = tissue[rand_cells],
-                              area = area[rand_cells],
-                              solidity = solidity[rand_cells],
-                              concavity = concavity[rand_cells],
+                              # area = area[rand_cells],
+                              # solidity = solidity[rand_cells],
+                              # concavity = concavity[rand_cells],
                               col=list(cluster=col_clusters, 
-                                       tissue=col_tissue,
-                                       area = col_area,
-                                       solidity = col_solidity,
-                                       concavity = col_concavity
+                                       tissue=col_tissue
+                                       # area = col_area,
+                                       # solidity = col_solidity,
+                                       # concavity = col_concavity
                                        ), 
                               show_legend=T)
 
@@ -233,7 +251,7 @@ library(RColorBrewer)
 library(paletteer)
 
 
-set.seed(20230521)
+set.seed(20230618)
 
 n <- length(unique(clusters))
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
@@ -253,9 +271,9 @@ pt_index_rand <- pt_index[rand_cells_pt]
 bm_index_rand <- bm_index[rand_cells_bm]
 rand_cells <- c(pt_index_rand, bm_index_rand)
 
-col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
-col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
-col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
+# col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+# col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+# col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
 
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               tissue = tissue[rand_cells],
@@ -313,11 +331,11 @@ for (i in 1: length(unique(clusters))){
   rand_cells <- c(rand_cells, rand_index_pt, rand_index_bm)
 }
 
-col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
-col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
-col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
-
-col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+# col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+# col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+# col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
+# 
+# col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
 #mat <- t(mat)
@@ -325,14 +343,14 @@ col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
                                        
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               tissue = tissue[rand_cells],
-                              area = area[rand_cells],
-                              solidity = solidity[rand_cells],
-                              concavity = concavity[rand_cells],
+                              # area = area[rand_cells],
+                              # solidity = solidity[rand_cells],
+                              # concavity = concavity[rand_cells],
                               col=list(cluster=col_clusters, 
-                                       tissue=col_tissue,
-                                       area = col_area,
-                                       solidity = col_solidity,
-                                       concavity = col_concavity
+                                       tissue=col_tissue
+                                       # area = col_area,
+                                       # solidity = col_solidity,
+                                       # concavity = col_concavity
                                        ), 
                               show_legend=T)
 
@@ -366,9 +384,9 @@ for (i in 1: length(unique(clusters))){
   rand_cells <- c(rand_cells, rand_idx)
 }
 
-col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
-col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
-col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
+# col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+# col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+# col_concavity = colorRamp2(c(min(concavity[rand_cells]),min(concavity[rand_cells])+(max(concavity[rand_cells])-min(concavity[rand_cells]))/2, max(concavity[rand_cells])), c("blue", "white", "red"))
 
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
@@ -377,14 +395,14 @@ col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               tissue = tissue[rand_cells],
-                              area = area[rand_cells],
-                              solidity = solidity[rand_cells],
-                              concavity = concavity[rand_cells],
+                              # area = area[rand_cells],
+                              # solidity = solidity[rand_cells],
+                              # concavity = concavity[rand_cells],
                               col=list(cluster=col_clusters, 
-                                       tissue=col_tissue,
-                                       area = col_area,
-                                       solidity = col_solidity,
-                                       concavity = col_concavity
+                                       tissue=col_tissue
+                                       # area = col_area,
+                                       # solidity = col_solidity,
+                                       # concavity = col_concavity
                                        ), 
                               show_legend=T)
 
@@ -413,19 +431,19 @@ mean_t <- t(mean[,2:ncol(mean)])
 colnames(mean_t) <- mean[,"Group.1"]
 
 
-mat_morph <- morph_mat_scaled
-mean_morph <- aggregate(t(mat_morph), list(clusters), mean)
+# mat_morph <- morph_mat_scaled
+# mean_morph <- aggregate(t(mat_morph), list(clusters), mean)
 
 mean_t <- t(mean[,2:ncol(mean)])
 colnames(mean_t) <- mean[,"Group.1"]
 
-area_mean = mean_morph[,"area"]
-solidity_mean = mean_morph[,"solidity"]
-concavity_mean = mean_morph[,"concavity"]
-
-col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(area_mean))/2, max(area_mean)), c("blue", "white", "red"))
-col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c("blue", "white", "red"))
-col_mean_concavity = colorRamp2(c(min(concavity_mean),min(concavity_mean)+(max(concavity_mean)-min(concavity_mean))/2, max(concavity_mean)), c("blue", "white", "red"))
+# area_mean = mean_morph[,"area"]
+# solidity_mean = mean_morph[,"solidity"]
+# concavity_mean = mean_morph[,"concavity"]
+# 
+# col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(area_mean))/2, max(area_mean)), c("blue", "white", "red"))
+# col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c("blue", "white", "red"))
+# col_mean_concavity = colorRamp2(c(min(concavity_mean),min(concavity_mean)+(max(concavity_mean)-min(concavity_mean))/2, max(concavity_mean)), c("blue", "white", "red"))
 
 column_ha = HeatmapAnnotation(cluster = mean[,"Group.1"], 
                               #area=area_mean,
@@ -463,21 +481,21 @@ library(scuttle)
 
 set.seed(20230135)
 
-sticky_cluster <- "34"
+sticky_cluster <- "35"
 
 # Feature-wise scaling
 mean_t_wo_sticky <- mean_t[,levels(clusters)!=sticky_cluster]
 mean_t_wo_sticky <- t(apply(mean_t_wo_sticky, 1, RESCALE, to=0:1))
 clusters_wo_sticky <- droplevels(clusters[clusters!=sticky_cluster])
 
-area_mean_wo_sticky <- area_mean[levels(clusters)!=sticky_cluster]
-solidity_mean_wo_sticky <- solidity_mean[levels(clusters)!=sticky_cluster]
-concavity_mean_wo_sticky <- concavity_mean[levels(clusters)!=sticky_cluster]
-
-
-col_mean_area_wo_sticky = colorRamp2(c(min(area_mean_wo_sticky),min(area_mean_wo_sticky)+(max(area_mean_wo_sticky)-min(area_mean_wo_sticky))/2, max(area_mean_wo_sticky)), c("blue", "white", "red"))
-col_mean_solidity_wo_sticky = colorRamp2(c(min(solidity_mean_wo_sticky),min(solidity_mean_wo_sticky)+(max(solidity_mean_wo_sticky)-min(solidity_mean_wo_sticky))/2, max(solidity_mean_wo_sticky)), c("blue", "white", "red"))
-col_mean_concavity_wo_sticky = colorRamp2(c(min(concavity_mean_wo_sticky),min(concavity_mean_wo_sticky)+(max(concavity_mean_wo_sticky)-min(concavity_mean_wo_sticky))/2, max(concavity_mean_wo_sticky)), c("blue", "white", "red"))
+# area_mean_wo_sticky <- area_mean[levels(clusters)!=sticky_cluster]
+# solidity_mean_wo_sticky <- solidity_mean[levels(clusters)!=sticky_cluster]
+# concavity_mean_wo_sticky <- concavity_mean[levels(clusters)!=sticky_cluster]
+# 
+# 
+# col_mean_area_wo_sticky = colorRamp2(c(min(area_mean_wo_sticky),min(area_mean_wo_sticky)+(max(area_mean_wo_sticky)-min(area_mean_wo_sticky))/2, max(area_mean_wo_sticky)), c("blue", "white", "red"))
+# col_mean_solidity_wo_sticky = colorRamp2(c(min(solidity_mean_wo_sticky),min(solidity_mean_wo_sticky)+(max(solidity_mean_wo_sticky)-min(solidity_mean_wo_sticky))/2, max(solidity_mean_wo_sticky)), c("blue", "white", "red"))
+# col_mean_concavity_wo_sticky = colorRamp2(c(min(concavity_mean_wo_sticky),min(concavity_mean_wo_sticky)+(max(concavity_mean_wo_sticky)-min(concavity_mean_wo_sticky))/2, max(concavity_mean_wo_sticky)), c("blue", "white", "red"))
 
 col_clusters_wo_sticky <- col_clusters[names(col_clusters)!=sticky_cluster]
 
@@ -517,7 +535,7 @@ set.seed(221228)
 mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
 rownames(mat_red) <- colnames(mat)
 
-saveRDS(mat_red, file.path(path, "intensity_solidity-scaled_area-scaled-sep/data/mat_red_int-1px-mean.rds"))
+saveRDS(mat_red, file.path(path, "results/mat_red_1px_int-morphology.rds"))
 
 #mat_red <- readRDS(file.path(path,"data/mat_red_int-1px-mean.rds"))
 ```
@@ -601,12 +619,9 @@ plot
 Now, we will plot the marker separately in the dim-red space. 
 
 ```{r visualizing-umap-by-marker, message=F, fig.width=20}
+mat_tmp <- rbind(mat, intensity_mat_lq_wo_zeros)
 
-int_mat <- intensity_mat_hq_wo_zeros
-colnames(int_mat) <- colnames(spe)
-mat_tmp <- rbind(morph_mat_scaled, int_mat)
-#for (i in 1: nrow(mat_tmp)){
-for (i in 1: 14){
+for (i in 1: nrow(mat_tmp)){
   marker <- rownames(mat_tmp)[i]
   mat_red_df <- as.data.frame(mat_red)
   mat_red_df["marker"] <- mat_tmp[i,]
@@ -625,7 +640,7 @@ for (i in 1: 14){
             axis.line = element_line(colour = "black"),
             legend.text = element_text(size=5))
   
-  ggsave(filename=file.path(path, paste0("intensity_solidity-scaled_area-scaled-sep/data/marker/UMAP_single_marker_", marker , ".tiff")), width = 10, height = 5) #units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste0("results/intensity_morph_markers_increasing/", marker , ".tiff")), width = 10, height = 5) #units = "in", device='tiff', dpi=500)
 } 
 ```
 
@@ -689,7 +704,7 @@ for(i in 1: length(samples)){
           panel.background = element_blank(), 
           axis.line = element_line(colour = "black"))
   
-  ggsave(filename=file.path(path, paste0("data/cluster/UMAP_single_cluster_", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste0("results/cluster/cluster_", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
 }
 
 ```
@@ -833,7 +848,7 @@ for(i in 1: length(files)){
             colour_by = "pg_clusters",
             colour = list(pg_clusters = col_clusters),
             display = "single",
-            save_plot = list(filename = file.path(path, "data/", files[i])),
+            save_plot = list(filename = file.path(path, "results/", paste0(files[i], "f"))),
             legend = NULL)
 
 }

@@ -13,7 +13,7 @@ In this RMD file, we will perform clustering on the curated data (after excludin
 
 ```{r read-data}
 
-path <- "/home/rstudio/src/MapMet/data/NEWEST_RESULTS_temp"
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
 spe <- readRDS(file.path(path,"results/spe_1px_non-refined_curated.rds"))
 
@@ -129,10 +129,11 @@ n_threads <- detectCores()
 
 mat <- t(mat)
 
-out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
-clusters <- factor(out$communities)
+# out <- FastPG::fastCluster(data=mat, k=45, num_threads=n_threads)
+# clusters <- factor(out$communities)
 
-saveRDS(clusters, file.path(path, "results/clusters-1px-postcuration_intensity-morphology.rds"))
+# saveRDS(clusters, file.path(path, "results/int_morph/clusters-1px-postcuration_intensity-morphology.rds"))
+clusters <- readRDS(file.path(path, "results/int_morph/clusters-1px-postcuration_intensity-morphology.rds"))
 
 ```
 
@@ -142,10 +143,10 @@ Now we will plot 41 distinct, manually selected colors.
 n <- length(unique(clusters))
 
 
-col_clusters <- c(rgb(255,255,209, maxColorValue = 255),
-                rgb(255,255,162, maxColorValue = 255),
+col_clusters <- c(rgb(255,255,162, maxColorValue = 255),
                 rgb(255,221,57, maxColorValue = 255),
                 rgb(246,246,0, maxColorValue = 255),
+                rgb(255,255,209, maxColorValue = 255),
                 rgb(254,217,166, maxColorValue = 255),
                 rgb(253,180,98, maxColorValue = 255),
                 rgb(255,137,0, maxColorValue = 255),
@@ -154,10 +155,10 @@ col_clusters <- c(rgb(255,255,209, maxColorValue = 255),
                 rgb(188,128,189, maxColorValue = 255),
                 rgb(190,174,212, maxColorValue = 255),
                 rgb(253,218,236, maxColorValue = 255),
+                rgb(251,154,153, maxColorValue = 255),
                 rgb(242,3,137, maxColorValue = 255),
                 rgb(251,128,114, maxColorValue = 255),
                 rgb(254,142,175, maxColorValue = 255),
-                rgb(251,154,153, maxColorValue = 255),
                 rgb(240,0,240, maxColorValue = 255),
                 rgb(227,26,28, maxColorValue = 255),
                 rgb(147,3,0, maxColorValue = 255),
@@ -185,6 +186,8 @@ col_clusters <- c(rgb(255,255,209, maxColorValue = 255),
                 rgb(174,129,37, maxColorValue = 255))
 
 pie(rep(1,n), col=col_clusters, labels=col_clusters)
+
+col_clusters <- setNames(col_clusters, c(0:40))
 ```
 
 Next we will look at the single cell heatmap ordered by the identified phenograph clusters for 2000 randomly selected cells. 
@@ -201,8 +204,6 @@ set.seed(20230521)
 
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
-
-mat <- t(mat)
 
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
@@ -252,10 +253,6 @@ library(paletteer)
 
 
 set.seed(20230618)
-
-n <- length(unique(clusters))
-col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-col_clusters <- setNames(sample(col_vector_433, n), unique(clusters))
 
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
@@ -424,7 +421,7 @@ Next, we will look at the mean marker expression per cluster.
 library(scuttle)
 
 set.seed(20230135)
-mat <- t(mat)
+
 mean <- aggregate(t(mat), list(clusters), mean)
 
 mean_t <- t(mean[,2:ncol(mean)])
@@ -474,7 +471,7 @@ Heatmap(mean_t,
 
 
 ```
-We can see that cluster 34 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
+We can see that cluster 35 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
 
 ```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=17}
 library(scuttle)
@@ -532,12 +529,12 @@ library(BiocParallel)
 
 set.seed(221228)
 
-mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
-rownames(mat_red) <- colnames(mat)
+# mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
+# rownames(mat_red) <- colnames(mat)
+# 
+# saveRDS(mat_red, file.path(path, "results/int_morph/mat_red_1px_int-morphology.rds"))
 
-saveRDS(mat_red, file.path(path, "results/mat_red_1px_int-morphology.rds"))
-
-#mat_red <- readRDS(file.path(path,"data/mat_red_int-1px-mean.rds"))
+mat_red <- readRDS(file.path(path,"results/int_morph/mat_red_1px_int-morphology.rds"))
 ```
 
 Next we will visualize the tissue type in the UMAP space.
@@ -747,7 +744,7 @@ plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33))
 
 save_tiff <- function(sublist, j){
   plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
-  ggsave(filename=file.path(path, paste("/data/sample/UMAP_1px-mean80_single_sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste("/data/sample/sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
 }
 
 mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
@@ -766,16 +763,16 @@ data$freq <- 1
 
 data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "intensity_solidity-scaled_area-scaled-sep/data/clusters-per-sample.csv"))
+#write.csv(data_wide, file.path(path, "results/int_morph/clusters-per-sample.csv"))
 
-data_long <- data_wide[126:175,] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
+data_long <- data_wide[1:50,] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
 data_long$cluster <- factor(data_long$cluster, levels=levels(clusters))
 
  
 # Stacked + percent
 ggplot(data_long, aes(fill=cluster, y=count, x=sample)) + 
-  ggtitle("Clusters per BM sample 101-150") +
+  ggtitle("Clusters per BM sample 1:50") +
   geom_bar(position="fill", stat="identity") + 
   scale_fill_manual(values = col_clusters) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
@@ -789,7 +786,7 @@ col_sample = setNames(sample(col_vector_433, length(unique(data$sample))), uniqu
 
 data_wide <- data %>% pivot_wider(names_from = c("sample"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "intensity_solidity_aspect-ratio/data/samples-per-cluster.csv"))
+#write.csv(data_wide, file.path(path, "results/int_morph/samples-per-cluster.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "sample", values_to = "count") 
 
@@ -814,7 +811,7 @@ data[data$tissue%in%"TU",]$tissue <- "PT"
 data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("tissue"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-#write.csv(data_wide, file.path(path, "/data/tissues-per-cluster.csv"))
+#write.csv(data_wide, file.path(path, "/results/int_morph/tissues-per-cluster.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "tissue", values_to = "count") 
 

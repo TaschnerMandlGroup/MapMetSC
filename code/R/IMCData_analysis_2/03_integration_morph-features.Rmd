@@ -20,7 +20,7 @@ First, we will read the SPE object and define a matrix containing only morpholog
 
 ```{r read-data}
 
-path <- "/home/rstudio/src/MapMet/code/R/data/NEWEST_RESULTS_temp"
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
 spe <- readRDS(file.path(path,"results/spe_no-dil_non-refined_curated.rds"))
 

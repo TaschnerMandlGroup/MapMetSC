@@ -59,7 +59,7 @@ The `read_steinbock` function provided by `imcRtools` can now be used to read in
 
 ```{r read-steinbock}
 
-path <- "/home/rstudio/src/MapMet/code/R/data/NEWEST_RESULTS_temp"
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 spe <- read_steinbock(path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv')) 
 
 #Rename third IF channel (CD45 for PT, CD56 for BM)

@@ -13,7 +13,7 @@ In this RMD file, we will identify cells that swam off between IF and IMC and ex
 
 ```{r read-data}
 
-path <- "/home/rstudio/src/MapMet/code/R/data/NEWEST_RESULTS_temp"
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
 spe <- readRDS(file.path(path,"results/spe_no-dil_non-refined.rds"))
 

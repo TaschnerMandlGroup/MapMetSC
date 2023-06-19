@@ -27,7 +27,7 @@ library(bruceR)
 library(SpatialExperiment)
 
 intensity_mat <- assay(spe, "exprs")
-colnames(intensity_mat) <- spe$sample
+colnames(intensity_mat) <- colnames(spe)
 intensity_mat <- intensity_mat[!grepl("mean-80", rownames(intensity_mat)),]
 
 
@@ -39,12 +39,13 @@ non_zeros <- as.logical(colSums(intensity_mat_hq)!=0)
 
 intensity_mat_hq_wo_zeros <- intensity_mat_hq[,non_zeros]
 intensity_mat_lq_wo_zeros <- intensity_mat_lq[,non_zeros]
+
+#Apply changes to SPE object
 spe <- spe[,non_zeros]
+rowData(spe)$use_channel <- !grepl("mean-80|IDO|DAPI|IF2_GD2|IF3_CD45/56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro", rownames(spe))
 
-
-cell_id <- colnames(spe)
 tissue <- spe$tissue
-
+cell_id <- colnames(spe)
 ```
 
 We will add morphological features according to the determined thresholds. 
@@ -80,13 +81,17 @@ clipped_area <- clipped_area[colnames(spe)]
 
 morph_mat_clipped <- rbind(clipped_area, clipper(morph_mat[2,], solidity_lower, 1), clipper(morph_mat[3,], 0, aspect_ratio_upper))
 
-colnames(morph_mat_clipped) <- spe$sample
+colnames(morph_mat_clipped) <- colnames(spe)
 
 rownames(morph_mat_clipped) <- c("area", "solidity", "aspect_ratio")
 
 #Concatenate intensity and morphological features
 mat <- rbind(intensity_mat_hq_wo_zeros, morph_mat_clipped)
-#mat <- intensity_mat_hq_wo_zeros
+
+#Apply changes to SPE object
+spe$area_clipped <- unname(morph_mat_clipped["area",])
+spe$solidity_clipped <- unname(morph_mat_clipped["solidity",])
+spe$aspect_ratio_clipped <- unname(morph_mat_clipped["aspect_ratio",])
 ```
 
 In a next step, we will plot a single-cell heatmap using complex heatmap. 
@@ -108,10 +113,10 @@ col_sample = setNames(sample(col_vector_433, length(unique(spe$sample))), unique
 
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
-column_ha = HeatmapAnnotation(sample = colnames(mat[,rand_cells]), col=list(sample=col_sample), show_legend=F)
+#column_ha = HeatmapAnnotation(sample = colnames(mat[,rand_cells]), col=list(sample=col_sample), show_legend=F)
 Heatmap(mat[,rand_cells], 
         column_title = "Single-cell heatmap",
-        top_annotation = column_ha, 
+        #top_annotation = column_ha, 
         show_column_dend = F,
         show_column_names=F,
         col=viridis(100)
@@ -135,6 +140,8 @@ mat <- t(mat)
 # saveRDS(clusters, file.path(path, "results/int_morph/clusters-1px-postcuration_intensity-morphology.rds"))
 clusters <- readRDS(file.path(path, "results/int_morph/clusters-1px-postcuration_intensity-morphology.rds"))
 
+#Apply changes to SPE object
+spe$pg_clusters <- clusters
 ```
 
 Now we will plot 41 distinct, manually selected colors.
@@ -188,6 +195,8 @@ col_clusters <- c(rgb(255,255,162, maxColorValue = 255),
 pie(rep(1,n), col=col_clusters, labels=col_clusters)
 
 col_clusters <- setNames(col_clusters, c(0:40))
+
+metadata(spe)$col_clusters <- col_clusters
 ```
 
 Next we will look at the single cell heatmap ordered by the identified phenograph clusters for 2000 randomly selected cells. 
@@ -205,6 +214,7 @@ set.seed(20230521)
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
+mat <- t(mat)
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
 
@@ -530,11 +540,15 @@ library(BiocParallel)
 set.seed(221228)
 
 # mat_red <- calculateUMAP(mat, BPPARAM = MulticoreParam()) 
-# rownames(mat_red) <- colnames(mat)
+#rownames(mat_red) <- colnames(spe)
 # 
 # saveRDS(mat_red, file.path(path, "results/int_morph/mat_red_1px_int-morphology.rds"))
 
 mat_red <- readRDS(file.path(path,"results/int_morph/mat_red_1px_int-morphology.rds"))
+rownames(mat_red) <- colnames(spe)
+
+#Apply changes to SPE object
+reducedDim(spe, "UMAP") <- mat_red
 ```
 
 Next we will visualize the tissue type in the UMAP space.
@@ -758,6 +772,7 @@ library(tidyverse)
 
 col_clusters <- col_clusters[order(as.integer(names(col_clusters)))]
 
+colnames(mat) <- spe$sample
 data <- data.frame(sample=colnames(mat), clusters)
 data$freq <- 1
 
@@ -834,19 +849,39 @@ spe$pg_clusters <- clusters
 files <- list.files(file.path(path, "masks_temp"))
 
 for(i in 1: length(files)){
+  
   masks <- loadImages(file.path(path, "masks_temp", files[i]), as.is = TRUE)
+  
+  # delete later
+  #names(masks) <- str_match(files[i], "^.*_.*_(.*_.*_.*_.*_.*).tif")[,2] 
+  #c <- str_match(files[i], "^.*_(.*)_.*_.*_.*_.*_.*")[,2] 
   
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
   
   plotCells(masks,
-            object = spe, 
+            object = spe,
             cell_id = "ObjectNumber", img_id = "sample_id",
             colour_by = "pg_clusters",
             colour = list(pg_clusters = col_clusters),
             display = "single",
-            save_plot = list(filename = file.path(path, "results/", paste0(files[i], "f"))),
+            save_plot = list(filename = file.path(path, "results/int_morph/max_sample_per_cluster", paste0("all_", files[i], "f"))),
             legend = NULL)
+
+
+  # col_celltype <- setNames(c("red", "white"), c('yes', 'no'))
+  # spe$binary <- 'no'
+  # spe[,spe$pg_clusters == as.integer(c)]$binary <- 'yes'
+  # 
+  # 
+  # plotCells(masks,
+  #           object = spe, 
+  #           cell_id = "ObjectNumber", img_id = "sample_id",
+  #           colour_by = "binary",
+  #           colour = list(binary = col_celltype),
+  #           display="single",
+  #           save_plot = list(filename = file.path(path, "results/int_morph/max_sample_per_cluster", paste0(files[i], "f"))),
+  #           legend=NULL)
 
 }
 
@@ -854,4 +889,12 @@ for(i in 1: length(files)){
 
 The next steps are to exclude sticky cells and low-quality markers and then to find a way to include morphological features.
 
+## Save objects
 
+Finally, the spe object can be saved for further downstream 
+processing and analysis.
+
+```{r save-objects-read-data}
+
+saveRDS(spe, file.path(path, "results/spe_processed.rds"))
+```

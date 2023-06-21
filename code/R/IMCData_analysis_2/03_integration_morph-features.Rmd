@@ -29,7 +29,7 @@ tissue <- spe$tissue
 spe_bm <- spe[,tissue=="BM"]
 spe_pt <- spe[,tissue=="PT"]
 
-spe <- spe_pt
+spe <- spe_bm
 
 morph_names <- c("area",
                  #"area_convex",
@@ -152,6 +152,8 @@ Upon visualization in the images, we can confirm that the outliers are indeed ou
 ```{r exclude-outliers, message=FALSE}
 
 # Remove segmentation artifacts
+
+spe <- spe_all
 outliers <- (spe$area <= 100 & spe$tissue == "PT" | spe$area <= 250 & spe$tissue == "BM" | spe$area >= 15600 & spe$tissue == "BM")
 sum(outliers)
 spe <- spe[,!outliers]
@@ -251,7 +253,7 @@ for(i in 1: length(files)){
               colour_by = "m",
               #colour = list(m = viridis(1000)),
               #display = "single",
-              save_plot = list(filename = file.path(path, "results/clipped_area-tissue-sep-postexclusion", paste0(morph_names[m], '_', files[i], 'f'))),
+              save_plot = list(filename = file.path(path, "results", paste0(morph_names[m], '_', files[i], 'f'))),
               #legend = NULL
               )
     

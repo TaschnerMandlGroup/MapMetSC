@@ -46,7 +46,7 @@ cell_id <- colnames(spe)
 mat <- mat[!grepl("IF2_GD2|IF3_CD45/56", rownames(mat)),]
 
 ```
-We are excluding 6031 due to zero intensity. 
+We are excluding 6031 (non-refined) or 6121 (refined) due to zero intensity. 
 
 In a next step, we will plot a single-cell heatmap using complex heatmap. 
 

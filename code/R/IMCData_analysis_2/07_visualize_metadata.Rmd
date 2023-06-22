@@ -92,7 +92,6 @@ columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation
   columnAnnotation(efs_dur=meta_all$efs_dur, col=list(efs_dur=col_efs_dur)) %v%
   columnAnnotation(MYCN_amp=meta_all$MYCN_amp, col=list(MYCN_amp=col_aberrations), annotation_legend_param = list(MYCN_amp = list(title='aberration', labels = c('no', 'yes', 'het', 'NA'))))  %v%
   columnAnnotation(ALK_amp=meta_all$ALK_amp, col=list(ALK_amp=col_aberrations), show_legend=FALSE) %v%
-  columnAnnotation(ALK_amp=meta_all$ALK_amp, col=list(ALK_amp=col_aberrations), show_legend=FALSE) %v%
   columnAnnotation(ALK_mut=meta_all$ALK_mut, col=list(ALK_mut=col_aberrations), show_legend=FALSE) %v%
   columnAnnotation(ATRX_del=meta_all$ATRX_del, col=list(ATRX_del=col_aberrations), show_legend=FALSE) %v%
   columnAnnotation(TERT_rear=meta_all$TERT_rear, col=list(TERT_rear=col_aberrations), show_legend=FALSE) %v%
@@ -174,44 +173,51 @@ draw(lgd, test = "add labels and title")
 ```
 
 Next, we will visualize the cluster per metadata group as described [here](https://r-graph-gallery.com/48-grouped-barplot-with-ggplot2.html).
-```{r barplot-cluster-per-sample, fig.height=15, fig.width=4}
+```{r barplot-cluster-per-sample, fig.height=15, fig.width=5}
  # library
 library(ggplot2)
 library(tidyverse)
 
 #change according to group of interest
-#spe_reduced <- spe[,spe$tissue=="BM" & spe$control=="no"]
-#groupname <- "timepoint"
+# spe_reduced <- spe[,spe$tissue=="BM" & spe$control=="no"]
+# groupname <- "timepoint"
 
-# spe_reduced <- spe[,spe$tissue=="BM"]
-# groupname <- "control"
+spe_reduced <- spe[,spe$tissue=="BM"]
+groupname <- "control"
 
-spe_reduced <- spe[,spe$timepoint=="DE"]
-groupname <- "tissue"
+# spe_reduced <- spe[,spe$timepoint=="DE"]
+# groupname <- "tissue"
 
 group <- colData(spe_reduced)[,groupname]
 
-col_clusters <- metadata(spe_reduced)$col_clusters
-clusters <- spe_reduced$pg_clusters 
+col_celltype <- metadata(spe_reduced)$color_vector$col_celltype
+celltype <- spe_reduced$celltype 
 
-col_clusters <- col_clusters[order(as.integer(names(col_clusters)))]
-data <- data.frame(sample = group, clusters)
+col_celltype <- col_celltype[order(names(col_celltype))]
+data <- data.frame(sample = group, celltype)
 data$freq <- 1
 
-data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
+data_wide <- data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, paste0("results/int_morph/clusters-per-", groupname, ".csv")))
+data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "celltype", values_to = "count") 
 
-data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
+data_long$celltype <- factor(data_long$celltype, levels=levels(celltype))
 
-data_long$cluster <- factor(data_long$cluster, levels=levels(clusters))
+#if compartment specific visualization
+compartment <- grepl("Tumor", colnames(data_wide))
+data_wide <- data_wide[, compartment]
+compartment <- grepl("Tumor", data_long$celltype)
+data_long <- data_long[compartment,]
 
+write.csv(data_wide, file.path(path, paste0("results/metadata/celltype-per-", groupname, "_tumor.csv")))
  
 # Stacked + percent
-ggplot(data_long, aes(fill=cluster, y=count, x=sample)) + 
-  ggtitle(paste0("Clusters per ", groupname)) +
-  geom_bar(position="fill", stat="identity") + 
-  scale_fill_manual(values = col_clusters) +
+ggplot(data_long, aes(fill=celltype, y=count, x=sample)) + 
+  ggtitle(paste0("celltype per ", groupname)) +
+  geom_bar(#position="fill", 
+    position="stack",
+    stat="identity") + 
+  scale_fill_manual(values = col_celltype) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
 ```
 

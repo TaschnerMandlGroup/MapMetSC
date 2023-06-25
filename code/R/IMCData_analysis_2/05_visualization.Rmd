@@ -89,6 +89,74 @@ Heatmap(mat[,rand_cells],
         )
 ```
 
+Now we will plot these heatmaps per cluster.
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+
+set.seed(20230521)
+
+celltype <- spe$celltype
+
+for(i in 1: length(unique(celltype))){
+
+  c <- unique(celltype)[i]
+
+  mat_c <- mat_hq[,celltype==c]
+  ct <- celltype[celltype==c]
+  tis <- spe$tissue[celltype==c]
+  
+  col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+  col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
+  
+  if (length(ct) < 8000){len=length(ct)}else{len=8000}
+  rand_cells <- sample(seq_len(ncol(mat_c)), len)
+  
+  
+  area_c = mat_morph["area",celltype==c]
+  solidity_c = mat_morph["solidity",celltype==c]
+  aspect_ratio_c = mat_morph["aspect_ratio",celltype==c]
+  
+  clPARP_c = mat_lq["clPARP_Yb176_mean",celltype==c]
+  
+  col_area_c = colorRamp2(c(min(area_c[rand_cells]),min(area_c[rand_cells])+(max(area_c[rand_cells])-min(area_c[rand_cells]))/2, max(area_c[rand_cells])), c("blue", "white", "red"))
+  col_solidity_c = colorRamp2(c(min(solidity_c[rand_cells]),min(solidity_c[rand_cells])+(max(solidity_c[rand_cells])-min(solidity_c[rand_cells]))/2, max(solidity_c[rand_cells])), c("blue", "white", "red"))
+  col_aspect_ratio_c = colorRamp2(c(min(aspect_ratio_c[rand_cells]),min(aspect_ratio_c[rand_cells])+(max(aspect_ratio_c[rand_cells])-min(aspect_ratio_c[rand_cells]))/2, max(aspect_ratio_c[rand_cells])), c("blue", "white", "red"))
+  
+  col_clPARP_c = colorRamp2(c(min(clPARP_c[rand_cells]),min(clPARP_c[rand_cells])+(max(clPARP_c[rand_cells])-min(clPARP_c[rand_cells]))/2, max(clPARP_c[rand_cells])), c("blue", "white", "red"))
+  
+  column_ha = HeatmapAnnotation(celltype = ct[rand_cells],
+                                tissue = tis[rand_cells],
+                                area = area_c[rand_cells],
+                                solidity = solidity_c[rand_cells],
+                                aspect_ratio = aspect_ratio_c[rand_cells],
+                                clPARP = clPARP_c[rand_cells],
+                                col=list(celltype=metadata(spe)$color_vector$col_celltype, 
+                                         tissue=col_tissue,
+                                         area = col_area_c,
+                                         solidity = col_solidity_c,
+                                         aspect_ratio = col_aspect_ratio_c,
+                                         clPARP = col_clPARP_c
+                                         ), 
+                                show_legend=T)
+  
+  png(file=file.path(path, paste0("results/heatmaps/annotated/cluster_low_res/", c , ".tiff")),width=18,height=8,units="in", res=1200)
+  
+  ht<- Heatmap(mat_c[,rand_cells], 
+          column_title = "Single-cell heatmap with 8000 randomly selected cells",
+          top_annotation = column_ha, 
+          cluster_columns=F,
+          column_order= order(tis[rand_cells], decreasing=F),
+          show_column_dend = T,
+          show_column_names=F,
+          col=viridis(100)
+          )
+  draw(ht)
+  
+  dev.off()
+}
+
+```
+
 Next we will look at the single cell heatmap ordered by the identified phenograph clusters and sample the same number of cells from BM and PT samples. 
 
 ```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
@@ -554,6 +622,39 @@ for(i in 1: length(samples)){
           axis.line = element_line(colour = "black"))
   
   ggsave(filename=file.path(path, paste0("results/UMAP/annotated/celltype/", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
+}
+
+```
+
+Now, we will plot the clusters separately in the dim-red space per PT and BM. 
+
+```{r visualizing-umap-by-marker, message=F, fig.width=20}
+
+celltype <- spe$celltype
+mat_red_df <- as.data.frame(mat_red)
+mat_red_df["tissue"] <- spe$tissue
+
+samples <- unique(celltype)
+
+for(i in 1: length(samples)){
+
+  sample_binary <- celltype == samples[i] 
+  
+  background <- as.data.frame(mat_red_df[!sample_binary,])
+  foreground <- as.data.frame(mat_red_df[sample_binary,])
+  plot <- ggplot(background, aes(x=V1, y=V2) ) +
+    geom_point(color="gray90", size=0.02) +
+    geom_point(data=foreground, aes(x=V1, y=V2, colour=tissue), show.legend=F, size=0.02, alpha=0.25) +
+    scale_colour_manual(values = col_tissue) +
+    ggtitle(samples[i]) +
+    theme(plot.title = element_text(size = 5), 
+          axis.title = element_text(size=5), 
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), 
+          axis.line = element_line(colour = "black"))
+  
+  ggsave(filename=file.path(path, paste0("results/dim_reduction/UMAP_phenograph/clusters/", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
 }
 
 ```

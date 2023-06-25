@@ -209,7 +209,7 @@ data_wide <- data_wide[, compartment]
 compartment <- grepl("Tumor", data_long$celltype)
 data_long <- data_long[compartment,]
 
-write.csv(data_wide, file.path(path, paste0("results/metadata/celltype-per-", groupname, "_tumor.csv")))
+#write.csv(data_wide, file.path(path, paste0("results/metadata/celltype-per-", groupname, "_tumor.csv")))
  
 # Stacked + percent
 ggplot(data_long, aes(fill=celltype, y=count, x=sample)) + 

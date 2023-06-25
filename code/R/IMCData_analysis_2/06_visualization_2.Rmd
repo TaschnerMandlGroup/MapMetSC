@@ -97,10 +97,11 @@ library(viridis)
 
 
 ## UMAP colored by cell type and expression - dittoDimPlot
-p1 <- dittoDimPlot(spe, var = "celltype", 
+p1 <- dittoDimPlot(spe, var = "pg_clusters", 
              reduction.use = "UMAP", size = 0.2,
              do.label = TRUE) +
-  scale_color_manual(values = metadata(spe)$color_vector$col_celltype) +
+  #scale_color_manual(values = metadata(spe)$color_vector$col_celltype) +
+  scale_color_manual(values = col_clusters) + 
   theme(legend.title = element_blank()) +
   ggtitle("Cell types on UMAP")
 
@@ -113,14 +114,14 @@ p1 + p2
 p1
 ```
 
-```{r cell type umap 2, fig.width=8, fig.height= 14, message=FALSE}
+```{r cell type umap 2, fig.width=16, fig.height= 32, message=FALSE}
 # UMAP colored by expression for all markers - plotReducedDim
 plot_list  <- lapply(rownames(spe)[rowData(spe)$marker_class == "type"], function(x){
   p <- dittoDimPlot(spe, 
                      var = x, 
                      assay = "exprs",
                      reduction.use = "UMAP",
-                     order="randomize",
+                     order="increasing",
                      size = 0.2, 
                      colors = viridis(100), 
                      legend.show=F,
@@ -130,7 +131,7 @@ plot_list  <- lapply(rownames(spe)[rowData(spe)$marker_class == "type"], functio
                     })
 
 
-plot_grid(plotlist = plot_list, ncol=4, nrow=7)
+plot_grid(plotlist = plot_list, ncol=4, nrow=8)
 
 ```
 ```{r cell type umap 2, fig.width=8, fig.height= 4, message=FALSE}

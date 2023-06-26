@@ -48,7 +48,7 @@ tissue <- spe$tissue
 cell_id <- colnames(spe)
 ```
 
-We will scale morphological features according to the determined thresholds. 
+We will add morphological features according to the determined thresholds. 
 ```{r generate-dataframes, message=FALSE, fig.height=10, fig.width=7}
 
 #Normalization and scaling functions 
@@ -77,6 +77,7 @@ solidity_lower <- 0.001
 aspect_ratio_upper <- 0.9995 
 
 clipped_area <- c(clipper(morph_mat[1,tissue=="BM"], 0, area_upper), clipper(morph_mat[1,tissue=="PT"], 0, area_upper))
+#clipped_area <- c(clipper(morph_mat[1,tissue=="PT"], 0, area_upper))
 clipped_area <- clipped_area[colnames(spe)]
 
 morph_mat_clipped <- rbind(clipped_area, clipper(morph_mat[2,], solidity_lower, 1), clipper(morph_mat[3,], 0, aspect_ratio_upper))
@@ -86,6 +87,7 @@ colnames(morph_mat_clipped) <- colnames(spe)
 rownames(morph_mat_clipped) <- c("area", "solidity", "aspect_ratio")
 
 #Concatenate intensity and morphological features or use intensity features only
+#mat <- rbind(intensity_mat_hq_wo_zeros, morph_mat_clipped)
 mat <- intensity_mat_hq_wo_zeros
 
 #Apply changes to SPE object
@@ -113,6 +115,7 @@ col_sample = setNames(sample(col_vector_433, length(unique(spe$sample))), unique
 
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
+#column_ha = HeatmapAnnotation(sample = colnames(mat[,rand_cells]), col=list(sample=col_sample), show_legend=F)
 Heatmap(mat[,rand_cells], 
         column_title = "Single-cell heatmap",
         #top_annotation = column_ha, 
@@ -122,44 +125,153 @@ Heatmap(mat[,rand_cells],
         )
 ```
 
-We will then reduce dimensionality of the data to 5 dimensions as described [here](https://umap-learn.readthedocs.io/en/latest/clustering.html).
+```{r batch-correction-fastMNN, message=FALSE, warning=FALSE}
+library(BiocParallel)
+library(batchelor)
+set.seed(220228)
+out <- fastMNN(spe, batch = spe$tissue,
+               auto.merge = FALSE,
+               subset.row = rowData(spe)$use_channel,
+               assay.type = "exprs",
+               BPPARAM = MulticoreParam())
+# Transfer the correction results to the main spe object
+reducedDim(spe, "fastMNN") <- reducedDim(out, "corrected")
+saveRDS(out, file.path(path, "results/fastMNN.rds"))
+```
+
+We can also use UMAP for dimensionality redcution before clustering.
 
 ```{r UMAP, message=FALSE}
 library(scater)
 library(BiocParallel)
 
-# set.seed(221228)
-# 
-# mat_red_clustering <- calculateUMAP(mat, ncomponents=5, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam())
-# rownames(mat_red_clustering) <- colnames(spe)
-# 
-# saveRDS(mat_red_clustering, file.path(path, "results/mat_red_clustering.rds"))
+set.seed(221228)
 
-mat_red_clustering <- readRDS(file.path(path,"results/mat_red_clustering.rds"))
+mat_red <- calculateUMAP(mat, ncomponents=3, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam())
+rownames(mat_red) <- colnames(spe)
+
+saveRDS(mat_red, file.path(path, "results/mat_red_3components.rds"))
+
+# mat_red <- readRDS(file.path(path,"results/mat_red_final.rds"))
+# rownames(mat_red) <- colnames(spe)
 
 #Apply changes to SPE object
-reducedDim(spe, "UMAP_clustering") <- mat_red_clustering
+reducedDim(spe, "UMAP_3") <- mat_red
 ```
 
-We will now cluster the dimensionality reduced data.
+We will now cluster the data.
 
 ```{r phenograph-clustering}
-# library(FastPG)
-# library(parallel)
-# library(Rphenograph)
-# 
-# set.seed(221229)
-# n_threads <- detectCores()
-# 
-# out <- FastPG::fastCluster(data=mat_red, k=45, num_threads=n_threads)
-# clusters <- factor(out$communities)
+library(FastPG)
+library(parallel)
+library(Rphenograph)
 
-#saveRDS(clusters, file.path(path, "results/pg_clusters.rds"))
+set.seed(221229)
+n_threads <- detectCores()
 
-clusters <- readRDS(file.path(path, "results/pg_clusters.rds"))
+
+# mat_integrated <- reducedDim(spe, "fastMNN")
+# non_zeros <- as.logical(rowSums(mat_integrated)!=0)
+# mat_integrated <- mat_integrated[non_zeros,] 
+# #mat <- t(mat)
+# 
+# out <- Rphenograph(mat_integrated, k = 45)
+# 
+# clusters <- factor(membership(out[[2]]))
+
+out <- FastPG::fastCluster(data=mat_red, k=45, num_threads=n_threads)
+clusters <- factor(out$communities)
+
+saveRDS(clusters, file.path(path, "results/clusters_UMAP-3-dim.rds"))
+
+# clusters <- readRDS(file.path(path, "results/clusters_final.rds"))
 
 #Apply changes to SPE object
 spe$pg_clusters <- clusters
+```
+
+We will now cluster the data using HDBscan. 
+
+```{r HDBScan-clustering}
+library("dbscan")
+
+cl <- hdbscan(mat_red, minPts=100)
+clusters <- cl$cluster
+
+spe$hdbscan_clusters <- clusters
+
+saveRDS(clusters, file.path(path, "results/hdbscan_clusters_UMAP-5-dim.rds"))
+```
+```{r GMM-clustering}
+library("ClusterR")
+
+cl <- hdbscan(mat_red, minPts=100)
+clusters <- cl$cluster
+
+spe$hdbscan_clusters <- clusters
+
+saveRDS(clusters, file.path(path, "results/hdbscan_clusters_UMAP-5-dim.rds"))
+```
+
+
+Now we will plot 41 distinct, manually selected colors.
+```{r colors, message=FALSE, fig.height=17}
+
+n <- length(unique(clusters))
+
+
+col_clusters <- c(rgb(255,255,162, maxColorValue = 255),
+                rgb(255,221,57, maxColorValue = 255),
+                rgb(246,246,0, maxColorValue = 255),
+                rgb(255,255,209, maxColorValue = 255),
+                rgb(254,217,166, maxColorValue = 255),
+                rgb(253,180,98, maxColorValue = 255),
+                rgb(255,137,0, maxColorValue = 255),
+                rgb(241,75,2, maxColorValue = 255),
+                rgb(152,78,163, maxColorValue = 255),
+                rgb(188,128,189, maxColorValue = 255),
+                rgb(190,174,212, maxColorValue = 255),
+                rgb(253,218,236, maxColorValue = 255),
+                rgb(251,154,153, maxColorValue = 255),
+                rgb(242,3,137, maxColorValue = 255),
+                rgb(251,128,114, maxColorValue = 255),
+                rgb(254,142,175, maxColorValue = 255),
+                rgb(240,0,240, maxColorValue = 255),
+                rgb(227,26,28, maxColorValue = 255),
+                rgb(147,3,0, maxColorValue = 255),
+                rgb(230,245,201, maxColorValue = 255),
+                rgb(204,235,197, maxColorValue = 255),
+                rgb(179,222,105, maxColorValue = 255),
+                rgb(198,255,72, maxColorValue = 255),
+                rgb(65,208,57, maxColorValue = 255),
+                rgb(60,119,97, maxColorValue = 255),
+                rgb(104,180,238, maxColorValue = 255),
+                rgb(128,177,211, maxColorValue = 255),
+                rgb(51,180,180, maxColorValue = 255),
+                rgb(102,166,30, maxColorValue = 255),
+                rgb(149,144,89, maxColorValue = 255),
+                rgb(210,205,126, maxColorValue = 255),
+                rgb(27,158,119, maxColorValue = 255),
+                rgb(102,194,165, maxColorValue = 255),
+                rgb(39,130,187, maxColorValue = 255),
+                rgb(166,206,227, maxColorValue = 255),
+                rgb(212,241,240, maxColorValue = 255),
+                rgb(169,189,210, maxColorValue = 255),
+                rgb(217,217,217, maxColorValue = 255),          
+                rgb(251,241,232, maxColorValue = 255),
+                rgb(2,0,138, maxColorValue = 255),
+                rgb(113,113,113, maxColorValue = 255),
+                rgb(212,89,67, maxColorValue = 255),
+                rgb(156,76,24, maxColorValue = 255),
+                rgb(174,129,37, maxColorValue = 255),
+                rgb(212,143,75, maxColorValue = 255),
+                rgb(143,109,113, maxColorValue = 255))
+
+pie(rep(1,n), col=col_clusters, labels=col_clusters)
+
+col_clusters <- setNames(col_clusters, c(0:(length(unique(clusters))-1)))
+
+metadata(spe)$color_vector$col_clusters <- col_clusters
 ```
 
 Next we will look at the single cell heatmap ordered by the identified phenograph clusters for 2000 randomly selected cells. 
@@ -180,6 +292,7 @@ col_clusters = setNames(sample(col_vector_433, length(unique(spe$pg_clusters))),
 col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
 col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
+mat <- t(mat)
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
 
@@ -188,14 +301,12 @@ solidity = morph_mat_clipped["solidity",]
 aspect_ratio = morph_mat_clipped["aspect_ratio",]
 
 clPARP = intensity_mat_lq_wo_zeros["clPARP_Yb176_mean",]
-FN = intensity_mat_lq_wo_zeros["Fibronectin_La139_mean",]
 
 col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
 col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
 col_aspect_ratio = colorRamp2(c(min(aspect_ratio[rand_cells]),min(aspect_ratio[rand_cells])+(max(aspect_ratio[rand_cells])-min(aspect_ratio[rand_cells]))/2, max(aspect_ratio[rand_cells])), c("blue", "white", "red"))
 
 col_clPARP = colorRamp2(c(min(clPARP[rand_cells]),min(clPARP[rand_cells])+(max(clPARP[rand_cells])-min(clPARP[rand_cells]))/2, max(clPARP[rand_cells])), c("blue", "white", "red"))
-col_FN = colorRamp2(c(min(FN[rand_cells]),min(FN[rand_cells])+(max(FN[rand_cells])-min(FN[rand_cells]))/2, max(FN[rand_cells])), c("blue", "white", "red"))
 
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               tissue = tissue[rand_cells],
@@ -203,14 +314,12 @@ column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
                               solidity = solidity[rand_cells],
                               aspect_ratio = aspect_ratio[rand_cells],
                               clPARP = clPARP[rand_cells],
-                              FN = FN[rand_cells],
                               col=list(cluster=col_clusters, 
                                        tissue=col_tissue,
                                        area = col_area,
                                        solidity = col_solidity,
                                        aspect_ratio = col_aspect_ratio,
-                                       clPARP = col_clPARP,
-                                       FN = col_FN
+                                       clPARP = col_clPARP
                                        ), 
                               show_legend=T)
 
@@ -255,14 +364,12 @@ for(i in 1: length(unique(clusters))){
   aspect_ratio_c = mat_morph["aspect_ratio",clusters==c]
   
   clPARP_c = mat_lq["clPARP_Yb176_mean",clusters==c]
-  FN_c = mat_lq["Fibronectin_La139_mean",clusters==c]
   
   col_area_c = colorRamp2(c(min(area_c[rand_cells]),min(area_c[rand_cells])+(max(area_c[rand_cells])-min(area_c[rand_cells]))/2, max(area_c[rand_cells])), c("blue", "white", "red"))
   col_solidity_c = colorRamp2(c(min(solidity_c[rand_cells]),min(solidity_c[rand_cells])+(max(solidity_c[rand_cells])-min(solidity_c[rand_cells]))/2, max(solidity_c[rand_cells])), c("blue", "white", "red"))
   col_aspect_ratio_c = colorRamp2(c(min(aspect_ratio_c[rand_cells]),min(aspect_ratio_c[rand_cells])+(max(aspect_ratio_c[rand_cells])-min(aspect_ratio_c[rand_cells]))/2, max(aspect_ratio_c[rand_cells])), c("blue", "white", "red"))
   
   col_clPARP_c = colorRamp2(c(min(clPARP_c[rand_cells]),min(clPARP_c[rand_cells])+(max(clPARP_c[rand_cells])-min(clPARP_c[rand_cells]))/2, max(clPARP_c[rand_cells])), c("blue", "white", "red"))
-  col_FN_c = colorRamp2(c(min(FN_c[rand_cells]),min(FN_c[rand_cells])+(max(FN_c[rand_cells])-min(FN_c[rand_cells]))/2, max(FN_c[rand_cells])), c("blue", "white", "red"))
   
   column_ha = HeatmapAnnotation(clusters = ct[rand_cells],
                                 tissue = tis[rand_cells],
@@ -270,18 +377,16 @@ for(i in 1: length(unique(clusters))){
                                 solidity = solidity_c[rand_cells],
                                 aspect_ratio = aspect_ratio_c[rand_cells],
                                 clPARP = clPARP_c[rand_cells],
-                                FN = FN_c[rand_cells],
                                 col=list(clusters=col_clusters, 
                                          tissue=col_tissue,
                                          area = col_area_c,
                                          solidity = col_solidity_c,
                                          aspect_ratio = col_aspect_ratio_c,
-                                         clPARP = col_clPARP_c,
-                                         FN = col_FN_c
+                                         clPARP = col_clPARP_c
                                          ), 
                                 show_legend=T)
   
-  png(file=file.path(path, paste0("results/heatmaps/clusters", c , ".tiff")),width=18,height=8,units="in", res=1200)
+  png(file=file.path(path, paste0("results/dim_reduction/UMAP_3comp_phenograph/heatmaps/", c , ".tiff")),width=18,height=8,units="in", res=1200)
   
   ht<- Heatmap(mat_c[,rand_cells], 
           column_title = "Single-cell heatmap with 8000 randomly selected cells",
@@ -298,80 +403,10 @@ for(i in 1: length(unique(clusters))){
 }
 
 ```
-
-Next, we will plot this heatmap for every cluster and tissue separately.
-```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
-
-set.seed(20230521)
-
-t = "PT"
-
-mat_hq <- mat
-mat_lq <- intensity_mat_lq_wo_zeros
-mat_morph <- morph_mat_clipped
-clusters <- spe$pg_clusters
-tissue <- spe$tissue
-
-for(i in 1: length(unique(clusters))){
-
-  c <- unique(clusters)[i]
-
-  mat_c <- mat_hq[,clusters==c & tissue ==t]
-  ct <- clusters[clusters==c & tissue ==t]
-  tis <- spe$tissue[clusters==c & tissue ==t]
-  
-  col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
-  col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
-  
-  if (length(ct) < 8000){len=length(ct)}else{len=8000}
-  if (length(ct) <2){next}
-  rand_cells <- sample(seq_len(ncol(mat_c)), len)
-  
-  area_c = mat_morph["area",clusters==c & tissue ==t]
-  solidity_c = mat_morph["solidity",clusters==c & tissue ==t]
-  aspect_ratio_c = mat_morph["aspect_ratio",clusters==c & tissue ==t]
-  
-  clPARP_c = mat_lq["clPARP_Yb176_mean",clusters==c & tissue ==t]
-  FN_c = mat_lq["Fibronectin_La139_mean",clusters==c & tissue ==t]
-  
-  col_area_c = colorRamp2(c(min(area_c[rand_cells]),min(area_c[rand_cells])+(max(area_c[rand_cells])-min(area_c[rand_cells]))/2, max(area_c[rand_cells])), c("blue", "white", "red"))
-  col_solidity_c = colorRamp2(c(min(solidity_c[rand_cells]),min(solidity_c[rand_cells])+(max(solidity_c[rand_cells])-min(solidity_c[rand_cells]))/2, max(solidity_c[rand_cells])), c("blue", "white", "red"))
-  col_aspect_ratio_c = colorRamp2(c(min(aspect_ratio_c[rand_cells]),min(aspect_ratio_c[rand_cells])+(max(aspect_ratio_c[rand_cells])-min(aspect_ratio_c[rand_cells]))/2, max(aspect_ratio_c[rand_cells])), c("blue", "white", "red"))
-  
-  column_ha = HeatmapAnnotation(clusters = ct[rand_cells],
-                                tissue = tis[rand_cells],
-                                area = area_c[rand_cells],
-                                solidity = solidity_c[rand_cells],
-                                aspect_ratio = aspect_ratio_c[rand_cells],
-                                col=list(clusters=col_clusters, 
-                                         tissue=col_tissue,
-                                         area = col_area_c,
-                                         solidity = col_solidity_c,
-                                         aspect_ratio = col_aspect_ratio_c
-                                         ), 
-                                show_legend=T)
-  
-  png(file=file.path(path, paste0("results/heatmaps/clusters-tissue-sep/", t, "_" , c , ".tiff")),width=18,height=8,units="in", res=1200)
-  
-  ht<- Heatmap(mat_c[,rand_cells], 
-          column_title = "Single-cell heatmap with 8000 randomly selected cells",
-          top_annotation = column_ha, 
-          cluster_columns=F,
-          column_order= order(tis[rand_cells], decreasing=F),
-          show_column_dend = T,
-          show_column_names=F,
-          col=viridis(100)
-          )
-  draw(ht)
-  
-  dev.off()
-}
-```
-
 
 Next we will look at the single cell heatmap ordered by the identified phenograph clusters and sample the same number of cells from BM and PT samples. 
 
-```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=10}
 library(ComplexHeatmap)
 library(viridis)
 library(circlize)
@@ -545,7 +580,7 @@ Heatmap(mat[,rand_cells],
 
 Next, we will look at the mean marker expression per cluster. The next two code blocks can be also run for tissue types (PT/BM) separately. 
 
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=17}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=10}
 library(scuttle)
 
 set.seed(20230135)
@@ -597,6 +632,11 @@ column_ha = HeatmapAnnotation(cluster = mean[,"Group.1"],
                                        ), 
                               show_legend=T)
 
+
+
+# Feature-wise scaling
+#mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
+
 Heatmap(mean_t, 
         column_title = "Cluster-means heatmap with phenograph clusters (1px -mean)-scaled",
         top_annotation = column_ha, 
@@ -609,14 +649,14 @@ Heatmap(mean_t,
 
 
 ```
-We can see that cluster 85 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
+We can see that cluster 38 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
 
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=17}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=10}
 library(scuttle)
 
 set.seed(20230139)
 
-sticky_cluster <- "85"
+sticky_cluster <- "89"
 
 # Feature-wise scaling
 mean_t_wo_sticky <- mean_t[,levels(clusters)!=sticky_cluster]
@@ -664,18 +704,21 @@ Heatmap(mean_t_wo_sticky,
 
 ```
 
-Then, we will perform dimensionality reduction by UMAP for visualization.
+Then, we will perform dimensionality reduction by a UMAP. 
 
 ```{r UMAP, message=FALSE}
+library(scater)
+library(BiocParallel)
 
-# set.seed(221228)
-# 
-# mat_red <- calculateUMAP(mat,  n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam())
+set.seed(221228)
+
+mat_red <- calculateUMAP(mat,  n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam())
+rownames(mat_red) <- colnames(spe)
+
+saveRDS(mat_red, file.path(path, "results/mat_red_k30.rds"))
+
+# mat_red <- readRDS(file.path(path,"results/mat_red_final.rds"))
 # rownames(mat_red) <- colnames(spe)
-# 
-# saveRDS(mat_red, file.path(path, "results/mat_red_visualization.rds"))
-# 
-mat_red <- readRDS(file.path(path,"results/mat_red_visualization.rds"))
 
 #Apply changes to SPE object
 reducedDim(spe, "UMAP") <- mat_red
@@ -739,7 +782,7 @@ mat_red_df["sample"] <- rownames(mat_red)
 mat_red_df_rand <- mat_red_df[sample(1:nrow(mat_red_df)),]
   
 plot <- ggplot(mat_red_df_rand, aes(x=V1, y=V2, colour=sample)) +
-    geom_point(size=0.05, alpha=0.5, show.legend=T) + 
+    geom_point(size=0.05, alpha=0.5, show.legend=F) + 
     ggtitle("Sample") +
     scale_colour_manual(values = col_sample) +
     theme(plot.title = element_text(size = 5), 
@@ -779,7 +822,7 @@ for (i in 1: nrow(mat_tmp)){
             axis.line = element_line(colour = "black"),
             legend.text = element_text(size=5))
   
-  ggsave(filename=file.path(path, paste0("results/UMAP/markers_decreasing/", marker , ".tiff")), width = 10, height = 5) #units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste0("results/dim_reduction/UMAP_phenograph/markers_decreasing/", marker , ".tiff")), width = 10, height = 5) #units = "in", device='tiff', dpi=500)
 } 
 ```
 
@@ -844,7 +887,7 @@ for(i in 1: length(samples)){
           panel.background = element_blank(), 
           axis.line = element_line(colour = "black"))
   
-  ggsave(filename=file.path(path, paste0("results/UMAP/clusters/", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste0("results/dim_reduction/UMAP_phenograph/clusters/", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
 }
 
 ```
@@ -887,7 +930,7 @@ plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33))
 
 save_tiff <- function(sublist, j){
   plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
-  ggsave(filename=file.path(path, paste("/results/UMAP/samples/sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste("/results/UMAP/sample/sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
 }
 
 mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
@@ -909,14 +952,14 @@ data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "fre
 
 write.csv(data_wide, file.path(path, "results/metadata/clusters-per-sample.csv"))
 
-data_long <- data_wide[c(51:100),] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
+data_long <- data_wide[c(146:170),] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
 data_long$cluster <- factor(data_long$cluster, levels=levels(clusters))
 
  
 # Stacked + percent
 ggplot(data_long, aes(fill=cluster, y=count, x=sample)) + 
-  ggtitle("Clusters per BM sample 51-100") +
+  ggtitle("Clusters per PT sample") +
   geom_bar(position="fill", stat="identity") + 
   scale_fill_manual(values = col_clusters) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
@@ -945,7 +988,7 @@ ggplot(data_long, aes(fill=sample, y=count, x=clusters)) +
 
 We will now visualize the tissues per cluster. 
 
-```{r barplot-tissues-per-cluster, fig.width=17}
+```{r barplot-tissues-per-cluster, fig.width=10}
 
 colnames(mat) <- spe$sample
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
@@ -957,7 +1000,7 @@ data[data$tissue%in%"TU",]$tissue <- "PT"
 data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("tissue"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "/results/metadata/tissues-per-cluster.csv"))
+#write.csv(data_wide, file.path(path, "/results/metadata/tissues-per-cluster.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "tissue", values_to = "count") 
 
@@ -975,18 +1018,17 @@ We will now visualize the clusters in a few samples to see if they make sense.
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(cytomapper)
 
-tissue = "TU"
 spe$pg_clusters <- clusters
 
-files <- list.files(file.path(path, "masks_temp", tissue))
+files <- list.files(file.path(path, "masks_temp"))
 
 for(i in 1: length(files)){
   
-  masks <- loadImages(file.path(path, "masks_temp", tissue, files[i]), as.is = TRUE)
+  masks <- loadImages(file.path(path, "masks_temp", files[i]), as.is = TRUE)
   
   # delete later
   names(masks) <- str_match(files[i], "^.*_.*_(.*_.*_.*_.*_.*).tif")[,2]
-  c <- str_match(files[i], "^(.*)_.*_.*_.*_.*_.*_.*")[,2]
+  c <- str_match(files[i], "^.*_(.*)_.*_.*_.*_.*_.*")[,2]
   
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
@@ -997,7 +1039,7 @@ for(i in 1: length(files)){
             colour_by = "pg_clusters",
             colour = list(pg_clusters = col_clusters),
             display = "single",
-            save_plot = list(filename = file.path(path, "results/colored_masks/max_sample_per_cluster", tissue, paste0("all_", files[i], "f"))),
+            save_plot = list(filename = file.path(path, "results/colored_masks/max_sample_per_cluster", paste0("all_", files[i], "f"))),
             legend = NULL)
 
 
@@ -1012,73 +1054,12 @@ for(i in 1: length(files)){
             colour_by = "binary",
             colour = list(binary = col_celltype),
             display="single",
-            save_plot = list(filename = file.path(path, "results/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
+            save_plot = list(filename = file.path(path, "results/colored_masks/max_sample_per_cluster", paste0(files[i], "f"))),
             legend=NULL)
 
 }
 
 ```
-
-Now we will plot 41 distinct, manually selected colors.
-```{r colors, message=FALSE, fig.height=17}
-
-n <- length(unique(clusters))
-
-
-col_clusters <- c(rgb(255,255,162, maxColorValue = 255),
-                rgb(255,221,57, maxColorValue = 255),
-                rgb(246,246,0, maxColorValue = 255),
-                rgb(255,255,209, maxColorValue = 255),
-                rgb(254,217,166, maxColorValue = 255),
-                rgb(253,180,98, maxColorValue = 255),
-                rgb(255,137,0, maxColorValue = 255),
-                rgb(241,75,2, maxColorValue = 255),
-                rgb(152,78,163, maxColorValue = 255),
-                rgb(188,128,189, maxColorValue = 255),
-                rgb(190,174,212, maxColorValue = 255),
-                rgb(253,218,236, maxColorValue = 255),
-                rgb(251,154,153, maxColorValue = 255),
-                rgb(242,3,137, maxColorValue = 255),
-                rgb(251,128,114, maxColorValue = 255),
-                rgb(254,142,175, maxColorValue = 255),
-                rgb(240,0,240, maxColorValue = 255),
-                rgb(227,26,28, maxColorValue = 255),
-                rgb(147,3,0, maxColorValue = 255),
-                rgb(230,245,201, maxColorValue = 255),
-                rgb(204,235,197, maxColorValue = 255),
-                rgb(179,222,105, maxColorValue = 255),
-                rgb(198,255,72, maxColorValue = 255),
-                rgb(65,208,57, maxColorValue = 255),
-                rgb(60,119,97, maxColorValue = 255),
-                rgb(104,180,238, maxColorValue = 255),
-                rgb(128,177,211, maxColorValue = 255),
-                rgb(51,180,180, maxColorValue = 255),
-                rgb(102,166,30, maxColorValue = 255),
-                rgb(149,144,89, maxColorValue = 255),
-                rgb(210,205,126, maxColorValue = 255),
-                rgb(27,158,119, maxColorValue = 255),
-                rgb(102,194,165, maxColorValue = 255),
-                rgb(39,130,187, maxColorValue = 255),
-                rgb(166,206,227, maxColorValue = 255),
-                rgb(212,241,240, maxColorValue = 255),
-                rgb(169,189,210, maxColorValue = 255),
-                rgb(217,217,217, maxColorValue = 255),          
-                rgb(251,241,232, maxColorValue = 255),
-                rgb(2,0,138, maxColorValue = 255),
-                rgb(113,113,113, maxColorValue = 255),
-                rgb(212,89,67, maxColorValue = 255),
-                rgb(156,76,24, maxColorValue = 255),
-                rgb(174,129,37, maxColorValue = 255),
-                rgb(212,143,75, maxColorValue = 255),
-                rgb(143,109,113, maxColorValue = 255))
-
-pie(rep(1,n), col=col_clusters, labels=col_clusters)
-
-col_clusters <- setNames(col_clusters, c(0:(length(unique(clusters))-1)))
-
-metadata(spe)$color_vector$col_clusters <- col_clusters
-```
-
 
 The next steps are to exclude sticky cells and low-quality markers and then to find a way to include morphological features.
 

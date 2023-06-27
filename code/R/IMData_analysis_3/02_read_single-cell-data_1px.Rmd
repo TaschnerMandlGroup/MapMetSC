@@ -60,17 +60,13 @@ The `read_steinbock` function provided by `imcRtools` can now be used to read in
 ```{r read-steinbock}
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe_0px <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'), intensities_folder = "intensities-0px-ref",regionprops_folder = "refined_regionprops", graphs_folder=NULL) 
-spe_1px <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'), intensities_folder = "intensities-1px-ref",regionprops_folder = "refined_regionprops", graphs_folder=NULL) 
+spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'), intensities_folder = "intensities-1px-ref",regionprops_folder = "refined_regionprops", graphs_folder=NULL) 
 
 #Rename third IF channel (CD45 for PT, CD56 for BM)
-rownames(spe_0px)[44] <- "IF3_CD45/56_mean"
-rownames(spe_0px)[88] <- "IF3_CD45/56_mean-80"
+rownames(spe)[44] <- "IF3_CD45/56_mean"
+rownames(spe)[88] <- "IF3_CD45/56_mean-80"
 
-rownames(spe_1px)[44] <- "IF3_CD45/56_mean"
-rownames(spe_1px)[88] <- "IF3_CD45/56_mean-80"
-
-spe_0px
+spe
 ```
 
 By default, single-cell data is read in as `SpatialExperiment` object. 
@@ -78,8 +74,8 @@ The summarized pixel intensities per channel and cell (here mean intensity) are
 stored in the `counts` slot. Columns represent cells and rows represent channels.
 
 ```{r counts}
-rowData(spe_0px)
-counts(spe_0px)[45:88,1:9]
+rowData(spe)
+counts(spe)[45:88,1:9]
 ```
 
 Metadata associated to individual cells are stored in the `colData` slot. After
@@ -89,12 +85,12 @@ the image name from which each cell was extracted and the width and height of th
 corresponding images are stored.
 
 ```{r colData}
-head(colData(spe_0px))
-typeof(colData(spe_0px))
-class(spe_0px)
-class(colData(spe_0px))
-nrow(colData(spe_0px))
-colData(spe_0px)[1:5, 2:ncol(colData(spe_0px))]
+head(colData(spe))
+typeof(colData(spe))
+class(spe)
+class(colData(spe))
+nrow(colData(spe))
+colData(spe)[1:5, 2:ncol(colData(spe))]
 ```
 
 The main difference between the `SpatialExperiment` and the
@@ -104,7 +100,7 @@ locations are stored in the `colData` slot while the `SpatialExperiment`
 container stores them in the `spatialCoords` slot:
 
 ```{r spatialCoords}
-head(spatialCoords(spe_0px))
+head(spatialCoords(spe))
 ```
 
 Finally, metadata regarding the channels are stored in the `rowData` slot. This
@@ -113,8 +109,8 @@ isotope mass and therefore match the channel order of the multi-channel images
 (see Section \@ref(read-images)).
 
 ```{r rowData}
-head(rowData(spe_0px))
-rowData(spe_0px)
+head(rowData(spe))
+rowData(spe)
 ```
 
 ## Single-cell processing {#cell-processing}
@@ -127,8 +123,7 @@ taken.
 We can set the `colnames` of the object to generate unique identifiers per cell:
 
 ```{r set-colnames}
-colnames(spe_0px) <- paste0(spe_0px$sample_id, "_", spe_0px$ObjectNumber)
-colnames(spe_1px) <- paste0(spe_1px$sample_id, "_", spe_1px$ObjectNumber)
+colnames(spe) <- paste0(spe$sample_id, "_", spe$ObjectNumber)
 ```
 
 It is also often the case that sample-specific metadata are available externally.
@@ -138,7 +133,6 @@ More information on how to extract matching patterns from a string can be found 
 ```{r add-indication}
 library(stringr)
 
-spe <- spe_0px
 spe$sample <- gsub(spe$sample_id, pattern="([UM]).*", replacement="\\1")
 spe$fm_id <- str_match(spe$sample, "_.*_(.*)_")[,2]  
 spe$tissue <- str_match(spe$sample, "^.*_.*_(.*)")[,2] 
@@ -180,56 +174,7 @@ spe$X17q_gain <- meta$X17q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$S
 
 spe$ROI <- str_match(spe$sample_id, "^.*_.*_.*_.*_(.*)")[,2]
 spe$year <- gsub(spe$sample_id, pattern="^.*_.*_(.*)-.*", replacement="\\1")
-spe_1px <- spe
-rm(spe)
-```
 
-```{r add-indication}
-spe <- spe_1px
-
-spe$sample <- gsub(spe$sample_id, pattern="([UM]).*", replacement="\\1")
-spe$fm_id <- str_match(spe$sample, "_.*_(.*)_")[,2]  
-spe$tissue <- str_match(spe$sample, "^.*_.*_(.*)")[,2] 
-spe$tissue[spe$tissue=="TU"] = "PT"
-
-meta <- read.csv(file.path(path, '20230617_metadata_complete.csv'))
-
-spe$puncture_side <- meta$Puncture_side[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$infiltration_right <- meta$Infiltration_right[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$infiltration_left <- meta$Infiltration_left[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$exclude <- meta$exclude[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$imc_score <- meta$IMC_score[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$staining_date <- meta$Staining_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$stainer <- meta$Stainer[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$imc_date <- meta$IMC_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$DE_date <- meta$DE_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$DE_year <- sub("-.*", "", spe$DE_date)
-spe$control <- meta$control[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$study_id <- meta$Study_ID[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$timepoint <- meta$Timepoint[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$stage <- meta$stage4[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$progression <- meta$efs[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$tod <- meta$tod[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$efs_dur <- meta$efs_dur[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$tod_date <- meta$tod_dat1[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$tod_dur <- meta$tod_dur[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$rez_date <- meta$rez_dat[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$prog_date <- meta$prog_dat[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$event_date <- meta$event_dat[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$MYCN_amp <- meta$MYCN_amp[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$ALK_amp <- meta$ALK_amp[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$ALK_mut <- meta$ALK_mut[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$ATRX_del <- meta$ATRX_del[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$TERT_rear <- meta$TERT_rear[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$X1p_loss <- meta$X1p_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$X1q_gain <- meta$X1q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$X11q_loss <- meta$X11q_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-spe$X17q_gain <- meta$X17q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
-
-spe$ROI <- str_match(spe$sample_id, "^.*_.*_.*_.*_(.*)")[,2]
-spe$year <- gsub(spe$sample_id, pattern="^.*_.*_(.*)-.*", replacement="\\1")
-spe_0px <- spe
-rm(spe)
 ```
 
 
@@ -302,7 +247,7 @@ processing and analysis.We will exclude low-quality samples.
 
 assay(spe, "exprs") <- assay(spe, "counts")
 
-saveRDS(spe, file.path(path, "results/spe_1px_non-refined.rds"))
+saveRDS(spe, file.path(path, "results/spe_1px_refined.rds"))
 ```
 
 ## Session Info

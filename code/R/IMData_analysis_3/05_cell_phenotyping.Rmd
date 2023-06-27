@@ -15,7 +15,7 @@ In this RMD file, we will perform clustering on the curated data (after excludin
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe <- readRDS(file.path(path,"results/spe_1px_non-refined_curated.rds"))
+spe <- readRDS(file.path(path,"results/spe_1px-curated.rds"))
 
 ```
 
@@ -115,7 +115,6 @@ rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
 Heatmap(mat[,rand_cells], 
         column_title = "Single-cell heatmap",
-        #top_annotation = column_ha, 
         show_column_dend = F,
         show_column_names=F,
         col=viridis(100)
@@ -128,14 +127,12 @@ We will then reduce dimensionality of the data to 5 dimensions as described [her
 library(scater)
 library(BiocParallel)
 
-# set.seed(221228)
-# 
-# mat_red_clustering <- calculateUMAP(mat, ncomponents=5, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam())
-# rownames(mat_red_clustering) <- colnames(spe)
-# 
-# saveRDS(mat_red_clustering, file.path(path, "results/mat_red_clustering.rds"))
+mat_red_clustering <- calculateUMAP(mat, ncomponents=5, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam(RNGseed = 221228))
+rownames(mat_red_clustering) <- colnames(spe)
 
-mat_red_clustering <- readRDS(file.path(path,"results/mat_red_clustering.rds"))
+saveRDS(mat_red_clustering, file.path(path, "results/mat_red_clustering.rds"))
+
+#mat_red_clustering <- readRDS(file.path(path,"results/mat_red_clustering.rds"))
 
 #Apply changes to SPE object
 reducedDim(spe, "UMAP_clustering") <- mat_red_clustering
@@ -143,23 +140,28 @@ reducedDim(spe, "UMAP_clustering") <- mat_red_clustering
 
 We will now cluster the dimensionality reduced data.
 
+```{r, echo=FALSE}
+start_time <- Sys.time()
+```
+
 ```{r phenograph-clustering}
-# library(FastPG)
-# library(parallel)
-# library(Rphenograph)
-# 
-# set.seed(221229)
-# n_threads <- detectCores()
-# 
-# out <- FastPG::fastCluster(data=mat_red, k=45, num_threads=n_threads)
-# clusters <- factor(out$communities)
+library(Rphenoannoy)
 
-#saveRDS(clusters, file.path(path, "results/pg_clusters.rds"))
+set.seed(221228)
 
-clusters <- readRDS(file.path(path, "results/pg_clusters.rds"))
+Rphenograph_out <- Rphenoannoy(mat_red_clustering, k = 45)
 
-#Apply changes to SPE object
+clusters <- factor(membership(Rphenograph_out[[2]]))
+saveRDS(clusters, file.path(path, "results/pg_clusters.rds"))
+
+#clusters <- readRDS(file.path(path, "results/pg_clusters.rds"))
 spe$pg_clusters <- clusters
+```
+
+```{r, echo=FALSE}
+end_time <- Sys.time()
+
+end_time-start_time
 ```
 
 Next we will look at the single cell heatmap ordered by the identified phenograph clusters for 2000 randomly selected cells. 

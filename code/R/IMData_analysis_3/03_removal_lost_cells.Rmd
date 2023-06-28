@@ -81,6 +81,7 @@ Heatmap(mat[,rand_cells],
 We can already see a cluster of cells expressing DAPI but not IMC markers. We can however not exclude that those cells that have a weak Iridium staining are showing the signal from neighboring cells. 
 
 We will now cluster the data to identify cells that swam off. 
+
 ```{r, echo=FALSE}
 start_time <- Sys.time()
 ```
@@ -130,7 +131,7 @@ column_ha = HeatmapAnnotation(cluster = clusters[rand_cells],
 
 
 Heatmap(mat[,rand_cells], 
-        column_title = "Single-cell heatmap with phenograph clusters (nodil -mean)",
+        column_title = "Single-cell heatmap witquh phenograph clusters (nodil -mean)",
         top_annotation = column_ha, 
         cluster_columns=F,
         column_order= order(clusters[rand_cells], decreasing=F),

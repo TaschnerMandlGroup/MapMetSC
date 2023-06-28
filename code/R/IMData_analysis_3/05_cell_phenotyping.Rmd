@@ -48,7 +48,7 @@ tissue <- spe$tissue
 cell_id <- colnames(spe)
 ```
 
-We will scale morphological features according to the determined thresholds. 
+We are excluding 1997 more cells here, as they are negative for all markers used in downstream analysis. We will scale morphological features according to the determined thresholds. 
 ```{r generate-dataframes, message=FALSE, fig.height=10, fig.width=7}
 
 #Normalization and scaling functions 
@@ -306,7 +306,7 @@ Next, we will plot this heatmap for every cluster and tissue separately.
 
 set.seed(20230521)
 
-t = "PT"
+t = "BM"
 
 mat_hq <- mat
 mat_lq <- intensity_mat_lq_wo_zeros
@@ -611,14 +611,14 @@ Heatmap(mean_t,
 
 
 ```
-We can see that cluster 85 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
+We can see that cluster 53 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
 
 ```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=17}
 library(scuttle)
 
 set.seed(20230139)
 
-sticky_cluster <- "85"
+sticky_cluster <- "53"
 
 # Feature-wise scaling
 mean_t_wo_sticky <- mean_t[,levels(clusters)!=sticky_cluster]
@@ -670,14 +670,12 @@ Then, we will perform dimensionality reduction by UMAP for visualization.
 
 ```{r UMAP, message=FALSE}
 
-# set.seed(221228)
-# 
-# mat_red <- calculateUMAP(mat,  n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam())
-# rownames(mat_red) <- colnames(spe)
-# 
-# saveRDS(mat_red, file.path(path, "results/mat_red_visualization.rds"))
-# 
-mat_red <- readRDS(file.path(path,"results/mat_red_visualization.rds"))
+mat_red <- calculateUMAP(mat, n_neighbors=30, BPPARAM = MulticoreParam(RNGseed = 221228))
+rownames(mat_red) <- colnames(spe)
+
+saveRDS(mat_red, file.path(path, "results/mat_red.rds"))
+
+#mat_red <- readRDS(file.path(path,"results/mat_red.rds"))
 
 #Apply changes to SPE object
 reducedDim(spe, "UMAP") <- mat_red
@@ -827,17 +825,21 @@ Now, we will plot the clusters separately in the dim-red space.
 
 ```{r visualizing-umap-by-marker, message=F, fig.width=20}
 
+mat_red_df <- as.data.frame(mat_red)
+mat_red_df["tissue"] <- spe$tissue
+
 samples <- unique(clusters)
 
 for(i in 1: length(samples)){
 
   sample_binary <- clusters == samples[i] 
   
-  background <- as.data.frame(mat_red[!sample_binary,])
-  foreground <- as.data.frame(mat_red[sample_binary,])
+  background <- as.data.frame(mat_red_df[!sample_binary,])
+  foreground <- as.data.frame(mat_red_df[sample_binary,])
   plot <- ggplot(background, aes(x=V1, y=V2) ) +
     geom_point(color="gray90", size=0.02) +
-    geom_point(data=foreground, color="palegreen4", show.legend=F, size=0.02, alpha=0.25) +
+    geom_point(data=foreground, aes(x=V1, y=V2, colour=tissue), show.legend=F, size=0.02, alpha=0.25) +
+    scale_colour_manual(values = col_tissue) +
     ggtitle(samples[i]) +
     theme(plot.title = element_text(size = 5), 
           axis.title = element_text(size=5), 
@@ -971,7 +973,7 @@ data[data$tissue%in%"TU",]$tissue <- "PT"
 data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("tissue"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "/results/metadata/tissues-per-cluster.csv"))
+#write.csv(data_wide, file.path(path, "/results/metadata/tissues-per-cluster.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "tissue", values_to = "count") 
 

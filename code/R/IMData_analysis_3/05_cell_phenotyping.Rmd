@@ -670,7 +670,7 @@ Then, we will perform dimensionality reduction by UMAP for visualization.
 
 ```{r UMAP, message=FALSE}
 
-mat_red <- calculateUMAP(mat, n_neighbors=30, min_dist=0, BPPARAM = MulticoreParam(RNGseed = 221228))
+mat_red <- calculateUMAP(mat, n_neighbors=30, BPPARAM = MulticoreParam(RNGseed = 221228))
 
 rownames(mat_red) <- colnames(spe)
 

@@ -294,7 +294,11 @@ rand_cells <- c()
 #Get same number of PT and BM cells per cluster
 for (i in 1: length(unique(celltype))){
   idx <- which(celltype == unique(celltype)[i])
-  rand_idx <- sample(idx, count)
+  if(length(idx)<count)
+    {rand_idx <- sample(idx, length(idx))}
+  else
+    {rand_idx <- sample(idx, count)}
+  
   rand_cells <- c(rand_cells, rand_idx)
 }
 
@@ -312,12 +316,13 @@ column_ha = HeatmapAnnotation(cluster = celltype[rand_cells],
                               area = area[rand_cells],
                               solidity = solidity[rand_cells],
                               aspect_ratio = aspect_ratio[rand_cells],
-                              col=list(cluster=metadata(spe)$color_vector$col_celltype, 
+                              col=list(cluster=metadata(spe)$color_vectors$col_celltype, 
                                        tissue=col_tissue,
                                        area = col_area,
                                        solidity = col_solidity,
                                        aspect_ratio = col_aspect_ratio
                                        ), 
+                              annotation_legend_param = list(cluster = list(at = unique(celltype[rand_cells][order(as.integer(sub('_.*', '', celltype[rand_cells])), decreasing=F)]))), #delete later
                               show_legend=T)
 
 
@@ -326,7 +331,8 @@ Heatmap(mat[,rand_cells],
         top_annotation = column_ha, 
         cluster_columns=F,
         cluster_rows=F,
-        column_order= order(celltype[rand_cells], decreasing=F),
+        #column_order= order(celltype[rand_cells], decreasing=F),
+        column_order = order(as.integer(sub('_.*', '', celltype[rand_cells])), decreasing=F),
         show_column_dend = T,
         show_column_names=F,
         col=viridis(100)
@@ -341,17 +347,17 @@ library(scuttle)
 set.seed(20230135)
 
 #calculate mean heatmap over all cells
-# matrix_hq <- mat_hq
-# matrix_lq <- mat_lq
-# morph_matrix <- mat_morph
-# clust <- celltype
+matrix_hq <- mat_hq
+matrix_lq <- mat_lq
+morph_matrix <- mat_morph
+clust <- celltype
 
 #calculate heatmap over tissue-derived cells
-tissue <- "PT"
-matrix_hq <- mat_hq[,spe$tissue==tissue]
-matrix_lq <- mat_lq[,spe$tissue==tissue]
-morph_matrix <- mat_morph[,spe$tissue==tissue]
-clust <- celltype[spe$tissue==tissue]
+# tissue <- "PT"
+# matrix_hq <- mat_hq[,spe$tissue==tissue]
+# matrix_lq <- mat_lq[,spe$tissue==tissue]
+# morph_matrix <- mat_morph[,spe$tissue==tissue]
+# clust <- celltype[spe$tissue==tissue]
 
 mean <- aggregate(t(matrix_hq), list(clust), mean)
 
@@ -379,7 +385,7 @@ column_ha = HeatmapAnnotation(celltype = mean[,"Group.1"],
                               aspect_ratio = aspect_ratio_mean,
                               clPARP = clPARP_mean,
                               ncells=anno_barplot(as.data.frame(table(clust))[,"Freq"], height = unit(3, "cm")),
-                              col=list(celltype=metadata(spe)$color_vector$col_celltype, 
+                              col=list(celltype=metadata(spe)$color_vectors$col_celltype, 
                                        area=col_mean_area,
                                        solidity=col_mean_solidity,
                                        aspect_ratio=col_mean_aspect_ratio,
@@ -409,17 +415,17 @@ library(bruceR)
 
 set.seed(20230139)
 
-sticky_cluster <- "Sticky"
+sticky_cluster <- "53_sticky cells"
 
 # Feature-wise scaling
-mean_t_wo_sticky <- mean_t[,levels(celltype)!=sticky_cluster]
+mean_t_wo_sticky <- mean_t[,colnames(mean_t)!=sticky_cluster]
 mean_t_wo_sticky <- t(apply(mean_t_wo_sticky, 1, RESCALE, to=0:1))
-clusters_wo_sticky <- droplevels(clust[clust!=sticky_cluster])
+clusters_wo_sticky <- spe$celltype[spe$celltype!=sticky_cluster]
 
-area_mean_wo_sticky <- area_mean[levels(celltype)!=sticky_cluster]
-solidity_mean_wo_sticky <- solidity_mean[levels(celltype)!=sticky_cluster]
-aspect_ratio_mean_wo_sticky <- aspect_ratio_mean[levels(celltype)!=sticky_cluster]
-clPARP_mean_wo_sticky <- clPARP_mean[levels(celltype)!=sticky_cluster]
+area_mean_wo_sticky <- area_mean[colnames(mean_t)!=sticky_cluster]
+solidity_mean_wo_sticky <- solidity_mean[colnames(mean_t)!=sticky_cluster]
+aspect_ratio_mean_wo_sticky <- aspect_ratio_mean[colnames(mean_t)!=sticky_cluster]
+clPARP_mean_wo_sticky <- clPARP_mean[colnames(mean_t)!=sticky_cluster]
 
 
 col_mean_area_wo_sticky = colorRamp2(c(min(area_mean_wo_sticky),min(area_mean_wo_sticky)+(max(area_mean_wo_sticky)-min(area_mean_wo_sticky))/2, max(area_mean_wo_sticky)), c("blue", "white", "red"))
@@ -427,10 +433,10 @@ col_mean_solidity_wo_sticky = colorRamp2(c(min(solidity_mean_wo_sticky),min(soli
 col_mean_aspect_ratio_wo_sticky = colorRamp2(c(min(aspect_ratio_mean_wo_sticky),min(aspect_ratio_mean_wo_sticky)+(max(aspect_ratio_mean_wo_sticky)-min(aspect_ratio_mean_wo_sticky))/2, max(aspect_ratio_mean_wo_sticky)), c("blue", "white", "red"))
 col_mean_clPARP_wo_sticky = colorRamp2(c(min(clPARP_mean_wo_sticky),min(clPARP_mean_wo_sticky)+(max(clPARP_mean_wo_sticky)-min(clPARP_mean_wo_sticky))/2, max(clPARP_mean_wo_sticky)), c("blue", "white", "red"))
 
-col_celltype <- metadata(spe)$color_vector$col_celltype
+col_celltype <- metadata(spe)$color_vectors$col_celltype
 col_clusters_wo_sticky <- col_celltype[names(col_celltype)!=sticky_cluster]
 
-column_ha = HeatmapAnnotation(celltype = droplevels(mean[levels(celltype)!=sticky_cluster,"Group.1"]),
+column_ha = HeatmapAnnotation(celltype = colnames(mean_t_wo_sticky),
                               area=area_mean_wo_sticky,
                               solidity=solidity_mean_wo_sticky,
                               aspect_ratio=aspect_ratio_mean_wo_sticky,
@@ -447,8 +453,8 @@ column_ha = HeatmapAnnotation(celltype = droplevels(mean[levels(celltype)!=stick
 Heatmap(mean_t_wo_sticky, 
         column_title = "Heatmap showing mean per cluster without sticky cells - scaled",
         top_annotation = column_ha, 
-        cluster_columns=F,
-        cluster_rows=F,
+        cluster_columns=T,
+        cluster_rows=T,
         show_column_dend = T,
         show_column_names=T,
         show_row_names=T,

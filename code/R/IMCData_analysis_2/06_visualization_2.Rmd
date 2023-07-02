@@ -97,11 +97,12 @@ library(viridis)
 
 
 ## UMAP colored by cell type and expression - dittoDimPlot
-p1 <- dittoDimPlot(spe, var = "pg_clusters", 
+p1 <- dittoDimPlot(spe, var = "celltype", 
              reduction.use = "UMAP", size = 0.2,
-             do.label = TRUE) +
-  #scale_color_manual(values = metadata(spe)$color_vector$col_celltype) +
-  scale_color_manual(values = col_clusters) + 
+             do.label = TRUE,
+             legend.show=F) +
+  scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) +
+  #scale_color_manual(values = col_clusters) + 
   theme(legend.title = element_blank()) +
   ggtitle("Cell types on UMAP")
 
@@ -111,6 +112,27 @@ p2 <- dittoDimPlot(spe, var = "ELAVL4_Yb174_mean", assay = "exprs",
     scale_color_viridis()
   
 p1 + p2
+p1
+```
+```{r cell type umap, fig.width=30, fig.height=15, message=FALSE}
+
+col_tmp <- c(metadata(spe)$color_vectors$col_celltype, setNames("gray90", "background"))
+t <- "BM"
+spe$celltype_tissue <- spe$celltype
+spe[,spe$tissue!=t]$celltype_tissue <- "background"
+
+#to plot background first, we will change the order
+spe_tmp <- cbind(spe[,spe$tissue!=t], spe[,spe$tissue==t])
+## UMAP colored by cell type and expression - dittoDimPlot
+p1 <- dittoDimPlot(spe_tmp, var = "celltype_tissue", 
+             reduction.use = "UMAP", size = 1,
+             do.label = TRUE,
+             legend.show=F) +
+  scale_color_manual(values = col_tmp) +
+  theme(legend.title = element_blank()) +
+  ggtitle(paste0(t, " cell types on UMAP"))
+
+rm(spe_tmp)
 p1
 ```
 

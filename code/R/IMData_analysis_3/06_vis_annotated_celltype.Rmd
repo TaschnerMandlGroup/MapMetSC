@@ -311,12 +311,14 @@ col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
 
 #mat <- t(mat)
 
-column_ha = HeatmapAnnotation(cluster = celltype[rand_cells],
+column_ha = HeatmapAnnotation(metacluster=spe$metacluster[rand_cells],
+                              cluster = celltype[rand_cells],
                               tissue = tissue[rand_cells],
                               area = area[rand_cells],
                               solidity = solidity[rand_cells],
                               aspect_ratio = aspect_ratio[rand_cells],
-                              col=list(cluster=metadata(spe)$color_vectors$col_celltype, 
+                              col=list(metacluster=metadata(spe)$color_vectors$col_metacluster,
+                                       cluster=metadata(spe)$color_vectors$col_celltype, 
                                        tissue=col_tissue,
                                        area = col_area,
                                        solidity = col_solidity,
@@ -374,18 +376,23 @@ mean_lq <- aggregate(t(matrix_lq), list(clust), mean)
 
 clPARP_mean = mean_lq[,"clPARP_Yb176_mean"]
 
+mean_metaclust <-aggregate(spe$metacluster, list(clust), max)
+mean_metacluster <- mean_metaclust$x
+
 col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(area_mean))/2, max(area_mean)), c("blue", "white", "red"))
 col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c("blue", "white", "red"))
 col_mean_aspect_ratio = colorRamp2(c(min(aspect_ratio_mean),min(aspect_ratio_mean)+(max(aspect_ratio_mean)-min(aspect_ratio_mean))/2, max(aspect_ratio_mean)), c("blue", "white", "red"))
 col_mean_clPARP = colorRamp2(c(min(clPARP_mean),min(clPARP_mean)+(max(clPARP_mean)-min(clPARP_mean))/2, max(clPARP_mean)), c("blue", "white", "red"))
 
-column_ha = HeatmapAnnotation(celltype = mean[,"Group.1"], 
+column_ha = HeatmapAnnotation(metacluster=mean_metacluster,
+                              celltype = mean[,"Group.1"], 
                               area=area_mean,
                               solidity = solidity_mean,
                               aspect_ratio = aspect_ratio_mean,
                               clPARP = clPARP_mean,
                               ncells=anno_barplot(as.data.frame(table(clust))[,"Freq"], height = unit(3, "cm")),
-                              col=list(celltype=metadata(spe)$color_vectors$col_celltype, 
+                              col=list(metacluster=metadata(spe)$color_vectors$col_metacluster,
+                                       celltype=metadata(spe)$color_vectors$col_celltype, 
                                        area=col_mean_area,
                                        solidity=col_mean_solidity,
                                        aspect_ratio=col_mean_aspect_ratio,
@@ -436,13 +443,17 @@ col_mean_clPARP_wo_sticky = colorRamp2(c(min(clPARP_mean_wo_sticky),min(clPARP_m
 col_celltype <- metadata(spe)$color_vectors$col_celltype
 col_clusters_wo_sticky <- col_celltype[names(col_celltype)!=sticky_cluster]
 
-column_ha = HeatmapAnnotation(celltype = colnames(mean_t_wo_sticky),
+mean_metacluster_wo_sticky <- mean_metaclust[mean_metaclust$Group.1!="53_sticky cells",]$x
+
+column_ha = HeatmapAnnotation(metacluster=mean_metacluster_wo_sticky,
+                              celltype = colnames(mean_t_wo_sticky),
                               area=area_mean_wo_sticky,
                               solidity=solidity_mean_wo_sticky,
                               aspect_ratio=aspect_ratio_mean_wo_sticky,
                               clPARP=clPARP_mean_wo_sticky,
                               ncells=anno_barplot(as.data.frame(table(clusters_wo_sticky))[,"Freq"], height = unit(3, "cm")),
-                              col=list(celltype=col_clusters_wo_sticky,
+                              col=list(metacluster=metadata(spe)$color_vectors$col_metacluster, 
+                                       celltype=col_clusters_wo_sticky,
                                        area=col_mean_area_wo_sticky,
                                        solidity=col_mean_solidity_wo_sticky,
                                        aspect_ratio=col_mean_aspect_ratio_wo_sticky,

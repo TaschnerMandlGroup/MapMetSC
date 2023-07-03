@@ -97,14 +97,14 @@ library(viridis)
 
 
 ## UMAP colored by cell type and expression - dittoDimPlot
-p1 <- dittoDimPlot(spe, var = "celltype", 
+p1 <- dittoDimPlot(spe, var = "metacluster", 
              reduction.use = "UMAP", size = 0.2,
              do.label = TRUE,
              legend.show=F) +
-  scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) +
+  scale_color_manual(values = metadata(spe)$color_vectors$col_metacluster) +
   #scale_color_manual(values = col_clusters) + 
   theme(legend.title = element_blank()) +
-  ggtitle("Cell types on UMAP")
+  ggtitle("Metaclusters on UMAP")
 
 p2 <- dittoDimPlot(spe, var = "ELAVL4_Yb174_mean", assay = "exprs",
              reduction.use = "UMAP", size = 0.2, 
@@ -208,46 +208,50 @@ In order to display frequencies of cell types per sample/patient, the
 `dittoBarPlot` function will be used. Data can be represented as
 percentages or counts and again `ggplot` objects are outputted.
 
-```{r barplot celltype, fig.height=15, fig.width=5, message=FALSE}
+```{r barplot celltype, fig.height=15, fig.width=15, message=FALSE}
 # by sample_id
-dittoBarPlot(spe, var = "celltype", group.by = "sample", retain.factor.levels=T) +
-    scale_fill_manual(values = metadata(spe)$color_vector$col_celltype)
+#figure out later how to appropriately change order of clusters
+#cluster_order <- c(1:7, 79, 8:29, 80, 30:31, 81, 32:37, 82, 38:39, 83, 40:48, 84, 49, 85, 50:54, 86, 55, 87, 56, 88, 57, 89, 58:60, 90, 61:62, 91, 63:67, 92, 68: 71, 93, 72:73, 94, 74:76, 95, 77:78, 96)
+
+dittoBarPlot(spe, var = "celltype", group.by = "sample", #var.labels.reorder=cluster_order, 
+             legend.show=T) +
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 # by sample_id -count
-dittoBarPlot(spe, var = "celltype", scale = "count", group.by = "sample", retain.factor.levels=T) +
-    scale_fill_manual(values = metadata(spe)$color_vector$col_celltype)
+dittoBarPlot(spe, var = "celltype", scale = "count", group.by = "sample", retain.factor.levels=T, legend.show=F) +
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 # by patient_id - percentage
 dittoBarPlot(spe, var = "celltype", group.by = "study_id", retain.factor.levels=T) +
-    scale_fill_manual(values = metadata(spe)$color_vector$col_celltype)
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 # by patient_id - count
 dittoBarPlot(spe[,spe$control=="no"], scale = "count", var = "celltype", group.by = "study_id", retain.factor.levels=T) +
-    scale_fill_manual(values = metadata(spe)$color_vector$col_celltype)
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 # by timepoint - percentage
 dittoBarPlot(spe[,spe$tissue=="BM" & spe$control=="no"], var = "celltype", group.by = "timepoint", retain.factor.levels=T) +
-    scale_fill_manual(values = metadata(spe)$color_vector$col_celltype)
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 # by timepoint - count
 dittoBarPlot(spe[,spe$tissue=="BM" & spe$control=="no"], scale = "count", var = "celltype", group.by = "timepoint", retain.factor.levels=T) +
-    scale_fill_manual(values = metadata(spe)$color_vector$col_celltype)
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 # by infiltration - percentage
-dittoBarPlot(spe[,spe$tissue=="BM"], var = "celltype", group.by = "control", retain.factor.levels=T) +
-    scale_fill_manual(values = metadata(spe)$color_vector$col_celltype)
+dittoBarPlot(spe[,spe$tissue=="BM"], var = "metacluster", group.by = "control", retain.factor.levels=T) +
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_metacluster)
 
 # by infiltration - count
-dittoBarPlot(spe[,spe$tissue=="BM"], scale = "count", var = "celltype", group.by = "control", retain.factor.levels=T) +
-    scale_fill_manual(values = metadata(spe)$color_vector$col_celltype)
+dittoBarPlot(spe[,spe$tissue=="BM"], scale = "count", var = "metacluster", group.by = "control", retain.factor.levels=T) +
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_metacluster)
 
 # by tissue - percentage
 dittoBarPlot(spe[,spe$timepoint=="DE"], var = "celltype", group.by = "tissue", retain.factor.levels=T) +
-    scale_fill_manual(values = metadata(spe)$color_vector$col_celltype)
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 # by tissue - count
 dittoBarPlot(spe[,spe$timepoint=="DE"], scale = "count", var = "celltype", group.by = "tissue", retain.factor.levels=T) +
-    scale_fill_manual(values = metadata(spe)$color_vector$col_celltype)
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 ```
 

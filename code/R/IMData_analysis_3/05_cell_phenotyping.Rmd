@@ -1057,6 +1057,26 @@ metadata(spe)$color_vectors$col_PT_celltype <- setNames(unname(col_clusters), PT
 metadata(spe)$color_vectors$col_celltype <- c(metadata(spe)$color_vectors$col_BM_celltype, metadata(spe)$color_vectors$col_PT_celltype)
 
 ```
+We will do the same for the metaclusters.
+
+```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
+
+BM_metacluster_names <- setNames(annotation$BM.metacluster, annotation$cluster)
+PT_metacluster_names <- setNames(annotation$PT.metacluster, annotation$cluster)
+
+BM_metacelltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_metacluster_names)
+PT_metacelltypes <- recode(spe[,spe$tissue=="PT"]$pg_clusters, !!!PT_metacluster_names)
+
+spe$metacluster <- "na"
+spe[,spe$tissue=="BM"]$metacluster<- as.vector(BM_metacelltypes)
+spe[,spe$tissue=="PT"]$metacluster<- as.vector(PT_metacelltypes)
+
+n <- length(unique(spe$metacluster))
+col_metacluster <- brewer.pal(n,"Set1")
+
+metadata(spe)$color_vectors$col_metacluster <- setNames(col_metacluster, unique(spe$metacluster))
+
+```
 
 Now we will plot 41 distinct, manually selected colors.
 ```{r colors, message=FALSE, fig.height=17}

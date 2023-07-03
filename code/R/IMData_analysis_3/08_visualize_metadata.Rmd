@@ -190,7 +190,9 @@ groupname <- "tissue"
 
 group <- colData(spe_reduced)[,groupname]
 
-col_celltype <- metadata(spe_reduced)$color_vectors$col_celltype
+col_celltype <- metadata(spe_reduced)$color_vectors$col_celltype[unique(spe_reduced$celltype)]
+col_celltype <- col_celltype[order(as.integer(sub('_.*', '', names(col_celltype))), decreasing=F)]
+
 celltype <- spe_reduced$celltype
 
 col_celltype <- col_celltype[order(names(col_celltype))]

@@ -1,0 +1,190 @@
+---
+title: "Read in scRNAseq data"
+output: html_document
+date: '2023-07-06'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Read in the single-cell data {#read-data}
+
+Here we will read in single-cell RNAseq data from a single-cell adrenal gland atlas by 
+[Jansky et al.](https://adrenal.kitz-heidelberg.de/developmental_programs_NB_viz/), and
+our imaging-based single-cell data
+
+```{r read-data, message=FALSE}
+library(Seurat)
+library(SingleCellExperiment)
+library(dplyr)
+library(tidyr)
+
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+
+rna <- readRDS(file.path(path,"public_datasets/Jansky/adrenal_gland_Seurat.RDS"))
+DefaultAssay(rna) <- "RNA"
+
+protein <- readRDS(file.path(path,"results/spe_clustered.rds"))
+protein <- protein[rowData(protein)$use_channel,]
+col_celltype <- metadata(protein)$color_vectors$col_celltype
+```
+
+# Set common features 
+Next, we will set common features between the reference and query dataset. Therefore,
+we have to rename the features in the imaging dataset to the names of the corresponding
+genes. 
+
+```{r set common features, message=FALSE}
+
+protein2gene <- read.csv(file.path(path,"public_datasets/protein2gene.csv"), sep=";")
+
+code <- setNames(protein2gene$gene, protein2gene$protein)
+rownames(protein) <- recode(rownames(protein), !!!code)
+rowData(protein)$name <- rownames(protein)
+rowData(protein)$channel <- rownames(protein)
+
+protein <- as.Seurat(protein, counts = "counts", data = "exprs")
+Idents(protein) <- "celltype"
+
+# set UMAP model in reference dataset
+# protein[["umap.new"]] <- CreateDimReducObject(embeddings = protein[["UMAP"]]@cell.embeddings, key = "UMAPnew_", assay="originalexp")
+# 
+# umap.new.model <- list()
+# umap.new.model$n_epochs <- 500
+# umap.new.model$alpha <-1
+# umap.new.model$method <- "umap"
+# umap.new.model$negative_sample_rate <- 5
+# umap.new.model$gamma <- 1
+# umap.new.model$approx_pow <- 0
+# umap.new.model$metric$cosine <- list()
+# umap.new.model$embedding <- protein[["umap.new"]]@cell.embeddings
+# ab_param <- uwot:::find_ab_params(spread = 1, min_dist = 0.01)
+# umap.new.model$a <- ab_param["a"]
+# umap.new.model$b <- ab_param["b"]
+# protein[["umap.new"]]@misc$model <- umap.new.model
+
+common_features <- intersect(row.names(rna), row.names(protein))
+
+# filtering cells without expression in common genes
+indx <- colSums(rna[common_features,])!=0
+rna <- rna[,indx]
+
+indx <- colSums(protein[common_features,])!=0
+protein <- protein[,indx]
+```
+
+# Quality control on public dataset
+
+We will then visualize the two datasets by UMAP.
+
+```{r read-data, message=FALSE}
+rna_all <- rna
+DimPlot(rna_all, reduction="umap")
+cur_cells <- sample(seq_len(ncol(rna)), 10000)
+rna <- rna[,cur_cells]
+DimPlot(rna, reduction="umap")
+```
+```{r read-data, message=FALSE, fig.width=20, fig.height=15}
+protein_all <- protein
+DimPlot(protein_all, reduction="UMAP")
+
+cur_cells <- sample(seq_len(ncol(protein_all)), 50000)
+protein <- protein_all[,cur_cells]
+DimPlot(protein, reduction="UMAP", cols=col_celltype)
+```
+# Find anchors
+
+Next, we will find anchors between the protein and RNA dataset.We can change the maximum allowed memory for future according to [this](https://satijalab.org/seurat/archive/v3.1/future_vignette.html).
+```{r find-anchors, message=FALSE}
+library(future)
+library(parallel)
+#options(future.globals.maxSize= 1048576000)
+
+plan("multisession", workers = detectCores() - 2)
+anchors_protein <- FindTransferAnchors(reference = protein, query = rna, 
+                                                  features = common_features,
+                                                  reference.assay = "originalexp", 
+                                                  query.assay = "RNA", 
+                                                  reduction = "cca",
+                                                  dims=1:20)
+
+saveRDS(anchors_protein, file.path(path, "public_datasets/Jansky/anchors.rds"))
+
+```
+
+# Transfer labels
+
+Next, we will transfer celltype labels from protein to RNA data, impute the protein expressions on the RNA datasets, and then project the RNA data onto the reference query.
+
+```{r transfer-labels, message=FALSE}
+
+# plan("multisession", workers = detectCores() - 2)
+# rna_mapped <- MapQuery(
+#     anchorset = anchors_protein, 
+#     query = rna,
+#     reference = protein, 
+#     refdata = list(
+#       celltype = protein@active.ident, 
+#       imputed_protein = GetAssayData(protein, assay = "originalexp", slot = "data")[common_features, ]
+#       ),
+#     reference.reduction = "pca"#,
+#     #reduction.model="umap.new"
+#   )
+
+#Alternatively: 
+rna_mapped <- rna
+plan("multisession", workers = detectCores() - 2)
+imputed_protein <- TransferData(anchorset = anchors_protein,
+                                 refdata = GetAssayData(protein, assay = "originalexp", slot = "data")[common_features, ],
+                                 weight.reduction = rna[["pca"]],
+                                 dims=1:20)
+
+rna_mapped[["protein"]] <- imputed_protein
+
+plan("multisession", workers = detectCores() - 2)
+predicted_celltype <- TransferData(anchorset = anchors_protein,
+                                               refdata = protein@active.ident,
+                                               weight.reduction =rna[["pca"]],
+                                               dims=1:20)
+
+rna_mapped <- AddMetaData(rna_mapped, metadata = predicted_celltype[,c("predicted.id","prediction.score.max")])
+
+saveRDS(protein, file.path(path, "public_datasets/Jansky/protein_mapped.rds"))
+saveRDS(rna_mapped, file.path(path, "public_datasets/Jansky/rna_mapped.rds"))
+
+rna_mapped@meta.data$predicted.id
+unname(rna_mapped@active.ident)
+```
+# Explore results
+
+Finally we will explore the mapping results.
+
+```{r evaluate, fig.width=14, message=FALSE}
+#DimPlot(rna_mapped, reduction = "ref.umap", group.by = "predicted.celltype.l1", label = TRUE, label.size = 3, repel = TRUE) + NoLegend()
+
+library(RColorBrewer)
+library(paletteer)
+
+
+set.seed(20230521)
+
+data <- data.frame(protein_clusters=rna_mapped@meta.data$predicted.id, rna_clusters=unname(rna_mapped@active.ident))
+
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+col_clusters = setNames(sample(col_vector_433, length(unique(data$rna_clusters))), unique(data$rna_clusters))
+
+data$freq <- 1
+data_wide <- data %>% pivot_wider(names_from = c("rna_clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
+
+#write.csv(data_wide, file.path(path, "/results/metadata/tissues-per-cluster.csv"))
+
+data_long <- data_wide %>% pivot_longer(cols = !protein_clusters, names_to = "rna_clusters", values_to = "count") 
+
+# Stacked + percent
+ggplot(data_long, aes(fill=rna_clusters, y=count, x=protein_clusters)) + 
+  ggtitle("RNA clusters per predicted protein cluster") +
+  geom_bar(position="fill", stat="identity", show.legend = T) + 
+  scale_fill_manual(values = col_clusters) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```

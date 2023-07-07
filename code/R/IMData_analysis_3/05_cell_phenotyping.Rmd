@@ -125,7 +125,7 @@ We will then reduce dimensionality of the data to 5 dimensions as described [her
 
 ```{r UMAP, message=FALSE}
 library(scater)
-library(BiocParallel)
+ylibrary(BiocParallel)
 
 mat_red_clustering <- calculateUMAP(mat, ncomponents=5, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam(RNGseed = 221228))
 rownames(mat_red_clustering) <- colnames(spe)

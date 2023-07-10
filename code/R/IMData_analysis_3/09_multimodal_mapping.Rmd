@@ -237,10 +237,10 @@ We will calculate UMAP on the integrated data.
 library(RColorBrewer)
 
 #delete later - just doing this now to allow for faster parallelization
-saveRDS(protein, file.path(path,"public_datasets/Jansky/results/protein.rds"))
-saveRDS(rna, file.path(path,"public_datasets/Jansky/results/rna.rds"))
-rm(protein)
-rm(rna)
+# saveRDS(protein, file.path(path,"public_datasets/Jansky/results/protein.rds"))
+# saveRDS(rna, file.path(path,"public_datasets/Jansky/results/rna.rds"))
+# rm(protein)
+# rm(rna)
 
 #UMAP and visualization
 mat_t <- t(mat_integrated)
@@ -256,8 +256,8 @@ saveRDS(mat_red_df, file.path(path,"public_datasets/Jansky/results/mat_red.rds")
 
 We will then visualize the integrated data in the UMAP space for RNA and protein separately. 
 
-```{r batch-correction and dimensionality reduction, message=FALSE}
-mod <- "rna"
+```{r batch-correction and dimensionality reduction, fig.width=15, message=FALSE}
+mod <- "protein"
 binary <- mat_red_df$modality == mod
 background <- as.data.frame(mat_red_df[!binary,])
 foreground <- as.data.frame(mat_red_df[binary,])
@@ -272,11 +272,11 @@ col_clust = setNames(sample(col_vector_433, length(unique(mat_red_df$clusters)))
   
 plot <- ggplot(background, aes(x=V1, y=V2)) +
     geom_point(color="gray90", size=0.02) +
-    geom_point(data=foreground, aes(x=V1, y=V2, colour=clusters), show.legend=F, size=0.02, alpha=0.25) +
-    scale_colour_manual(values = col_clusters) +
+    geom_point(data=foreground, aes(x=V1, y=V2, colour=clusters), show.legend=F, size=0.2) +
+    scale_colour_manual(values = col_clust) +
     ggtitle(paste0(mod, " clusters")) +
-    theme(plot.title = element_text(size = 5), 
-          axis.title = element_text(size=5), 
+    theme(#plot.title = element_text(size = 5), 
+          #axis.title = element_text(size=5), 
           panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(), 
           panel.background = element_blank(), 
@@ -287,9 +287,9 @@ plot
 
 Next we will look at cluster similarity of the integrated data. 
 
-```{r batch-correction and dimensionality reduction, message=FALSE}
+```{r batch-correction and dimensionality reduction, fig.width=15, message=FALSE}
 #PCA to show cluster similarity
-mean <- aggregate(t(mat_integrated), list(clusters), mean)
+mean <- aggregate(mat_integrated, list(clusters), mean)
 
 mean_t <- t(mean[,2:ncol(mean)])
 colnames(mean_t) <- mean[,"Group.1"]
@@ -299,8 +299,8 @@ data <- as.data.frame(mean_scaled)
 data <- t(data)
 data.pca <- FactoMineR::PCA(data, graph=F)
 
-modality <- rep("rna", ncol(data))
-modality["_"%in%colnames(data)]<-"protein"
+modality <- rep("rna", nrow(data))
+modality[unlist(lapply(rownames(data), FUN=function(x){grepl("_",x, fixed = TRUE)}))] <- "protein"
 data$modality <- as.factor(modality)
 
 fviz_pca_ind(data.pca, repel=T, habillage=data$modality)

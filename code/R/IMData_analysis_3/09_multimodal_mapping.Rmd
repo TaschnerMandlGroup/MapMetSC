@@ -47,23 +47,6 @@ rowData(protein)$channel <- rownames(protein)
 protein <- as.Seurat(protein, counts = "counts", data = "exprs")
 Idents(protein) <- "celltype"
 
-# set UMAP model in reference dataset
-# protein[["umap.new"]] <- CreateDimReducObject(embeddings = protein[["UMAP"]]@cell.embeddings, key = "UMAPnew_", assay="originalexp")
-# 
-# umap.new.model <- list()
-# umap.new.model$n_epochs <- 500
-# umap.new.model$alpha <-1
-# umap.new.model$method <- "umap"
-# umap.new.model$negative_sample_rate <- 5
-# umap.new.model$gamma <- 1
-# umap.new.model$approx_pow <- 0
-# umap.new.model$metric$cosine <- list()
-# umap.new.model$embedding <- protein[["umap.new"]]@cell.embeddings
-# ab_param <- uwot:::find_ab_params(spread = 1, min_dist = 0.01)
-# umap.new.model$a <- ab_param["a"]
-# umap.new.model$b <- ab_param["b"]
-# protein[["umap.new"]]@misc$model <- umap.new.model
-
 common_features <- intersect(row.names(rna), row.names(protein))
 
 # filtering cells without expression in common genes
@@ -76,11 +59,136 @@ protein <- protein[,indx]
 
 # Quality control on public dataset
 
+We will first look at cluster similarity to evaulate which clusters are similar. 
+```{r mean-per-cluster-protein, fig.height=15, message=FALSE}
+library(scuttle)
+library(bruceR)
+library(ComplexHeatmap)
+library(viridis)
+
+protein_clusters <- protein@active.ident
+protein_data <- GetAssayData(protein, assay = "originalexp", slot = "data")[common_features, ]
+protein_mean <- aggregate(t(protein_data), list(protein_clusters), mean)
+
+protein_mean_t <- t(protein_mean[,2:ncol(protein_mean)])
+colnames(protein_mean_t) <- protein_mean[,"Group.1"]
+protein_mean_scaled <- t(apply(protein_mean_t, 1, RESCALE, to=0:1))
+
+column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(protein_clusters))[,"Freq"], height = unit(3, "cm")),
+                              show_legend=F)
+
+Heatmap(protein_mean_scaled, 
+        column_title = "Mean per cluster (protein data)",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+
+```
+```{r mean-per-cluster-rna, fig.height=15, message=FALSE}
+
+rna_clusters <- rna@active.ident
+rna_data <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
+rna_mean <- aggregate(t(rna_data), list(rna_clusters), mean)
+
+rna_mean_t <- t(rna_mean[,2:ncol(rna_mean)])
+colnames(rna_mean_t) <- rna_mean[,"Group.1"]
+rna_mean_scaled <- t(apply(rna_mean_t, 1, RESCALE, to=0:1))
+
+column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(rna_clusters))[,"Freq"], height = unit(3, "cm")),
+                              show_legend=F)
+
+Heatmap(rna_mean_scaled, 
+        column_title = "Mean per cluster (RNA data)",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+
+```
+We will next plot the two together to look at similarity.
+```{r mean-per-cluster-combined, fig.height=15, message=FALSE}
+
+clusters <- c(rna_clusters, protein_clusters)
+cell_count <- c(as.data.frame(table(rna_clusters))[,"Freq"], as.data.frame(table(protein_clusters))[,"Freq"])
+modality <- c(rep(c("RNA"), ncol(rna_mean_scaled)), rep(c("protein"), ncol(protein_mean_scaled)))
+mean_scaled <- cbind(rna_mean_scaled, protein_mean_scaled)
+
+column_ha = HeatmapAnnotation(modality=modality,
+                              ncells=anno_barplot(cell_count, height = unit(3, "cm")),
+                              show_legend=F)
+
+Heatmap(mean_scaled, 
+        column_title = "Mean per cluster (RNA & protein)",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+
+
+```
+We can see that immune cells are most similar to sticky cells and that CD8A does not correlate on RNA (expressed in tumor cells) and protein level. We will hence exclude the two. 
+
+```{r mean-per-cluster-combined, fig.height=15, message=FALSE}
+
+clusters_2 <- c(rna_clusters, protein_clusters[protein_clusters!="53_sticky cells"])
+cell_count_2 <- as.data.frame(table(droplevels(clusters_2)))[,"Freq"]
+modality_2 <- c(rep(c("RNA"), ncol(rna_mean_scaled)), rep(c("protein"), ncol(protein_mean_scaled[,colnames(protein_mean_scaled)!="53_sticky cells"])))
+mean_scaled_2 <- cbind(rna_mean_scaled, protein_mean_scaled[,colnames(protein_mean_scaled)!="53_sticky cells"])
+
+column_ha = HeatmapAnnotation(modality=modality_2,
+                              ncells=anno_barplot(cell_count_2, height = unit(3, "cm")),
+                              show_legend=F)
+
+Heatmap(mean_scaled_2, 
+        column_title = "Mean per cluster (RNA & protein)",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+
+
+```
+We will then look at cluster similarity in the PCA plot.
+```{r pca-plot, fig.height=20, fig.width=20, message=FALSE}
+library("FactoMineR")
+library("factoextra")
+
+data <- as.data.frame(mean_scaled_2)
+
+data <- t(data)
+data.pca <- FactoMineR::PCA(data, graph=F)
+data$modality <- as.factor(modality_2)
+
+fviz_pca_ind(data.pca, repel=T, habillage=data$modality)
+```
+
+
 We will then visualize the two datasets by UMAP.
 
 ```{r read-data, message=FALSE}
 rna_all <- rna
 DimPlot(rna_all, reduction="umap")
+
+for (i in 1: length(unique(clusters))){
+  idx <- which(clusters == unique(clusters)[i])
+  rand_idx <- sample(idx, count)
+  rand_cells <- c(rand_cells, rand_idx)
+}
+
+
 cur_cells <- sample(seq_len(ncol(rna)), 10000)
 rna <- rna[,cur_cells]
 DimPlot(rna, reduction="umap")

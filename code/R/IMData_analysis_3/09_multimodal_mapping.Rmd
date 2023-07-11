@@ -195,6 +195,7 @@ DimPlot(protein, reduction="UMAP")
 For further analysis we will exclude CD8A and the sticky cells.
 ```{r data-curation, message=FALSE}
 protein <- subset(x=protein, idents = c("53_sticky cells"), invert=TRUE)
+rna <- subset(x=rna, idents = c("Immune cells", "Adrenal cortex", "Erythrocytes", "Hepatocytes", "Muscle progenitor cells", "Myocytes", "Myofibroblasts", "Mesenchymal cells", "Endothelial cells"), invert=TRUE)
 
 common_features <- common_features[common_features !="CD8A"]
 
@@ -237,21 +238,20 @@ We will calculate UMAP on the integrated data.
 library(RColorBrewer)
 
 #delete later - just doing this now to allow for faster parallelization
-# saveRDS(protein, file.path(path,"public_datasets/Jansky/results/protein.rds"))
-# saveRDS(rna, file.path(path,"public_datasets/Jansky/results/rna.rds"))
-# rm(protein)
-# rm(rna)
+saveRDS(protein, file.path(path,"public_datasets/Jansky/results/protein.rds"))
+saveRDS(rna, file.path(path,"public_datasets/Jansky/results/rna.rds"))
+rm(protein)
+rm(rna)
 
 #UMAP and visualization
 mat_t <- t(mat_integrated)
 mat_red <- calculateUMAP(mat_t, BPPARAM = MulticoreParam())
-saveRDS(mat_red, file.path(path,"public_datasets/Jansky/results/mat_red.rds"))
 
 mat_red_df <- as.data.frame(mat_red)
 mat_red_df$clusters <- clusters
 mat_red_df$modality <- batch_id
 
-saveRDS(mat_red_df, file.path(path,"public_datasets/Jansky/results/mat_red.rds"))
+saveRDS(mat_red_df, file.path(path,"public_datasets/Jansky/results/mat_red_NBonly.rds"))
 ```
 
 We will then visualize the integrated data in the UMAP space for RNA and protein separately. 
@@ -421,4 +421,38 @@ ggplot(data_long, aes(fill=rna_clusters, y=count, x=protein_clusters)) +
   geom_bar(position="fill", stat="identity", show.legend = T) + 
   scale_fill_manual(values = col_clusters) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+
+#Project UMAP
+
+We will re-compute UMAP for the protein data in order to obtain a UMAP model and then project the scRNAseq data onto the generated UMAP using [Seurat](https://satijalab.org/seurat/reference/projectumap). 
+
+```{r find-anchors, message=FALSE}
+library(future)
+library(parallel)
+options(future.globals.maxSize= 1048576000)
+
+RunUMAP(object = protein, dims = 1:dim(protein)[2], return.model=T)
+
+ProjectUMAP(
+  query = rna,
+  reference=protein,
+  reduction.model="umap"
+)
+
+```
+
+#Transfer labels with singleR
+
+Finally, we will test singleR to transfer labels from the RNA to the protein dataset. 
+
+```{r find-anchors, message=FALSE}
+
+library(SingleR)
+
+rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
+protein_mat <- GetAssayData(protein, assay = "originalexp", slot = "data")[common_features, ]
+
+predicted_labels <- SingleR(test = protein_mat, ref = rna_mat, labels = rna@active.ident, BPPARAM = MulticoreParam())
+
 ```

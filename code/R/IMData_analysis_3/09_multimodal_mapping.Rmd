@@ -22,7 +22,8 @@ library(tidyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-rna <- readRDS(file.path(path,"public_datasets/Jansky/adrenal_gland_Seurat.RDS"))
+rna <- readRDS(file.path(path,"public_datasets/Lee/disco_bone_marrow_v2.0.rds"))
+rna@assays$RNA@data <- NormalizeData(rna@assays$RNA@counts) # only for Lee et al.
 DefaultAssay(rna) <- "RNA"
 
 protein <- readRDS(file.path(path,"results/spe_clustered.rds"))
@@ -39,7 +40,7 @@ genes.
 
 protein2gene <- read.csv(file.path(path,"public_datasets/protein2gene.csv"), sep=";")
 
-code <- setNames(protein2gene$gene, protein2gene$protein)
+code <- setNames(protein2gene$genes, protein2gene$protein)
 rownames(protein) <- recode(rownames(protein), !!!code)
 rowData(protein)$name <- rownames(protein)
 rowData(protein)$channel <- rownames(protein)
@@ -50,11 +51,11 @@ Idents(protein) <- "celltype"
 common_features <- intersect(row.names(rna), row.names(protein))
 
 # filtering cells without expression in common genes
-indx <- colSums(rna[common_features,])!=0
-rna <- rna[,indx]
+#indx <- colSums(rna[common_features,])!=0
+#rna <- rna[,indx]
 
-indx <- colSums(protein[common_features,])!=0
-protein <- protein[,indx]
+#indx <- colSums(protein[common_features,])!=0
+#protein <- protein[,indx]
 ```
 
 # Quality control on public dataset
@@ -181,30 +182,39 @@ fviz_pca_ind(data.pca, repel=T, habillage=data$modality)
 
 We will then visualize the two datasets by UMAP.
 
-```{r umap-rna, message=FALSE}
+```{r umap-rna, fig.width=20, fig.height=15, message=FALSE}
+library(RColorBrewer)
+library(paletteer)
+set.seed(230713)
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+col_rna_clusters = setNames(sample(col_vector_433, length(unique(rna@active.ident))), unique(rna@active.ident))
 
-DimPlot(rna, reduction="umap")
+DimPlot(rna, reduction="umap", cols=col_rna_clusters)
+
 ```
 
 
 ```{r umap-protein, message=FALSE, fig.width=20, fig.height=15}
-
-DimPlot(protein, reduction="UMAP")
+set.seed(230713)
+col_protein_clusters = setNames(sample(col_vector_433, length(unique(protein@active.ident))), unique(protein@active.ident))
+DimPlot(protein, reduction="UMAP", cols=col_protein_clusters)
 ```
 
 For further analysis we will exclude CD8A and the sticky cells.
 ```{r data-curation, message=FALSE}
 #protein <- subset(x=protein, idents = c("53_sticky cells"), invert=TRUE)
-protein <- protein[,protein@meta.data$metacluster=="tumor" | protein@active.ident=="78_schwann cells" | protein@active.ident =="78_SCP"]
-rna <- subset(x=rna, idents = c("Immune cells", "Adrenal cortex", "Erythrocytes", "Hepatocytes", "Muscle progenitor cells", "Myocytes", "Myofibroblasts", "Mesenchymal cells", "Endothelial cells"), invert=TRUE)
+#protein <- protein[,protein@meta.data$metacluster=="tumor" | protein@active.ident=="78_schwann cells" | protein@active.ident =="78_SCP"]
+#rna <- subset(x=rna, idents = c("Immune cells", "Adrenal cortex", "Erythrocytes", "Hepatocytes", "Muscle progenitor cells", "Myocytes", "Myofibroblasts", "Mesenchymal cells", "Endothelial cells"), invert=TRUE)
 
-common_features <- common_features[!common_features%in%c("CD8A")]
+protein <- protein[,protein@meta.data$metacluster!="tumor" & protein@active.ident!="53_sticky cells"]
 
-indx <- colSums(rna[common_features,])!=0
-rna <- rna[,indx]
+#common_features <- common_features[!common_features%in%c("CD8A")]
 
-indx <- colSums(protein[common_features,])!=0
-protein <- protein[,indx]
+# indx <- colSums(rna[common_features,])!=0
+# rna <- rna[,indx]
+# 
+# indx <- colSums(protein[common_features,])!=0
+# protein <- protein[,indx]
 ```
 
 # Batch correction
@@ -447,18 +457,21 @@ ProjectUMAP(
 
 Finally, we will test singleR to transfer labels from the RNA to the protein dataset. 
 
-```{r single-r, fig.height=15, fig.width= 15, message=FALSE}
-
+```{r single-r, fig.height=20, fig.width= 15, message=FALSE}
+library(BiocParallel)
 library(SingleR)
 
 rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
 protein_mat <- GetAssayData(protein, assay = "originalexp", slot = "data")[common_features, ]
 
-predicted_labels <- SingleR(test = rna_mat, ref = protein_mat, labels = protein@active.ident, BPPARAM = MulticoreParam())
+predicted_labels <- SingleR(test = protein_mat, ref = rna_mat, labels = rna@active.ident, BPPARAM = MulticoreParam())
 
-predicted_labels$score
+protein_sce <- readRDS(file.path(path,"results/spe_clustered.rds"))
+protein_sce <- protein_sce[,protein_sce$metacluster!="tumor" & protein_sce$celltype!="53_sticky cells"]
+protein_sce$predicted_immune_clusters <- predicted_labels$labels
+saveRDS(protein_sce, file.path(path,"public_datasets/Lee/spe_immune_clusters.rds"))
 
-plotScoreHeatmap(predicted_labels)
+#plotScoreHeatmap(predicted_labels)
 ```
 
 Next, we will look at the marker expression in a single-cell heatmap and plot the true and predicted labels in the top annotation bar.

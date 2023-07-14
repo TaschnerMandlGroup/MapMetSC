@@ -22,8 +22,8 @@ library(tidyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-rna <- readRDS(file.path(path,"public_datasets/Lee/disco_bone_marrow_v2.0.rds"))
-rna@assays$RNA@data <- NormalizeData(rna@assays$RNA@counts) # only for Lee et al.
+rna <- readRDS(file.path(path,"public_datasets/Jansky/adrenal_gland_Seurat.RDS"))
+#rna@assays$RNA@data <- NormalizeData(rna@assays$RNA@counts) # only for Lee et al.
 DefaultAssay(rna) <- "RNA"
 
 protein <- readRDS(file.path(path,"results/spe_clustered.rds"))
@@ -203,10 +203,10 @@ DimPlot(protein, reduction="UMAP", cols=col_protein_clusters)
 For further analysis we will exclude CD8A and the sticky cells.
 ```{r data-curation, message=FALSE}
 #protein <- subset(x=protein, idents = c("53_sticky cells"), invert=TRUE)
-#protein <- protein[,protein@meta.data$metacluster=="tumor" | protein@active.ident=="78_schwann cells" | protein@active.ident =="78_SCP"]
-#rna <- subset(x=rna, idents = c("Immune cells", "Adrenal cortex", "Erythrocytes", "Hepatocytes", "Muscle progenitor cells", "Myocytes", "Myofibroblasts", "Mesenchymal cells", "Endothelial cells"), invert=TRUE)
+protein <- protein[,protein@meta.data$metacluster=="tumor" | protein@active.ident=="78_schwann cells" | protein@active.ident =="78_SCP"]
+rna <- subset(x=rna, idents = c("Immune cells", "Adrenal cortex", "Erythrocytes", "Hepatocytes", "Muscle progenitor cells", "Myocytes", "Myofibroblasts", "Mesenchymal cells", "Endothelial cells"), invert=TRUE)
 
-protein <- protein[,protein@meta.data$metacluster!="tumor" & protein@active.ident!="53_sticky cells"]
+#protein <- protein[,protein@meta.data$metacluster=="tumor"]
 
 #common_features <- common_features[!common_features%in%c("CD8A")]
 
@@ -457,21 +457,24 @@ ProjectUMAP(
 
 Finally, we will test singleR to transfer labels from the RNA to the protein dataset. 
 
-```{r single-r, fig.height=20, fig.width= 15, message=FALSE}
+```{r single-r, fig.height=15, fig.width= 15, message=FALSE}
 library(BiocParallel)
 library(SingleR)
 
 rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
+rna_clusters <- rna@active.ident
+rm(rna)
 protein_mat <- GetAssayData(protein, assay = "originalexp", slot = "data")[common_features, ]
 
-predicted_labels <- SingleR(test = protein_mat, ref = rna_mat, labels = rna@active.ident, BPPARAM = MulticoreParam())
+predicted_labels <- SingleR(test = protein_mat, ref = rna_mat, labels = rna_clusters, BPPARAM = MulticoreParam())
 
 protein_sce <- readRDS(file.path(path,"results/spe_clustered.rds"))
-protein_sce <- protein_sce[,protein_sce$metacluster!="tumor" & protein_sce$celltype!="53_sticky cells"]
-protein_sce$predicted_immune_clusters <- predicted_labels$labels
-saveRDS(protein_sce, file.path(path,"public_datasets/Lee/spe_immune_clusters.rds"))
+protein_sce <- protein_sce[,protein_sce$metacluster=="tumor" | protein_sce$celltype=="78_schwann cells" | protein_sce$celltype =="78_SCP"]
+protein_sce$predicted_tumor_clusters <- predicted_labels$labels
+saveRDS(protein_sce, file.path(path,"public_datasets/Jansky/results/spe_tumor_clusters.rds"))
 
-#plotScoreHeatmap(predicted_labels)
+#plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 16000),])
+plotScoreHeatmap(predicted_labels, cluster_cols=col_predicted_labels)
 ```
 
 Next, we will look at the marker expression in a single-cell heatmap and plot the true and predicted labels in the top annotation bar.
@@ -481,9 +484,10 @@ library(RColorBrewer)
 set.seed(20230517)
 
 
-additional_NE_markers <- c("HAND2", "PHOX2A", "PHOX2B", "PNMT", "TH", "CARTPT", "ISL1", "ERBB3", "ERBB4", "DBH")
-rna_mat <- rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")[c(common_features, additional_NE_markers), ]
-true_label <- rna@active.ident
+#additional_NE_markers <- c("HAND2", "PHOX2A", "PHOX2B", "PNMT", "TH", "CARTPT", "ISL1", "ERBB3", "ERBB4", "DBH")
+#rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")[c(common_features, additional_NE_markers), ]
+
+true_label <- protein@active.ident
 predicted_label <- predicted_labels$labels
 
 n <- length(unique(predicted_label))
@@ -493,20 +497,20 @@ col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 
 col_predicted_labels = setNames(sample(col_vector_433, length(unique(predicted_label))), unique(predicted_label))
-col_true_labels = setNames(sample(col_vector_74, length(unique(true_label))), unique(true_label))
+col_true_labels = setNames(sample(col_vector_433, length(unique(true_label))), unique(true_label))
 
-#count <- min(table(predicted_label))
-# count <- 500
-# rand_cells <- c()
-# 
-# #Get same number of PT and BM cells per cluster
-# for (i in 1: length(unique(predicted_label))){
-#   idx <- which(predicted_label == unique(predicted_label)[i])
-#   rand_idx <- sample(idx, count)
-#   rand_cells <- c(rand_cells, rand_idx)
-# }
+count <- min(table(predicted_label))
+count <- 500
+rand_cells <- c()
 
-rand_cells <- sample(seq_len(ncol(rna_mat)), 8000)
+#Get same number of PT and BM cells per cluster
+for (i in 1: length(unique(predicted_label))){
+  idx <- which(predicted_label == unique(predicted_label)[i])
+  rand_idx <- sample(idx, count)
+  rand_cells <- c(rand_cells, rand_idx)
+}
+
+#rand_cells <- sample(seq_len(ncol(rna_mat)), 8000)
 
 column_ha = HeatmapAnnotation(predicted_label = predicted_label[rand_cells],
                               #true_cluster = true_label[rand_cells],
@@ -516,7 +520,7 @@ column_ha = HeatmapAnnotation(predicted_label = predicted_label[rand_cells],
                               show_legend=T)
 
 
-Heatmap(as.matrix(rna_mat[,rand_cells]), 
+Heatmap(as.matrix(protein_mat[,rand_cells]), 
         column_title = "Protein data- scHeatmap - true and predicted labels",
         top_annotation = column_ha, 
         cluster_columns=F,
@@ -527,13 +531,16 @@ Heatmap(as.matrix(rna_mat[,rand_cells]),
         )
 ```
 
-```{r mean-per-cluster-protein, fig.height=12, fig.width=8, message=FALSE}
+```{r mean-per-cluster-protein, fig.height=11, fig.width=10, message=FALSE}
 library(bruceR)
-rna_mean <- aggregate(t(rna_mat), list(predicted_labels$labels), mean)
 
-rna_mean_t <- t(rna_mean[,2:ncol(rna_mean)])
-colnames(rna_mean_t) <- rna_mean[,"Group.1"]
-rna_mean_scaled <- t(apply(rna_mean_t, 1, RESCALE, to=0:1))
+mat <- protein_mat
+
+mean <- aggregate(t(mat), list(predicted_labels$labels), mean)
+
+mean_t <- t(mean[,2:ncol(mean)])
+colnames(mean_t) <- mean[,"Group.1"]
+mean_scaled <- t(apply(mean_t, 1, RESCALE, to=0:1))
 
 column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(predicted_labels$labels))[,"Freq"], height = unit(3, "cm")),
                               col=list(predicted_label=col_predicted_labels, 
@@ -541,7 +548,10 @@ column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(predicted_
                                        ), 
                               show_legend=F)
 
-Heatmap(rna_mean_scaled, 
+tumor_markers <- c("ELAVL4", "CXCR4", "MME", "CD74", "HLA-A", "CD274", "GATA3", "VIM", "MKI67", "CD44", "NCAM1", "ST8SIA1", "PRPH", "LUM", "CHGA", "SOX10", "S100B")
+
+
+Heatmap(mean_scaled[tumor_markers,], 
         column_title = "Mean per cluster (protein data)",
         top_annotation = column_ha, 
         cluster_columns=T,
@@ -555,21 +565,40 @@ Heatmap(rna_mean_scaled,
 
 Finally we will explore the mapping results in a barplot.
 
-```{r evaluate-barplot, fig.width=14, message=FALSE}
+```{r evaluate-barplot, fig.width=20, message=FALSE}
 
-data <- data.frame(protein_clusters=predicted_label, rna_clusters=rna@active.ident)
+data <- data.frame(RNA_clusters=predicted_label, protein_clusters=protein@active.ident)
 
 data$freq <- 1
-data_wide <- data %>% pivot_wider(names_from = c("rna_clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
+data_wide <- data %>% pivot_wider(names_from = c("protein_clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-#write.csv(data_wide, file.path(path, "/results/metadata/tissues-per-cluster.csv"))
+write.csv(data_wide, file.path(path,"public_datasets/Jansky/results/predicted_RNA_per_protein_cluster.csv"))
 
-data_long <- data_wide %>% pivot_longer(cols = !protein_clusters, names_to = "rna_clusters", values_to = "count") 
+data_long <- data_wide %>% pivot_longer(cols = !RNA_clusters, names_to = "protein_clusters", values_to = "count") 
 
 # Stacked + percent
-ggplot(data_long, aes(fill=rna_clusters, y=count, x=protein_clusters)) + 
-  ggtitle("RNA clusters per predicted protein cluster") +
+ggplot(data_long, aes(fill=RNA_clusters, y=count, x=protein_clusters)) + 
+  ggtitle("Predicted RNA cluster per protein cluster") +
   geom_bar(position="fill", stat="identity", show.legend = T) + 
-  scale_fill_manual(values = col_true_labels) +
+  scale_fill_manual(values = col_predicted_labels) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+```
+Next, for each protein based cell type, we will determine the major RNA celltype assignment.
+```{r evaluate-max-assignment, fig.width=20, message=FALSE}
+RNA_clusters <- data_wide$RNA_clusters
+data <- data_wide
+data <- data[,-1]
+rownames(data) <- RNA_clusters
+data <- (prop.table(as.matrix(data), margin=2))
+protein_clust <- names(unlist(apply(data, 2, which.max)))
+predicted_rna_clust_1 <- data_wide[unname(unlist(apply(data, 2, which.max))), "RNA_clusters"]
+proportion_1 <- unname(unlist(apply(data, 2, max)))
+predicted_rna_clust_2 <- unname(apply(data, 2, function(x){rownames(data)[order(x, decreasing=T)][2]}))
+proportion_2 <- unname(apply(data, 2, function(x){sort(x, decreasing=T)[2]}))
+
+assignments <- as.data.frame(cbind("protein_cluster" = protein_clust, "predicted_RNA_cluster_1" = predicted_rna_clust_1, "proportion_1"=proportion_1, "predicted_RNA_cluster_2" = predicted_rna_clust_2, "proportion_2"=proportion_2))
+
+assignments
+
+write.csv(assignments, file.path(path,"public_datasets/Jansky/results/similarity_assignments_tumor.csv"))
 ```

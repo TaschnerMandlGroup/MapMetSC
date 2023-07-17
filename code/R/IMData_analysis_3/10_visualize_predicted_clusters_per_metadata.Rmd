@@ -16,24 +16,27 @@ We will first read in the SPE for tumor and non-tumor cells with the predicted c
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe_tumor <- readRDS(file.path(path,"public_datasets/Jansky/results/spe_tumor_clusters.rds"))
-spe_tumor$predicted_clusters <- spe_tumor$predicted_tumor_clusters
-spe_tumor$predicted_tumor_clusters <- NULL
+# For separate tumor and non-tumor prediction (e.g. Jansky-Lee)
+# spe_tumor <- readRDS(file.path(path,"public_datasets/Jansky/results/spe_tumor_clusters.rds"))
+# spe_tumor$predicted_clusters <- spe_tumor$predicted_tumor_clusters
+# spe_tumor$predicted_tumor_clusters <- NULL
+# 
+# spe_non_tumor <- readRDS(file.path(path,"public_datasets/Lee/results/spe_immune_clusters.rds"))
+# spe_non_tumor$predicted_clusters <- spe_non_tumor$predicted_immune_clusters
+# spe_non_tumor$predicted_immune_clusters <- NULL
+# spe_non_tumor <- spe_non_tumor[,spe_non_tumor$celltype!="78_schwann cells" & spe_non_tumor$celltype !="78_SCP"]
+# 
+# spe <- cbind(spe_tumor, spe_non_tumor)
+# spe[,spe$celltype=="78_schwann cells" | spe$celltype =="78_SCP"]$metacluster <- "tumor"
 
-spe_non_tumor <- readRDS(file.path(path,"public_datasets/Lee/results/spe_immune_clusters.rds"))
-spe_non_tumor$predicted_clusters <- spe_non_tumor$predicted_immune_clusters
-spe_non_tumor$predicted_immune_clusters <- NULL
-spe_non_tumor <- spe_non_tumor[,spe_non_tumor$celltype!="78_schwann cells" & spe_non_tumor$celltype !="78_SCP"]
+spe <- readRDS(file.path(path,"public_datasets/Fetahu/results/spe_predicted_clusters.rds"))
 
-spe <- cbind(spe_tumor, spe_non_tumor)
-spe[,spe$celltype=="78_schwann cells" | spe$celltype =="78_SCP"]$metacluster <- "tumor"
-
-saveRDS(spe, file.path(path, "results/spe_predicted-clusters.RDS"))
+saveRDS(spe, file.path(path, "results/spe_predicted-clusters_Fetahu.RDS"))
 ```
 
 Next, we will plot the predicted celltypes in the UMAP space. 
 
-```{r cell type umap, fig.width=30, fig.height=15, message=FALSE}
+```{r cell type umap, fig.width=15, fig.height=7, message=FALSE}
 library(dittoSeq)
 library(RColorBrewer)
 
@@ -53,7 +56,6 @@ p2 <- dittoDimPlot(spe, var = "predicted_clusters",
   theme(legend.title = element_blank()) +
   ggtitle("Inferrred clusters on UMAP")
 
-p1
 p2
 
 ```
@@ -86,7 +88,7 @@ for(i in 1: length(samples)){
           panel.background = element_blank(), 
           axis.line = element_line(colour = "black"))
   
-  ggsave(filename=file.path(path, paste0("results//UMAP/predicted_clusters/", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste0("results/UMAP/Fetahu/", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
 }
 
 ```

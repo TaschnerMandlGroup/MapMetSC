@@ -75,7 +75,6 @@ Here, the log-fold change in our model refers to the change in cell abundance af
 ```{r}
 #design <- model.matrix(~factor(tissue) + factor(timepoint), y.ab$samples)
 design <- model.matrix(~factor(timepoint), y.ab$samples)
-deisgn <- createDesignM
 ```
 
 We use the `estimateDisp()` function to estimate the NB dispersion for each cluster (Figure \@ref(fig:abplotbcv)).

@@ -21,6 +21,7 @@ library(diffcyt)
 library(flowCore)
 library(readxl)
 library(scater)
+library(dplyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
@@ -29,10 +30,10 @@ spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 
 keep_rows <- rowData(spe)$use_channel
 keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & (spe$timepoint=="DE" | spe$timepoint=="RE2") 
+
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
 sce$sample_id <- factor(spe[keep_rows, keep_cols]$sample)
-#sce$sample_id <- factor(spe[keep_rows, keep_cols]$sample_id)
 sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
 sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype)
 
@@ -61,18 +62,69 @@ rowData(sce)$marker_class <- ifelse(rownames(sce) %in% type_markers, "type",
 
 reducedDim(sce, "UMAP") <- reducedDim(spe, "UMAP")[keep_cols,]
 
-# spe_cat <- spe[rowData(spe)$use_channel,]
-# 
-# spe_cat$sample <- factor(spe$sample)
-# spe_cat$sample_id <- factor(spe$sample_id)
-# spe_cat$condition <- factor(spe$timepoint)
-# spe_cat$cluster_id <- factor(spe$celltype)
-# 
-# # Add celltype information to metadata
-# metadata(spe_cat)$cluster_codes <- data.frame(celltype = factor(spe_cat$celltype))
-# 
+
 # keep <- as.vector(spe_cat[,spe_cat$tissue=="BM" & spe_cat$control=="no" & spe_cat$metacluster=="tumor"]$sample_id)
 # sce <- filterSCE(spe_cat, sample_id %in% keep) 
+```
+
+```{r pseudo-anonymous, message=FALSE}
+library(SpatialExperiment)
+library(CATALYST)
+library(cowplot)
+library(ggplot2)
+library(diffcyt)
+library(flowCore)
+library(readxl)
+library(scater)
+library(dplyr)
+
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+
+# Create catalyst compatible SCE object
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
+
+keep_rows <- rowData(spe)$use_channel
+keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & (spe$timepoint=="DE" | spe$timepoint=="RE2") 
+
+#pseudo-anonymize
+count_df <- as.data.frame(assay(spe, "counts")[keep_rows, keep_cols])
+
+marker_names <- setNames(unlist(lapply(seq_len(length(unique(rownames(count_df)))), function(x){paste0("marker_", x)})), unique(rownames(count_df)))
+rownames(count_df) <- recode(rownames(count_df), !!!marker_names)
+
+cell_names <- setNames(unlist(lapply(seq_len(length(unique(colnames(count_df)))), function(x){paste0("cell_", x)})), unique(colnames(count_df)))
+colnames(count_df) <- recode(colnames(count_df), !!!cell_names)
+
+celltype_names <- setNames(unlist(lapply(seq_len(length(unique(spe[keep_rows, keep_cols]$celltype))), function(x){paste0("celltype_", x)})), unique(spe[keep_rows, keep_cols]$celltype))
+celltype <- recode(spe[keep_rows, keep_cols]$celltype, !!!celltype_names)
+
+sample_names <- setNames(unlist(lapply(seq_len(length(unique(spe[keep_rows, keep_cols]$sample))), function(x){paste0("sample_", x)})), unique(spe[keep_rows, keep_cols]$sample))
+sample <- recode(spe[keep_rows, keep_cols]$sample, !!!sample_names)
+
+sce <- SingleCellExperiment(assays=list(counts=count_df, exprs=count_df))
+
+sce$sample_id <- factor(sample)
+sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
+sce$cluster_id <- factor(celltype)
+
+# Add celltype information to metadata
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(celltype))
+
+# Add metadata
+metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,condition) %>% 
+    summarise(n_cells=n(),.groups = 'drop') %>%
+    as.data.frame()
+
+# Define cell_type_markers 
+type_markers <- rownames(sce)[1:27]
+
+# Define cell_state_markers 
+state_markers <- rownames(sce)[27:32]
+
+# Add to spe
+rowData(sce)$marker_class <- ifelse(rownames(sce) %in% type_markers, "type",
+                                    ifelse(rownames(sce) %in% state_markers, "state", 
+                                    "other"))
 ```
 
 # Diagnostic plots
@@ -134,15 +186,15 @@ plotMultiHeatmap(sce,
 The UMAP map below is colored according to the expression level of the CD4 marker, highlighting the position of CD4+ T-cells (Figure \@ref(fig:umap-one-expr-CD4)). In this way, one can use a set of markers to highlight where cell types of interest are located on the map. If one is loosely interpreting *density* of points in the map, it is recommended to select a fixed number of cells per sample.
 
 ```{r umap-one-expr-CD4, fig.width = 6, fig.cap = "UMAP based on the arcsinh-transformed expression of the 10 lineage markers in the cells from the PBMC dataset. UMAP was run with no PCA step. From each of the 16 samples, 1000 cells were randomly selected. Cells are colored according to the expression level of the CD4 marker."}
-plotDR(sce, "UMAP", color_by = "CD4_Yb171_mean")
+plotDR(sce, "UMAP", color_by = "CD44_In115_mean")
 ```
 Alternatively, we can color the cells by any resolution of clustering available in the codes. Here, we compare the t-SNE and UMAP projections of cells colored by the 20 metaclusters.  Ideally, cells of the same color should be close to each other (Figure \@ref(fig:umap-one-clustering1)). When the plots are further stratified by sample (Figure \@ref(fig:umap-facet-sample)), we can verify whether similar cell populations are present in all replicates, which can help in identifying outlying samples. Optionally, stratification can be done by condition (Figure \@ref(fig:umap-facet-condition)). With such a spot-check plot, we can inspect whether differences in cell abundance are strong between conditions, and we can visualize and identify distinguishing clusters before applying formal statistical testing. A similar approach of data exploration was proposed in studies of treatment-specific differences of polyfunctional antigen-specific T-cells [@Lin2015a].
 
-```{r umap-one-clustering1, fig.height = 3.5, fig.cap = "t-SNE and UMAP based on the arcsinh-transformed expression of the 10 lineage markers in the cells from the PBMC dataset. From each of the 16 samples, 500 (t-SNE) and 1000 (UMAP) cells were randomly selected. Cells are colored according to the 20 cell populations obtained with FlowSOM after the metaclustering step with ConsensusClusterPlus."}
+```{r umap-one-clustering1, fig.height = 3.5, fig.cap = "t-SNE and UMAP based on the arcsinh-transformed expression of the 10 lineage markers in the cells from the PBMC dataset. From each of the 16 samples, 500 (t-SNE) and 1000 (UMAP) cells were randomly selected. Cells are colored according to the 20 cell populations obtained with FlowSOM after the metaclustering step with ConsensusClusterPlus.", fig.width=10, fig.height=7}
 
 p2 <- plotDR(sce, "UMAP", color_by = "celltype")
 lgd <- get_legend(p2)
-p2 <- p2 + theme(legend.position = "none")
+#p2 <- p2 + theme(legend.position = "none")
 p2
 ```
 
@@ -179,15 +231,15 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=50, fig.height=20}
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=20, fig.height=10}
 plotAbundances(sce, k = "celltype", by = "sample")
 ```
 It may be quite hard to see the differences in cluster abundances in the plot above, especially for clusters with very low frequency.  And, since boxplots cannot represent multimodal distributions, we show boxplots with jittered points of the sample-level cluster proportions overlaid (Figure \@ref(fig:diff-freqs-plot-props-boxplot)).  The y-axes are scaled to the range of data plotted for each cluster, to better visualize the differences in frequency of lower abundance clusters. For this experiment, it may be interesting to additionally depict the patient information. We do this by plotting a different point shape for each patient. Indeed, we can see that often the direction of abundance changes between the two conditions are concordant among the patients.
 
-```{r diff-freqs-plot-props-boxplot, fig.height = 4, fig.cap = "Relative abundance of the 8 PBMC populations in each sample, in the PBMC dataset, represented with boxplots. Values for the two conditions are indicated with different colors: red for the unstimulated (Ref) and blue for the stimulated with BCR/FcR-XL (BCRXL) samples. Values for each patient are indicated with different shape. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=15, fig.height=10}
+```{r diff-freqs-plot-props-boxplot, fig.height = 4, fig.cap = "Relative abundance of the 8 PBMC populations in each sample, in the PBMC dataset, represented with boxplots. Values for the two conditions are indicated with different colors: red for the unstimulated (Ref) and blue for the stimulated with BCR/FcR-XL (BCRXL) samples. Values for each patient are indicated with different shape. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=10, fig.height=7}
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
-
-abundances <- as.data.frame(p$data %>% group_by(cluster_id, condition) %>% 
+p
+abundance_table <- as.data.frame(p$data %>% group_by(cluster_id, condition) %>% 
     summarise(mean=mean(Freq),
               .groups = 'drop')) 
 
@@ -206,12 +258,9 @@ We set up the model formulas and contrast matrix using the `createFormula()` and
 ei <- metadata(sce)$experiment_info
 design <- createDesignMatrix(ei, cols_design = "condition")
 
-# da_formula1 <- createFormula(ei,
-#     cols_fixed = "condition", cols_random="sample_id")
-
-# (da_formula2 <- createFormula(ei,
-#     cols_fixed = "timepoint",
-#     cols_random = c("sample", "study_id")))
+# (da_formula1 <- createFormula(ei, 
+#     cols_fixed = "condition", 
+#     cols_random = "sample_id"))
 ```
 
 ```{r design-contrast}
@@ -222,9 +271,13 @@ The `r Biocpkg("diffcyt")` package provides three methods for differential abund
 
 ```{r da-analysis}
 da_res1 <- diffcyt(sce, 
-    formula = da_formula1, contrast = contrast,
+    design=design, 
+    #formula = ds_formula1,
+    contrast = contrast,
     analysis_type = "DA", method_DA = "diffcyt-DA-edgeR",
-    clustering_to_use = "celltype", min_cells=1, min_samples=1, verbose = T)
+    clustering_to_use = "celltype", 
+    min_cells=1, min_samples=1, 
+    verbose = T)
 ```
 
 The `r Biocpkg("diffcyt")` output consists of a list containing several `r Biocpkg("SummarizedExperiment")` objects. The differential test results are stored in the `rowData` slot of the results object `res`, and can be accessed using the `rowData()` accessor function from the `r Biocpkg("SummarizedExperiment")` package. The results include raw p-values (`p_val`) and adjusted p-values (`p_adj`) for each cluster (for DA tests) or cluster-marker combination (for DS tests), which can be used to rank the clusters or cluster-marker combinations by their evidence for differential abundance (DA tests) or differential states within cell populations (DS tests).
@@ -232,4 +285,96 @@ The `r Biocpkg("diffcyt")` output consists of a list containing several `r Biocp
 ```{r}
 names(da_res1)
 rowData(da_res1$res) 
+```
+
+When we count the number of differential findings for both GLMMs specified above, we find that accounting for the patient pairing increases the sensitivity to detect differentially abundant cell populations. 
+
+```{r diff-freqs-fit-model}
+table(rowData(da_res1$res)$p_adj < FDR_cutoff)
+```
+
+A summary table displaying the results (raw and adjusted p-values) together with the observed cell population proportions by sample can be generated using `r Biocpkg("diffcyt")`'s `topTable()` function. For more details, see `?topTable`.
+
+```{r diff-freqs-fit-model-output}
+topTable(da_res1, show_props = TRUE, format_vals = TRUE, digits = 2)
+```
+
+As we get incorrect results, we will repeat the same analysis using edgeR. 
+This allows us to take advantage of the NB GLM methods to model overdispersed count data in the presence of limited replication - 
+except that the counts are not of reads per gene, but of cells per label [@lun2017testing].
+The aim is to share information across labels to improve our estimates of the biological variability in cell abundance between replicates.
+
+```{r}
+library(edgeR)
+
+abundances <- table(metadata(sce)$cluster_codes$celltype, sce$sample_id) 
+abundances <- unclass(abundances) 
+head(abundances)
+# Attaching some column metadata.
+extra.info <- colData(sce)[match(colnames(abundances), sce$sample_id),]
+y.ab <- DGEList(abundances, samples=extra.info)
+y.ab
+```
+
+We filter out low-abundance labels as previously described.
+This avoids cluttering the result table with very rare subpopulations that contain only a handful of cells.
+For a DA analysis of cluster abundances, filtering is generally not required as most clusters will not be of low-abundance (otherwise there would not have been enough evidence to define the cluster in the first place).
+
+```{r}
+keep <- filterByExpr(y.ab, group=y.ab$samples$timepoint)
+#y.ab <- y.ab[keep,]
+summary(keep)
+```
+
+Unlike DE analyses, we do not perform an additional normalization step with `calcNormFactors()`.
+This means that we are only normalizing based on the "library size", i.e., the total number of cells in each sample.
+Any changes we detect between conditions will subsequently represent differences in the proportion of cells in each cluster.
+The motivation behind this decision is discussed in more detail in Section \@ref(composition-effects).
+
+We formulate the design matrix without a blocking factor as we assume to have no more batch effects in the data and an additive term for the timepoint (i.e. condition). Here, the log-fold change in our model refers to the change in cell abundance between timepoints, rather than the change in gene expression.
+
+```{r}
+#design <- model.matrix(~factor(sample_id) + factor(condition), y.ab$samples)
+design <- model.matrix(~factor(condition), y.ab$samples)
+```
+
+We use the `estimateDisp()` function to estimate the NB (negative binomial) dispersion for each cluster (Figure \@ref(fig:abplotbcv)).
+We turn off the trend as we do not have enough points for its stable estimation. 
+
+```{r abplotbcv, fig.cap="Biological coefficient of variation (BCV) for each label with respect to its average abundance. BCVs are defined as the square root of the NB dispersion. Common dispersion estimates are shown in red."}
+y.ab <- estimateDisp(y.ab, design, trend="none")
+summary(y.ab$common.dispersion)
+plotBCV(y.ab, cex=1)
+```
+
+We repeat this process with the QL dispersion, again disabling the trend (Figure \@ref(fig:abplotql)).
+
+```{r abplotql, fig.cap="QL dispersion estimates for each label with respect to its average abundance. Quarter-root values of the raw estimates are shown in black while the shrunken estimates are shown in red. Shrinkage is performed towards the common dispersion in blue."}
+fit.ab <- glmQLFit(y.ab, design, robust=TRUE, abundance.trend=FALSE)
+summary(fit.ab$var.prior)
+summary(fit.ab$df.prior)
+plotQLDisp(fit.ab, cex=1)
+```
+We test for differences in abundance between timepoints using `glmQLFTest()`.
+
+```{r}
+res <- glmQLFTest(fit.ab, coef=ncol(design))
+summary(decideTests(res))
+topTags(res)
+```
+
+
+To understand this result, will next look at a summary of normalized abundances.
+```{r}
+library(tidyr)
+normalized_proportions <- as.data.frame(t(res$fitted.values))
+normalized_proportions$condition <- y.ab$samples$condition
+
+norm_prop_long <- normalized_proportions %>%
+  pivot_longer(!condition, names_to = "cluster", values_to = "mean")
+
+abundance_table_normalized <- as.data.frame(norm_prop_long %>% group_by(condition, cluster) %>% 
+    summarise(mean=mean(mean),
+              .groups = 'drop')) 
+
 ```

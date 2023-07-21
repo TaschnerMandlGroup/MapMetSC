@@ -259,7 +259,7 @@ We propose some quick checks to verify whether the data we analyze globally repr
 The step below generates a plot with per-sample marker expression distributions, colored by condition (Figure \@ref(fig:plot-marker-expression-distribution)). Here, we can already see distinguishing markers, such as pNFkB and CD20, between stimulated and unstimulated conditions. 
 
 ```{r plot-marker-expression-distribution, fig.cap = "Per-sample smoothed densities of marker expression (arcsinh-transformed) of 10 lineage markers and 14 functional markers in the PBMC dataset. Two conditions: unstimulated (Ref) and stimulated with BCR/FcR-XL (BCRXL) for each of the 8 healthy donors are presented and colored by experimental condition."}
-p <- plotExprs(spe_reduced, color_by = "timepoint")
+p <- plotExprs(sce, color_by = "condition")
 p$facet$params$ncol <- 6
 p
 ```
@@ -269,7 +269,7 @@ Another spot check is the number of cells per sample (Figure \@ref(fig:plot-numb
 
 ```{r plot-number-of-cells, fig.height = 4, fig.cap = "Barplot showing the number of cells measured for each sample in the PBMC dataset. Bars are colored by experimental condition: unstimulated (Ref) and stimulated with BCR/FcR-XL (BCRXL). Numbers in the names on the x-axis indicate patient IDs. Numbers on top of the bars indicate the cell counts."}
 n_cells(sce) 
-plotCounts(sce, group_by = "sample", color_by = "condition")
+plotCounts(sce, group_by = "sample_id", color_by = "condition")
 ```
 
 ## MDS plot
@@ -279,7 +279,7 @@ In transcriptomics applications, one of the most utilized exploratory plots is t
 In our MDS plot on median marker expression values (Figure \@ref(fig:plot-mds)), we can also see that the first dimension (MDS1) separates the unstimulated and stimulated samples reasonably well.  The second dimension (MDS2) represents, to some degree, differences between patients. Most of the samples that originate from the same patient are placed at a similar point along the y-axis, for example, samples from patients 7, 5, and 8  are at the bottom of the plot, while samples from patient 4 are located at the top of the plot.  This also indicates that the marker expression of individual patients is driving similarity and perhaps should be formally accounted for in the downstream statistical modeling.
 
 ```{r plot-mds, fig.cap = "MDS plot for the unstimulated (Ref) and stimulated with BCR/FcR-XL (BCRXL) samples obtained for each of the 8 healthy donors in the PBMC dataset. Calculations are based on the median (arcsinh-transformed) marker expression of 10 lineage markers and 14 functional markers across all cells measured for each sample.  Distances between samples in the plot approximate the typical change in medians. Numbers in the label names indicate patient IDs."}
-pbMDS(sce, by="sample_id", color_by = "condition")
+pbMDS(sce, color_by = "condition", label_by = "sample_id")
 ```
 
 In contrast to genomic applications, the number of variables measured for each sample is much lower in HDCyto data. In the former, thousands of genes are surveyed, whereas in the latter, ~20-50 antigens are typically targeted. Similar to the MDS plot above, a heatmap of the same data also gives insight into the structure of the data.  The heatmap shows median marker intensities with clustered columns (markers) and rows (samples). We have used hierarchical clustering with average linkage and Euclidean distance, but also Ward's linkage could be used [@Bruggner2014], and in CyTOF applications, a cosine distance shows good performance [@Bendall2014]. In this plot, we can see which markers drive the observed clustering of samples (Figure \@ref(fig:plot-dendogram)).
@@ -291,7 +291,7 @@ HELENA: except for 1-2, this is not really true, I think?
 5-7-8 are close-ish, 3-4 definitely not close in the Ref group
 -->
 
-```{r plot-dendogram, fig.cap = "Heatmap of the median (arcsinh-transformed) marker expression of 10 lineage markers and 14 functional markers across all cells measured for each sample in the PBMC dataset. Color-coded with yellow for lower expression and blue for higher expression. Dendrograms present clustering of samples (rows) and markers (columns) which is based on hierarchical clustering with Euclidean distance metric and average linkage. Row annotations on the left of the heatmap represent the two conditions: unstimulated (Ref) and stimulated with BCR/FcR-XL (BCRXL), and patient IDs for each of the 8 healthy donors.", fig.width=15}
+```{r plot-dendogram, fig.cap = "Heatmap of the median (arcsinh-transformed) marker expression of 10 lineage markers and 14 functional markers across all cells measured for each sample in the PBMC dataset. Color-coded with yellow for lower expression and blue for higher expression. Dendrograms present clustering of samples (rows) and markers (columns) which is based on hierarchical clustering with Euclidean distance metric and average linkage. Row annotations on the left of the heatmap represent the two conditions: unstimulated (Ref) and stimulated with BCR/FcR-XL (BCRXL), and patient IDs for each of the 8 healthy donors."}
 plotExprHeatmap(sce, scale = "last",
     hm_pal = rev(hcl.colors(10, "YlGnBu")))
 ```
@@ -362,7 +362,7 @@ In addition to investigating expression of the lineage markers, we can also have
 
 ```{r plot-clustering-heatmap1-complex, fig.cap = "Heatmap of the median marker intensities of the 10 lineage markers and one signaling marker (pS6) across the 20 cell populations obtained with FlowSOM after the metaclustering step with ConsensusClusterPlus (PBMC data). The left panel presents a heatmap analogous to the one in Figure \\@ref(fig:plot-clustering-heatmap1). Heatmap on the right represents the median of the arcsinh, 0-1 transformed marker expression for a signaling marker pS6 calculated over cells in each sample (columns) individually."}
 plotMultiHeatmap(sce, 
-    hm1 = "type", hm2 = "state", k = "meta20", 
+    hm1 = "type", hm2 = "pS6", k = "meta20", 
     row_anno = FALSE, bars = TRUE, perc = TRUE)
 ```
 
@@ -568,13 +568,18 @@ Differential analysis of cell population abundance compares the proportions of c
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
 ```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters."}
-plotAbundances(spe_reduced, k = "celltype", by = "sample")
+plotAbundances(sce, k = "merging1", by = "sample_id")
 ```
 
 It may be quite hard to see the differences in cluster abundances in the plot above, especially for clusters with very low frequency.  And, since boxplots cannot represent multimodal distributions, we show boxplots with jittered points of the sample-level cluster proportions overlaid (Figure \@ref(fig:diff-freqs-plot-props-boxplot)).  The y-axes are scaled to the range of data plotted for each cluster, to better visualize the differences in frequency of lower abundance clusters. For this experiment, it may be interesting to additionally depict the patient information. We do this by plotting a different point shape for each patient. Indeed, we can see that often the direction of abundance changes between the two conditions are concordant among the patients.
 
 ```{r diff-freqs-plot-props-boxplot, fig.height = 4, fig.cap = "Relative abundance of the 8 PBMC populations in each sample, in the PBMC dataset, represented with boxplots. Values for the two conditions are indicated with different colors: red for the unstimulated (Ref) and blue for the stimulated with BCR/FcR-XL (BCRXL) samples. Values for each patient are indicated with different shape. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters."}
-plotAbundances(sce, k = "merging1", by = "cluster_id", shape_by = "patient_id")
+library(dplyr)
+p <- plotAbundances(sce, k = "merging1", by = "cluster_id", shape_by = "patient_id")
+p
+abundances <- as.data.frame(p$data %>% group_by(cluster_id, condition) %>% 
+    summarise(mean=mean(Freq),
+              .groups = 'drop')) 
 ```
 
 <!-- A more suitable model would be based on the beta-binomial distribution, or similar results can be achieved by modeling the extra variance of ratios as random effects for each individual sample in the -->
@@ -600,14 +605,13 @@ where $\gamma_{i} \sim N(0, \sigma^2_\gamma)$.
 We set up the model formulas and contrast matrix using the `createFormula()` and `createContrast()` functions from the `r Biocpkg("diffcyt")` package. These functions create the model formulas and contrast matrix in the required format for the `r Biocpkg("diffcyt")` testing functions. For more details, see `?createFormula` and `?createContrast`, or refer to the extended documentation in the `r Biocpkg("diffcyt")` vignette ([diffcyt workflow](http://bioconductor.org/packages/release/bioc/vignettes/diffcyt/inst/doc/diffcyt_workflow.html)).
 
 ```{r da-formulas}
-#ei <- metadata(sce)$experiment_info
-ei <- colData(sce)
+ei <- metadata(sce)$experiment_info
 (da_formula1 <- createFormula(ei, 
-    cols_fixed = "timepoint", 
-    cols_random = "sample"))
-(da_formula2 <- createFormula(ei,
-    cols_fixed = "timepoint",
-    cols_random = c("sample", "study_id")))
+    cols_fixed = "condition", 
+    cols_random = "sample_id"))
+(da_formula2 <- createFormula(ei, 
+    cols_fixed = "condition", 
+    cols_random = c("sample_id", "patient_id")))
 ```
 
 ```{r design-contrast}
@@ -620,18 +624,18 @@ The `r Biocpkg("diffcyt")` package provides three methods for differential abund
 da_res1 <- diffcyt(sce, 
     formula = da_formula1, contrast = contrast,
     analysis_type = "DA", method_DA = "diffcyt-DA-GLMM",
-    clustering_to_use = "celltype", min_cells=1, min_samples=1, verbose = T)
+    clustering_to_use = "merging1", verbose = FALSE)
 da_res2 <- diffcyt(sce, 
     formula = da_formula2, contrast = contrast,
     analysis_type = "DA", method_DA = "diffcyt-DA-GLMM",
-    clustering_to_use = "celltype", min_cells=1, min_samples=1, verbose = T)
+    clustering_to_use = "merging1", verbose = FALSE)
 ```
 
 The `r Biocpkg("diffcyt")` output consists of a list containing several `r Biocpkg("SummarizedExperiment")` objects. The differential test results are stored in the `rowData` slot of the results object `res`, and can be accessed using the `rowData()` accessor function from the `r Biocpkg("SummarizedExperiment")` package. The results include raw p-values (`p_val`) and adjusted p-values (`p_adj`) for each cluster (for DA tests) or cluster-marker combination (for DS tests), which can be used to rank the clusters or cluster-marker combinations by their evidence for differential abundance (DA tests) or differential states within cell populations (DS tests).
 
 ```{r}
-names(da_res2)
-rowData(da_res2$res) 
+names(da_res1)
+rowData(da_res1$res) 
 ```
 
 When we count the number of differential findings for both GLMMs specified above, we find that accounting for the patient pairing increases the sensitivity to detect differentially abundant cell populations. 

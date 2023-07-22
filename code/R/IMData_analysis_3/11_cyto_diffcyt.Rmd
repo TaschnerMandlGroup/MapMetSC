@@ -29,19 +29,20 @@ path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & (spe$timepoint=="DE" | spe$timepoint=="RE2") 
+keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" #& (spe$timepoint=="DE" | spe$timepoint=="RE2") 
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
 sce$sample_id <- factor(spe[keep_rows, keep_cols]$sample)
-sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
+sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
 sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype)
+sce$condition <- factor(spe[keep_rows, keep_cols]$progression)
 
 # Add celltype information to metadata
 metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype))
 
 # Add metadata
-metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,condition) %>% 
+metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,timepoint,condition) %>% 
     summarise(n_cells=n(),.groups = 'drop') %>%
     as.data.frame()
 
@@ -149,7 +150,7 @@ plotCounts(sce, group_by = "sample_id", color_by = "condition")
 
 In transcriptomics applications, one of the most utilized exploratory plots is the multi-dimensional scaling (MDS) plot or a principal component analysis (PCA) plot.  Such plots show similarities between samples measured in an unsupervised way and give a sense of how much differential expression can be detected before conducting any formal tests.  In transcriptomics, distances between samples are calculated based on the expression of the top varying genes.  We propose a similar plot for our data using median marker expression over all cells to calculate dissimilarities between samples (other aggregations are also possible, and one could reduce the number of top varying markers to include in the calculation).  Ideally, samples should cluster well within the same condition, although this depends on the magnitude of the difference between experimental conditions.  With this diagnostic, one can identify outlier samples and eliminate them if the circumstances warrant it.  An MDS plot on the median marker expressions can be generated with `pbMDS()`, which internally calls the same-named `r Biocpkg("limma")` function.
 
-```{r plot-mds, fig.cap = "MDS plot for the unstimulated (Ref) and stimulated with BCR/FcR-XL (BCRXL) samples obtained for each of the 8 healthy donors in the PBMC dataset. Calculations are based on the median (arcsinh-transformed) marker expression of 10 lineage markers and 14 functional markers across all cells measured for each sample.  Distances between samples in the plot approximate the typical change in medians. Numbers in the label names indicate patient IDs.", fig.width=15}
+```{r plot-mds, fig.cap = "MDS plot for the unstimulated (Ref) and stimulated with BCR/FcR-XL (BCRXL) samples obtained for each of the 8 healthy donors in the PBMC dataset. Calculations are based on the median (arcsinh-transformed) marker expression of 10 lineage markers and 14 functional markers across all cells measured for each sample.  Distances between samples in the plot approximate the typical change in medians. Numbers in the label names indicate patient IDs.", fig.width=40}
 pbMDS(sce, by="sample_id", color_by="condition", label_by="sample_id")
 ```
 
@@ -170,7 +171,7 @@ plotExprHeatmap(sce,
     bars = TRUE, perc = TRUE)
 ```
 
-```{r plot-clustering-distribution1, fig.height = 8, fig.cap = "Distributions of marker intensities (arcsinh-transformed) of the 10 lineage markers in the 20 cell populations obtained with FlowSOM after the metaclustering step with ConsensusClusterPlus (PBMC data). Red densities represent marker expression for cells in a given cluster. Blue densities are calculated over all the cells and serve as a reference.", fig.width=15, fig.height=20}
+```{r plot-clustering-distribution1, fig.height = 8, fig.cap = "Distributions of marker intensities (arcsinh-transformed) of the 10 lineage markers in the 20 cell populations obtained with FlowSOM after the metaclustering step with ConsensusClusterPlus (PBMC data). Red densities represent marker expression for cells in a given cluster. Blue densities are calculated over all the cells and serve as a reference.", fig.width=40, fig.height=20}
 plotClusterExprs(sce, k = "celltype")
 ```
 
@@ -198,12 +199,12 @@ lgd <- get_legend(p2)
 p2
 ```
 
-```{r umap-facet-sample, fig.height = 6, fig.cap = "UMAP as in Figure \\@ref(fig:umap-one-clustering1), but stratified by sample.", fig.width=15, fig.height=20}
+```{r umap-facet-sample, fig.height = 6, fig.cap = "UMAP as in Figure \\@ref(fig:umap-one-clustering1), but stratified by sample.", fig.width=23, fig.height=20}
 # facet by sample
 plotDR(sce, "UMAP", color_by = "celltype", facet_by = "sample_id")
 ```
 
-```{r umap-facet-condition, fig.height = 3.5, fig.cap = "UMAP as in Figure \\@ref(fig:umap-one-clustering1), but stratified by condition.", fig.width=10, fig.height=10}
+```{r umap-facet-condition, fig.height = 3.5, fig.cap = "UMAP as in Figure \\@ref(fig:umap-one-clustering1), but stratified by condition.", fig.width=10, fig.height=7}
 # facet by condition
 plotDR(sce, "UMAP", color_by = "celltype", facet_by = "condition")
 ```
@@ -231,7 +232,7 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=20, fig.height=10}
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=20, fig.height=20}
 plotAbundances(sce, k = "celltype", by = "sample")
 ```
 It may be quite hard to see the differences in cluster abundances in the plot above, especially for clusters with very low frequency.  And, since boxplots cannot represent multimodal distributions, we show boxplots with jittered points of the sample-level cluster proportions overlaid (Figure \@ref(fig:diff-freqs-plot-props-boxplot)).  The y-axes are scaled to the range of data plotted for each cluster, to better visualize the differences in frequency of lower abundance clusters. For this experiment, it may be interesting to additionally depict the patient information. We do this by plotting a different point shape for each patient. Indeed, we can see that often the direction of abundance changes between the two conditions are concordant among the patients.
@@ -335,7 +336,7 @@ We formulate the design matrix without a blocking factor as we assume to have no
 
 ```{r}
 #design <- model.matrix(~factor(sample_id) + factor(condition), y.ab$samples)
-design <- model.matrix(~factor(condition), y.ab$samples)
+design <- model.matrix(~0+condition, y.ab$samples)
 ```
 
 We use the `estimateDisp()` function to estimate the NB (negative binomial) dispersion for each cluster (Figure \@ref(fig:abplotbcv)).
@@ -355,26 +356,94 @@ summary(fit.ab$var.prior)
 summary(fit.ab$df.prior)
 plotQLDisp(fit.ab, cex=1)
 ```
-We test for differences in abundance between timepoints using `glmQLFTest()`.
+We test for differences in abundance between timepoints using `glmQLFTest()`. When there are multiple groups, we can perform the gLmQLFTest according to [this](https://www.biostars.org/p/382480/).
 
 ```{r}
-res <- glmQLFTest(fit.ab, coef=ncol(design))
-summary(decideTests(res))
-topTags(res)
+# colnames(design) <- c("DE", "RE1", "RE2", "REL")
+# contrasts <- makeContrasts(DEvsRE1 = DE-RE1,
+#                            DEvsRE2 = DE-RE2,
+#                            DEvsREL = DE-REL,
+#                            RE1vsREL = RE1-REL,
+#                            RE2vsREL = RE2-REL,
+#                            levels = design)
+
+colnames(design) <- c("no", "yes")
+contrasts <- makeContrasts(NOvsYES = no-yes,
+                           levels = design)
+
+res <- list()
+
+set.seed(230722)
+for (i in 1:ncol(contrasts)){
+
+    res <- append(res, list(glmQLFTest(fit.ab, contrast = contrasts[,i])))
+    #write.csv(as.data.frame(topTags(res[[i]], n=Inf)), file.path(path, paste0("results/in_house/catalyst/", colnames(contrasts)[i], ".csv")))
+}
+
+
+summary(decideTests(res[[1]]))
+topTags(res[[1]], n=Inf)
+
 ```
-
-
-To understand this result, will next look at a summary of normalized abundances.
-```{r}
+Next, we will plot these significance values onto a boxplot according to [this](https://www.datanovia.com/en/blog/ggpubr-how-to-add-p-values-generated-elsewhere-to-a-ggplot/).
+```{r, fig.width=20, fig.height=23}
 library(tidyr)
-normalized_proportions <- as.data.frame(t(res$fitted.values))
-normalized_proportions$condition <- y.ab$samples$condition
+library(ggpubr)
+library(rstatix)
+library(gridExtra)
+library(gtools)
 
-norm_prop_long <- normalized_proportions %>%
-  pivot_longer(!condition, names_to = "cluster", values_to = "mean")
+p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
 
-abundance_table_normalized <- as.data.frame(norm_prop_long %>% group_by(condition, cluster) %>% 
-    summarise(mean=mean(mean),
-              .groups = 'drop')) 
+plot_list_values <- list()
+plot_list_stars <- list()
+for(i in 1:length(unique(p$data$cluster_id))){
+  cluster_name <- unique(p$data$cluster_id)[i]
+  proportions <- data.frame(p$data[p$data$cluster_id == cluster_name, c("sample_id", "condition", "Freq")])
+  
+  p_adj <- c()
+  group1 <- c()
+  group2 <- c()
+  
+  for(j in 1:ncol(contrasts)){
+    stats <- as.data.frame(topTags(res[[j]], n=Inf))
+    p_adj <- c(p_adj, stats[rownames(stats)==droplevels(cluster_name), "FDR"])
+    group1 <- c(group1, unlist(strsplit(colnames(contrasts)[j], "vs"))[1])
+    group2 <- c(group2, unlist(strsplit(colnames(contrasts)[j], "vs"))[2])
+  }
+  
+  stats_df <- data.frame(p_adj=p_adj, group1=group1, group2=group2)
+  stats_df$p_adj_signif <- stars.pval(stats_df$p_adj)
+  stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
+  
+  plot_list_values[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
+                  color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
+                  add = "jitter", title=cluster_name, show.legend = F) +
+          stat_pvalue_manual(
+            stats_df, 
+            y.position = 130, step.increase = 0.2,
+            label = "p_adj"
+            )  + 
+          theme(aspect.ratio = 0.8)
+  
+  plot_list_stars[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
+                color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
+                add = "jitter", title=cluster_name, show.legend = F) +
+        stat_pvalue_manual(
+          stats_df, 
+          y.position = 130, step.increase = 0.2,
+          label = "p_adj_signif"
+          )  + 
+        theme(aspect.ratio = 0.8)
+}
 
+
+grid.arrange(grobs = plot_list_values, ncol = 4)
+grid.arrange(grobs = plot_list_stars, ncol = 4)
+
+#checking NSCs
+overview <- data.frame(patient=spe[,spe$control=="no" & spe$celltype=="60_NSC"]$study_id, progression=spe[,spe$control=="no" & spe$celltype=="60_NSC"]$progression) %>% group_by(patient, progression) %>% 
+     summarise(n_cells=n(),.groups = 'drop') %>%
+     as.data.frame()
+table(overview$progression)
 ```

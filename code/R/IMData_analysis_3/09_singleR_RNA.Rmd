@@ -23,12 +23,13 @@ library(monocle3)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-monocle_cell_dataset <- readRDS(file.path(path,"public_datasets/Fetahu/rna_integrated_monocle.rds"))
+rna <- readRDS(file.path(path,"results/public_datasets/Jansky/adrenal_gland_Seurat.RDS"))
 
 #only for Fetahu et al.
+monocle_cell_dataset <- readRDS(file.path(path,"public_datasets/Fetahu/rna_integrated_monocle.rds"))
 rna <- as.Seurat(monocle_cell_dataset, data=NULL)
 rna <- RenameAssays(object = rna, originalexp = 'RNA')
-celltype_details <- readRDS(file.path(path,"public_datasets/Fetahu/metadata.rds"))
+celltype_details <- readRDS(file.path(path,"results/public_datasets/Fetahu/metadata.rds"))
 rna@active.ident <- setNames(pull(celltype_details[match(celltype_details$cell,colnames(rna)),"cellont_cluster"], "cellont_cluster"),
                              pull(celltype_details[match(celltype_details$cell,colnames(rna)), "cell"], "cell"))
 
@@ -36,7 +37,7 @@ rna@active.ident <- setNames(pull(celltype_details[match(celltype_details$cell,c
 DefaultAssay(rna) <- "RNA"
 
 
-protein <- readRDS(file.path(path,"results/spe_clustered.rds"))
+protein <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 protein <- protein[rowData(protein)$use_channel,]
 col_celltype <- metadata(protein)$color_vectors$col_celltype
 ```
@@ -48,7 +49,7 @@ genes.
 
 ```{r set common features, message=FALSE}
 
-protein2gene <- read.csv(file.path(path,"public_datasets/protein2gene.csv"), sep=";")
+protein2gene <- read.csv(file.path(path,"results/public_datasets/protein2gene.csv"), sep=";")
 
 code <- setNames(protein2gene$genes, protein2gene$protein)
 rownames(protein) <- recode(rownames(protein), !!!code)
@@ -127,12 +128,13 @@ Heatmap(rna_mean_scaled,
 For further analysis we will exclude CD8A and the sticky cells.
 ```{r data-curation, message=FALSE}
 protein <- subset(x=protein, idents = c("53_sticky cells"), invert=TRUE)
+protein <- protein[,protein@meta.data$metacluster=="tumor"]
 #protein <- protein[,protein@meta.data$metacluster=="tumor" | protein@active.ident=="78_schwann cells" | protein@active.ident =="78_SCP"]
-# rna <- subset(x=rna, idents = c("Immune cells", "Adrenal cortex", "Erythrocytes", "Hepatocytes", "Muscle progenitor cells", "Myocytes", "Myofibroblasts", "Mesenchymal cells", "Endothelial cells"), invert=TRUE)
+rna <- subset(x=rna, idents = c("Immune cells", "Adrenal cortex", "Erythrocytes", "Hepatocytes", "Muscle progenitor cells", "Myocytes", "Myofibroblasts", "Mesenchymal cells", "Endothelial cells"), invert=TRUE)
 
 #protein <- protein[,protein@meta.data$metacluster=="tumor"]
 
-#common_features <- common_features[!common_features%in%c("CD8A")]
+common_features <- common_features[!common_features%in%c("CD8A")]
 
 # indx <- colSums(rna[common_features,])!=0
 # rna <- rna[,indx]
@@ -150,6 +152,13 @@ protein_mean <- aggregate(t(protein_data), list(protein_clusters), mean)
 protein_mean_t <- t(protein_mean[,2:ncol(protein_mean)])
 colnames(protein_mean_t) <- protein_mean[,"Group.1"]
 protein_mean_scaled <- t(apply(protein_mean_t, 1, RESCALE, to=0:1))
+
+rna_clusters <- rna@active.ident
+rna_data <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
+rna_mean <- aggregate(t(rna_data), list(rna_clusters), mean)
+rna_mean_t <- t(rna_mean[,2:ncol(rna_mean)])
+colnames(rna_mean_t) <- rna_mean[,"Group.1"]
+rna_mean_scaled <- t(apply(rna_mean_t, 1, RESCALE, to=0:1))
 
 clusters <- c(rna_clusters, protein_clusters)
 cell_count <- c(as.data.frame(table(rna_clusters))[,"Freq"], as.data.frame(table(protein_clusters))[,"Freq"])
@@ -198,7 +207,7 @@ set.seed(230713)
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 col_rna_clusters = setNames(sample(col_vector_433, length(unique(rna@active.ident))), unique(rna@active.ident))
 
-DimPlot(rna, reduction="UMAP", cols=col_rna_clusters)
+DimPlot(rna, reduction="umap", cols=col_rna_clusters)
 
 ```
 
@@ -206,7 +215,7 @@ DimPlot(rna, reduction="UMAP", cols=col_rna_clusters)
 ```{r umap-protein, message=FALSE, fig.width=20, fig.height=15}
 set.seed(230713)
 col_protein_clusters = setNames(sample(col_vector_433, length(unique(protein@active.ident))), unique(protein@active.ident))
-DimPlot(protein, reduction="UMAP", cols=col_protein_clusters)
+DimPlot(protein, reduction="UMAP", cols=col_protein_clusters, raster=F)
 ```
 
 #Transfer labels with singleR
@@ -224,10 +233,11 @@ protein_mat <- GetAssayData(protein, assay = "originalexp", slot = "data")[commo
 
 predicted_labels <- SingleR(test = protein_mat, ref = rna_mat, labels = rna_clusters, BPPARAM = MulticoreParam())
 
-protein_sce <- readRDS(file.path(path,"results/spe_clustered.rds"))
+protein_sce <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 protein_sce <- protein_sce[,protein_sce$celltype!="53_sticky cells"]
+protein_sce <- protein_sce[,protein_sce$metacluster=="tumor"]
 protein_sce$predicted_tumor_clusters <- predicted_labels$labels
-saveRDS(protein_sce, file.path(path,"public_datasets/Fetahu/results/spe_predicted_clusters.rds"))
+saveRDS(protein_sce, file.path(path,"results/public_datasets/Jansky/results/spe_predicted_tumor_clusters.rds"))
 
 plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 16000),])
 #plotScoreHeatmap(predicted_labels)
@@ -307,7 +317,7 @@ column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(predicted_
 tumor_markers <- c("ELAVL4", "CXCR4", "MME", "CD74", "HLA-A", "CD274", "GATA3", "VIM", "MKI67", "CD44", "NCAM1", "ST8SIA1", "PRPH", "LUM", "CHGA", "SOX10", "S100B")
 
 
-Heatmap(mean_scaled, 
+Heatmap(mean_scaled[tumor_markers,], 
         column_title = "Mean per cluster (protein data)",
         top_annotation = column_ha, 
         cluster_columns=T,
@@ -328,7 +338,7 @@ data <- data.frame(RNA_clusters=predicted_label, protein_clusters=protein@active
 data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("protein_clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path,"public_datasets/Fetahu/results/predicted_RNA_per_protein_cluster.csv"))
+write.csv(data_wide, file.path(path,"results/public_datasets/Jansky/results/predicted_rna_per_protein_tumor_cluster.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !RNA_clusters, names_to = "protein_clusters", values_to = "count") 
 
@@ -356,5 +366,5 @@ assignments <- as.data.frame(cbind("protein_cluster" = protein_clust, "predicted
 
 assignments
 
-write.csv(assignments, file.path(path,"public_datasets/Fetahu/results/similarity_assignments_tumor.csv"))
+write.csv(assignments, file.path(path,"results/public_datasets/Jansky/results/similarity_assignments_tumor_woSchwann.csv"))
 ```

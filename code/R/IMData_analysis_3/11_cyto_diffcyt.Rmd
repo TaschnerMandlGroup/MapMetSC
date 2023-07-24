@@ -10,9 +10,9 @@ knitr::opts_chunk$set(echo = TRUE, out.width = "120%")
 
 ## Load data
 
-We will first read in the previously generated `SpatialExperiment` object.
+First, we will find paired samples. 
 
-```{r read-data-pheno, message=FALSE}
+```{r selection-paired-sample, message=FALSE}
 library(SpatialExperiment)
 library(CATALYST)
 library(cowplot)
@@ -22,27 +22,66 @@ library(flowCore)
 library(readxl)
 library(scater)
 library(dplyr)
+library(tidyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-# Create catalyst compatible SCE object
 spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 
+meta_path <- file.path(path, '20230617_metadata_complete.csv')
+meta_all = read.csv(meta_path)
+
+samples <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor"]$fm_id)
+meta_positive <-meta_all[meta_all$control == 'no'& meta_all$Sample%in%samples,]
+meta_pos_reduced <- meta_positive[c("Study_ID", "Tissue", "Timepoint")]
+meta_pos_reduced$new <- 1 
+meta_pos_reduced_tidy <- meta_pos_reduced %>% pivot_wider(names_from = c("Tissue", "Timepoint"), values_from = "new")
+meta_timepoint <- meta_pos_reduced_tidy[, c("Study_ID", "PT_DE", "BM_DE", "BM_RE1", "BM_RE2", "BM_REL")]
+meta_timepoint[is.na(meta_timepoint)] <- 0
+meta_timepoint <- as.data.frame(meta_timepoint)
+rownames(meta_timepoint) <- meta_timepoint$Study_ID
+meta_timepoint$Study_ID <- NULL
+
+paired_patients <- rownames(meta_timepoint)[meta_timepoint$BM_DE==1 & meta_timepoint$BM_REL==1]
+```
+
+We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
+
+```{r read-data-pheno, message=FALSE}
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
+#spe <- readRDS(file.path(path,"results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" #& (spe$timepoint=="DE" | spe$timepoint=="RE2") 
+keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & (spe$timepoint=="DE" | spe$timepoint=="RE2") #& spe$study_id%in%paired_patients
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
-sce$sample_id <- factor(spe[keep_rows, keep_cols]$sample)
-sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
+sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
 sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype)
-sce$condition <- factor(spe[keep_rows, keep_cols]$progression)
+#sce$cluster_id <- factor(spe[keep_rows, keep_cols]$predicted_clusters)
+sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+
+sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
+mna <- as.vector(sce$mna)
+mna <- replace(x = mna, list =  mna %in% c(1, 3), values =  'MNA')
+mna <- replace(x = mna, list =  mna %in% c(0), values =  'nMNA')
+mna <- replace(x = mna, list =  mna %in% c(9), values =  'unknown')
+sce$mna <- as.factor(mna)
+
+sce$progress <- factor(spe[keep_rows, keep_cols]$progression)
+progress <- as.vector(sce$progress)
+progress <- replace(x = progress, list =  progress==0, values =  'NoProg')
+progress <- replace(x = progress, list =  progress==1, values =  'Prog')
+sce$progress <- as.factor(progress)
+
+sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
 
 # Add celltype information to metadata
 metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype))
+#metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$predicted_clusters))
 
 # Add metadata
-metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,timepoint,condition) %>% 
+metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,patient, mna, condition, progress) %>% 
     summarise(n_cells=n(),.groups = 'drop') %>%
     as.data.frame()
 
@@ -232,13 +271,13 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=20, fig.height=20}
-plotAbundances(sce, k = "celltype", by = "sample")
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=30, fig.height=10}
+plotAbundances(sce, k = "celltype", by = "sample", col_clust=F)
 ```
 It may be quite hard to see the differences in cluster abundances in the plot above, especially for clusters with very low frequency.  And, since boxplots cannot represent multimodal distributions, we show boxplots with jittered points of the sample-level cluster proportions overlaid (Figure \@ref(fig:diff-freqs-plot-props-boxplot)).  The y-axes are scaled to the range of data plotted for each cluster, to better visualize the differences in frequency of lower abundance clusters. For this experiment, it may be interesting to additionally depict the patient information. We do this by plotting a different point shape for each patient. Indeed, we can see that often the direction of abundance changes between the two conditions are concordant among the patients.
 
 ```{r diff-freqs-plot-props-boxplot, fig.height = 4, fig.cap = "Relative abundance of the 8 PBMC populations in each sample, in the PBMC dataset, represented with boxplots. Values for the two conditions are indicated with different colors: red for the unstimulated (Ref) and blue for the stimulated with BCR/FcR-XL (BCRXL) samples. Values for each patient are indicated with different shape. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=10, fig.height=7}
-p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
+p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "patient")
 p
 abundance_table <- as.data.frame(p$data %>% group_by(cluster_id, condition) %>% 
     summarise(mean=mean(Freq),
@@ -265,7 +304,11 @@ design <- createDesignMatrix(ei, cols_design = "condition")
 ```
 
 ```{r design-contrast}
-contrast <- createContrast(c(0,1))
+#colnames(design) <- c("DE", "RE2")
+contrast <- createContrast(c(-1,1))
+
+# contrast <- makeContrasts(DEvsRE2 = DE-RE2,
+#                            levels = design)
 ```
 
 The `r Biocpkg("diffcyt")` package provides three methods for differential abundance (DA) analyses, and two methods for differential state (DS) analyses. For an explanation and comparison of the different methods, see @Weber2019a. Here, we use the DA methodology based on mixed models, which is implemented in the method `diffcyt-DA-GLMM`. This method can be selected by providing the arguments `method = "DA"` and `method_DA = "diffcyt-DA-GLMM"` to the `diffcyt()` wrapper function (for more details, see `?diffcyt`). As our SCE contains a total of 22 clusterings (1 high-resolution, 19 consensus mergings, and 2 manual mergings), we also specify the clustering of interest via `clustering_to_use = "merging1"`.
@@ -335,8 +378,31 @@ The motivation behind this decision is discussed in more detail in Section \@ref
 We formulate the design matrix without a blocking factor as we assume to have no more batch effects in the data and an additive term for the timepoint (i.e. condition). Here, the log-fold change in our model refers to the change in cell abundance between timepoints, rather than the change in gene expression.
 
 ```{r}
-#design <- model.matrix(~factor(sample_id) + factor(condition), y.ab$samples)
-design <- model.matrix(~0+condition, y.ab$samples)
+#unpaired
+#design <- model.matrix(~condition, y.ab$samples)
+
+#unpaired for multiple factors, e.g. MYCN
+Group <- factor(paste(y.ab$samples$condition,y.ab$samples$mna,sep="."))
+cbind(y.ab$samples, Group=Group)
+design <- model.matrix(~0+Group)
+colnames(design) <- levels(Group)
+
+#paired analysis between timepoints
+#design <- model.matrix(~patient+condition, y.ab$samples)
+
+#multilevel design - comparisons between and within patients
+# patient <- y.ab$samples$patient
+# mna <- y.ab$samples$mna
+# progression <- y.ab$samples$progress
+# condition <- y.ab$samples$condition
+# 
+# design <- model.matrix(~patient)
+# 
+# nMNA.RE2 <- mna == "nMNA" & condition=="RE2"
+# MNA.RE2 <- mna == "MNA" & condition=="RE2"
+# unknown.RE2 <- mna == "unknown" & condition=="RE2"
+# 
+# design <- cbind(design, nMNA.RE2, MNA.RE2, unknown.RE2)
 ```
 
 We use the `estimateDisp()` function to estimate the NB (negative binomial) dispersion for each cluster (Figure \@ref(fig:abplotbcv)).
@@ -359,6 +425,17 @@ plotQLDisp(fit.ab, cex=1)
 We test for differences in abundance between timepoints using `glmQLFTest()`. When there are multiple groups, we can perform the gLmQLFTest according to [this](https://www.biostars.org/p/382480/).
 
 ```{r}
+#unpaired multiple factors
+contrasts <- makeContrasts(nMNA.DEvs.RE2 = DE.nMNA-RE2.nMNA,
+                           MNA.DEvs.RE2 = DE.MNA-RE2.MNA,
+                           levels=design)
+                           
+#for multilevel comparison
+#Clusters that are different at RE2 as compared to DE for MNA patients
+# res <- glmQLFTest(fit.ab, coef="MNA.RE2")
+#Clusters that are different at RE2 as compared to DE in MNA vs. nMNA
+# res <- glmQLFTest(fit.ab, contrast=c(rep(0, length(unique(patient))), -1,1,0))
+
 # colnames(design) <- c("DE", "RE1", "RE2", "REL")
 # contrasts <- makeContrasts(DEvsRE1 = DE-RE1,
 #                            DEvsRE2 = DE-RE2,
@@ -367,17 +444,13 @@ We test for differences in abundance between timepoints using `glmQLFTest()`. Wh
 #                            RE2vsREL = RE2-REL,
 #                            levels = design)
 
-colnames(design) <- c("no", "yes")
-contrasts <- makeContrasts(NOvsYES = no-yes,
-                           levels = design)
-
 res <- list()
 
 set.seed(230722)
 for (i in 1:ncol(contrasts)){
 
     res <- append(res, list(glmQLFTest(fit.ab, contrast = contrasts[,i])))
-    #write.csv(as.data.frame(topTags(res[[i]], n=Inf)), file.path(path, paste0("results/in_house/catalyst/", colnames(contrasts)[i], ".csv")))
+    #write.csv(as.data.frame(topTags(res[[i]], n=Inf)), file.path(path, paste0("results/public_datasets/Jansky_Lee/differential_abundance/", colnames(contrasts)[i], ".csv")))
 }
 
 
@@ -386,7 +459,7 @@ topTags(res[[1]], n=Inf)
 
 ```
 Next, we will plot these significance values onto a boxplot according to [this](https://www.datanovia.com/en/blog/ggpubr-how-to-add-p-values-generated-elsewhere-to-a-ggplot/).
-```{r, fig.width=20, fig.height=23}
+```{r, fig.width=16, fig.height=18}
 library(tidyr)
 library(ggpubr)
 library(rstatix)
@@ -394,6 +467,11 @@ library(gridExtra)
 library(gtools)
 
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
+
+
+#comparisons <-colnames(contrasts)
+#only for one comparison
+comparisons <- c("nMNAvsMNA")
 
 plot_list_values <- list()
 plot_list_stars <- list()
@@ -405,11 +483,13 @@ for(i in 1:length(unique(p$data$cluster_id))){
   group1 <- c()
   group2 <- c()
   
-  for(j in 1:ncol(contrasts)){
-    stats <- as.data.frame(topTags(res[[j]], n=Inf))
+  #for(j in 1:ncol(contrasts)){
+  for(j in 1:1){
+    #stats <- as.data.frame(topTags(res[[j]], n=Inf))
+    stats <- as.data.frame(topTags(res, n=Inf))
     p_adj <- c(p_adj, stats[rownames(stats)==droplevels(cluster_name), "FDR"])
-    group1 <- c(group1, unlist(strsplit(colnames(contrasts)[j], "vs"))[1])
-    group2 <- c(group2, unlist(strsplit(colnames(contrasts)[j], "vs"))[2])
+    group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
+    group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
   }
   
   stats_df <- data.frame(p_adj=p_adj, group1=group1, group2=group2)
@@ -442,8 +522,8 @@ grid.arrange(grobs = plot_list_values, ncol = 4)
 grid.arrange(grobs = plot_list_stars, ncol = 4)
 
 #checking NSCs
-overview <- data.frame(patient=spe[,spe$control=="no" & spe$celltype=="60_NSC"]$study_id, progression=spe[,spe$control=="no" & spe$celltype=="60_NSC"]$progression) %>% group_by(patient, progression) %>% 
-     summarise(n_cells=n(),.groups = 'drop') %>%
-     as.data.frame()
-table(overview$progression)
+# overview <- data.frame(patient=spe[,spe$control=="no" & spe$celltype=="60_NSC"]$study_id, progression=spe[,spe$control=="no" & spe$celltype=="60_NSC"]$progression) %>% group_by(patient, progression) %>% 
+#      summarise(n_cells=n(),.groups = 'drop') %>%
+#      as.data.frame()
+# table(overview$progression)
 ```

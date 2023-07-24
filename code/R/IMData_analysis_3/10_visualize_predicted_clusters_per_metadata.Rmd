@@ -17,26 +17,28 @@ We will first read in the SPE for tumor and non-tumor cells with the predicted c
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
 # For separate tumor and non-tumor prediction (e.g. Jansky-Lee)
-# spe_tumor <- readRDS(file.path(path,"public_datasets/Jansky/results/spe_tumor_clusters.rds"))
-# spe_tumor$predicted_clusters <- spe_tumor$predicted_tumor_clusters
-# spe_tumor$predicted_tumor_clusters <- NULL
-# 
-# spe_non_tumor <- readRDS(file.path(path,"public_datasets/Lee/results/spe_immune_clusters.rds"))
-# spe_non_tumor$predicted_clusters <- spe_non_tumor$predicted_immune_clusters
-# spe_non_tumor$predicted_immune_clusters <- NULL
-# spe_non_tumor <- spe_non_tumor[,spe_non_tumor$celltype!="78_schwann cells" & spe_non_tumor$celltype !="78_SCP"]
-# 
-# spe <- cbind(spe_tumor, spe_non_tumor)
-# spe[,spe$celltype=="78_schwann cells" | spe$celltype =="78_SCP"]$metacluster <- "tumor"
+spe_tumor <- readRDS(file.path(path,"results/public_datasets/Jansky/results/spe_predicted_tumor_clusters.rds"))
+spe_tumor$predicted_clusters <- spe_tumor$predicted_tumor_clusters
+spe_tumor$predicted_tumor_clusters <- NULL
 
-spe <- readRDS(file.path(path,"public_datasets/Fetahu/results/spe_predicted_clusters.rds"))
+spe_non_tumor <- readRDS(file.path(path,"results/public_datasets/Lee/results/spe_immune_clusters.rds"))
+spe_non_tumor$predicted_clusters <- spe_non_tumor$predicted_immune_clusters
+spe_non_tumor$predicted_immune_clusters <- NULL
+#spe_non_tumor <- spe_non_tumor[,spe_non_tumor$celltype!="78_schwann cells" & spe_non_tumor$celltype !="78_SCP"]
 
-saveRDS(spe, file.path(path, "results/spe_predicted-clusters_Fetahu.RDS"))
+spe <- cbind(spe_tumor, spe_non_tumor)
+#spe[,spe$celltype=="78_schwann cells" | spe$celltype =="78_SCP"]$metacluster <- "tumor"
+
+#For Fetahu
+# spe <- readRDS(file.path(path,"public_datasets/Fetahu/results/spe_predicted_clusters.rds"))
+
+
+saveRDS(spe, file.path(path, "results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
 ```
 
 Next, we will plot the predicted celltypes in the UMAP space. 
 
-```{r cell type umap, fig.width=15, fig.height=7, message=FALSE}
+```{r cell type umap, fig.width=30, fig.height=15, message=FALSE}
 library(dittoSeq)
 library(RColorBrewer)
 
@@ -94,7 +96,7 @@ for(i in 1: length(samples)){
 ```
 
 Next, we will visualize the cluster per metadata group as described [here](https://r-graph-gallery.com/48-grouped-barplot-with-ggplot2.html).
-```{r barplot-cluster-per-sample, fig.height=8, fig.width=10}
+```{r barplot-cluster-per-sample, fig.height=5, fig.width=4}
  # library
 library(ggplot2)
 library(tidyverse)
@@ -105,10 +107,10 @@ library(tidyverse)
 # spe_reduced[,spe_reduced$MYCN_amp==3]$MYCN_amp <- 1
 # groupname <- "timepoint"
 
-# spe_reduced <- spe[,spe$control=="no" & spe$metacluster!="tumor" & spe$tissue=="PT" & spe$timepoint=="DE"]
-# spe_reduced <- spe_reduced[,spe_reduced$MYCN_amp==0 | spe_reduced$MYCN_amp==1 | spe_reduced$MYCN_amp==3]
-# spe_reduced[,spe_reduced$MYCN_amp==3]$MYCN_amp <- 1
-# groupname <- "MYCN_amp"
+spe_reduced <- spe[,spe$control=="no" & spe$metacluster=="tumor" & spe$tissue=="BM" & spe$timepoint=="DE"]
+spe_reduced <- spe_reduced[,spe_reduced$MYCN_amp==0 | spe_reduced$MYCN_amp==1 | spe_reduced$MYCN_amp==3]
+spe_reduced[,spe_reduced$MYCN_amp==3]$MYCN_amp <- 1
+groupname <- "MYCN_amp"
 
 # spe_reduced <- spe[,spe$control=="no" & spe$metacluster=="tumor"]
 # spe_reduced <- spe_reduced[,spe_reduced$TERT_rear==0 | spe_reduced$TERT_rear==1]
@@ -117,9 +119,9 @@ library(tidyverse)
 # spe_reduced <- spe[,spe$tissue=="BM"&spe$metacluster!="tumor"]
 # groupname <- "control"
 
-spe_reduced <- spe[,spe$timepoint=="DE"  & spe$metacluster!="tumor"]
-spe_reduced <- spe_reduced[,spe_reduced$MYCN_amp==0]
-groupname <- "tissue"
+# spe_reduced <- spe[,spe$timepoint=="DE"  & spe$metacluster!="tumor"]
+# spe_reduced <- spe_reduced[,spe_reduced$MYCN_amp==0]
+# groupname <- "tissue"
 
 group <- colData(spe_reduced)[,groupname]
 
@@ -128,7 +130,7 @@ group <- colData(spe_reduced)[,groupname]
 
 
 celltype <- spe_reduced$predicted_clusters
-#tumor_celltypes <- c("late SCPs", "cycling SCPs", "SCPs", "Bridge", "connecting Chromaffin cells", "Chromaffin cells", "late Chromaffin cells", "cycling Neuroblasts", "Neuroblasts", "late Neuroblasts")
+tumor_celltypes <- c("late SCPs", "cycling SCPs", "SCPs", "Bridge", "connecting Chromaffin cells", "Chromaffin cells", "late Chromaffin cells", "cycling Neuroblasts", "Neuroblasts", "late Neuroblasts")
 
 
 #col_celltype <- col_celltype[order(names(col_celltype))]
@@ -139,13 +141,13 @@ data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0)
 
 data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "celltype", values_to = "count") 
-#data_long$celltype <- factor(data_long$celltype, levels=tumor_celltypes)
+data_long$celltype <- factor(data_long$celltype, levels=tumor_celltypes)
 
-write.csv(data_wide, file.path(path, paste0("results/metadata/predicted_clusters/nMNA_celltype-per-", groupname, "_non-tumor.csv")))
+#write.csv(data_wide, file.path(path, paste0("results/metadata/predicted_clusters/nMNA_celltype-per-", groupname, "_non-tumor.csv")))
  
 # Stacked + percent
 ggplot(data_long, aes(fill=celltype, y=count, x=sample)) + 
-  ggtitle(paste0("nMNA_celltype per ", groupname)) +
+  ggtitle(paste0("BM_celltype per ", groupname)) +
   geom_bar(position="fill", 
     #position="stack",
     stat="identity",
@@ -160,6 +162,7 @@ ggplot(data_long, aes(fill=celltype, y=count, x=sample)) +
    <summary>SessionInfo</summary>
    
 ```{r, echo = FALSE}
+
 sessionInfo()
 ```
 </details>

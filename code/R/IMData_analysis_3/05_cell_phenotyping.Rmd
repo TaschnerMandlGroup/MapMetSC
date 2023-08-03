@@ -15,7 +15,7 @@ In this RMD file, we will perform clustering on the curated data (after excludin
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe <- readRDS(file.path(path,"results/spe_1px-curated.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_1px-curated.rds"))
 
 ```
 
@@ -125,14 +125,14 @@ We will then reduce dimensionality of the data to 5 dimensions as described [her
 
 ```{r UMAP, message=FALSE}
 library(scater)
-ylibrary(BiocParallel)
+library(BiocParallel)
 
-mat_red_clustering <- calculateUMAP(mat, ncomponents=5, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam(RNGseed = 221228))
+#mat_red_clustering <- calculateUMAP(mat, ncomponents=5, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam(RNGseed = 221228))
 rownames(mat_red_clustering) <- colnames(spe)
 
-saveRDS(mat_red_clustering, file.path(path, "results/mat_red_clustering.rds"))
+#saveRDS(mat_red_clustering, file.path(path, "results/mat_red_clustering.rds"))
 
-#mat_red_clustering <- readRDS(file.path(path,"results/mat_red_clustering.rds"))
+mat_red_clustering <- readRDS(file.path(path,"results/in_house/mat_red_clustering.rds"))
 
 #Apply changes to SPE object
 reducedDim(spe, "UMAP_clustering") <- mat_red_clustering
@@ -1007,14 +1007,14 @@ for(i in 1: length(files)){
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
   
-  plotCells(masks,
-            object = spe,
-            cell_id = "ObjectNumber", img_id = "sample_id",
-            colour_by = "pg_clusters",
-            colour = list(pg_clusters = col_clusters),
-            display = "single",
-            save_plot = list(filename = file.path(path, "results/colored_masks/max_sample_per_cluster", tissue, paste0("all_", files[i], "f"))),
-            legend = NULL)
+  # plotCells(masks,
+  #           object = spe,
+  #           cell_id = "ObjectNumber", img_id = "sample_id",
+  #           colour_by = "pg_clusters",
+  #           colour = list(pg_clusters = col_clusters),
+  #           display = "single",
+  #           save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0("all_", files[i], "f"))),
+  #           legend = NULL)
 
 
   col_celltype <- setNames(c("red", "white"), c('yes', 'no'))
@@ -1028,7 +1028,7 @@ for(i in 1: length(files)){
             colour_by = "binary",
             colour = list(binary = col_celltype),
             display="single",
-            save_plot = list(filename = file.path(path, "results/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
+            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
             legend=NULL)
 
 }
@@ -1041,9 +1041,14 @@ We will then examine the cell types in the images and annotate the clusters base
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(dplyr)
-annotation <- read.csv(file.path(path, "results", "annotation.csv"), sep=";")
-BM_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$BM.annotation), annotation$cluster)
-PT_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$PT.annotation), annotation$cluster)
+annotation <- read.csv(file.path(path, "results", "in_house", "annotation_v3.csv"), sep=";")
+
+#non-merged clusters
+
+# BM_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$BM.annotation.2), annotation$cluster)
+# PT_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$PT.annotation.2), annotation$cluster)
+BM_cluster_names <- setNames(annotation$BM.annotation.2, annotation$cluster)
+PT_cluster_names <- setNames(annotation$PT.annotation.2, annotation$cluster)
 
 BM_celltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_cluster_names)
 PT_celltypes <- recode(spe[,spe$tissue=="PT"]$pg_clusters, !!!PT_cluster_names)
@@ -1052,10 +1057,13 @@ spe$celltype <- "na"
 spe[,spe$tissue=="BM"]$celltype<- as.vector(BM_celltypes)
 spe[,spe$tissue=="PT"]$celltype<- as.vector(PT_celltypes)
 
-metadata(spe)$color_vectors$col_BM_celltype <- setNames(unname(col_clusters), BM_cluster_names)
-metadata(spe)$color_vectors$col_PT_celltype <- setNames(unname(col_clusters), PT_cluster_names)
-metadata(spe)$color_vectors$col_celltype <- c(metadata(spe)$color_vectors$col_BM_celltype, metadata(spe)$color_vectors$col_PT_celltype)
+set.seed(230820)
+col_clusters <- setNames(sample(col_vector_433, length(unique(spe$celltype))), unique(spe$celltype))
+metadata(spe)$color_vectors$col_celltype <- col_clusters
 
+#metadata(spe)$color_vectors$col_BM_celltype <- setNames(unname(col_clusters), BM_cluster_names)
+#metadata(spe)$color_vectors$col_PT_celltype <- setNames(unname(col_clusters), PT_cluster_names)
+#metadata(spe)$color_vectors$col_celltype <- c(metadata(spe)$color_vectors$col_BM_celltype, metadata(spe)$color_vectors$col_PT_celltype)
 ```
 We will do the same for the metaclusters.
 
@@ -1072,9 +1080,9 @@ spe[,spe$tissue=="BM"]$metacluster<- as.vector(BM_metacelltypes)
 spe[,spe$tissue=="PT"]$metacluster<- as.vector(PT_metacelltypes)
 
 n <- length(unique(spe$metacluster))
-col_metacluster <- brewer.pal(n,"Set1")
+col_metacluster <- brewer.pal(n,"Set3")
 
-metadata(spe)$color_vectors$col_metacluster <- setNames(col_metacluster, unique(spe$metacluster))
+metadata(spe)$color_vectors$col_metacluster <- setNames(col_metacluster[1:length(unique(spe$metacluster))], unique(spe$metacluster))
 
 ```
 
@@ -1152,5 +1160,5 @@ processing and analysis.
 
 ```{r save-objects-read-data}
 
-saveRDS(spe, file.path(path, "results/spe_clustered.rds"))
+saveRDS(spe, file.path(path, "results/spe_clustered_2.rds"))
 ```

@@ -15,7 +15,7 @@ In this RMD file, we will plot UMAPs and histograms on the annotated SPE.
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe <- readRDS(file.path(path,"results/spe_clustered.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 
 ```
 
@@ -68,7 +68,7 @@ column_ha = HeatmapAnnotation(celltype = celltype[rand_cells],
                               solidity = solidity[rand_cells],
                               aspect_ratio = aspect_ratio[rand_cells],
                               clPARP = clPARP[rand_cells],
-                              col=list(celltype=metadata(spe)$color_vector$col_celltype, 
+                              col=list(celltype=metadata(spe)$color_vectors$col_celltype, 
                                        tissue=col_tissue,
                                        area = col_area,
                                        solidity = col_solidity,
@@ -343,7 +343,7 @@ Heatmap(mat[,rand_cells],
 
 Next, we will look at the mean marker expression per cluster. The next two code blocks can be also run for tissue types (PT/BM) separately. 
 
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=17}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=15, fig.width=18}
 library(scuttle)
 
 set.seed(20230135)
@@ -404,8 +404,8 @@ column_ha = HeatmapAnnotation(metacluster=mean_metacluster,
 Heatmap(mean_t, 
         column_title = "Heatmap showing mean per cluster - unscaled",
         top_annotation = column_ha, 
-        cluster_columns=F,
-        cluster_rows=F,
+        cluster_columns=T,
+        cluster_rows=T,
         show_column_dend = T,
         show_column_names=T,
         show_row_names=T,
@@ -416,13 +416,13 @@ Heatmap(mean_t,
 ```
 We can see that cluster 38 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
 
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=17}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=13, fig.width=18}
 library(scuttle)
 library(bruceR)
 
-set.seed(20230139)
+set.seed(20230802)
 
-sticky_cluster <- "53_sticky cells"
+sticky_cluster <- "sticky cell"
 
 # Feature-wise scaling
 mean_t_wo_sticky <- mean_t[,colnames(mean_t)!=sticky_cluster]
@@ -443,7 +443,7 @@ col_mean_clPARP_wo_sticky = colorRamp2(c(min(clPARP_mean_wo_sticky),min(clPARP_m
 col_celltype <- metadata(spe)$color_vectors$col_celltype
 col_clusters_wo_sticky <- col_celltype[names(col_celltype)!=sticky_cluster]
 
-mean_metacluster_wo_sticky <- mean_metaclust[mean_metaclust$Group.1!="53_sticky cells",]$x
+mean_metacluster_wo_sticky <- mean_metaclust[mean_metaclust$Group.1!="sticky cell",]$x
 
 column_ha = HeatmapAnnotation(metacluster=mean_metacluster_wo_sticky,
                               celltype = colnames(mean_t_wo_sticky),
@@ -465,6 +465,9 @@ Heatmap(mean_t_wo_sticky,
         column_title = "Heatmap showing mean per cluster without sticky cells - scaled",
         top_annotation = column_ha, 
         cluster_columns=T,
+        clustering_distance_columns="pearson", #use euclidian, kendal or pearson
+        clustering_method_columns="ward.D2",
+        #clustering_method_rows="ward.D2",
         cluster_rows=T,
         show_column_dend = T,
         show_column_names=T,

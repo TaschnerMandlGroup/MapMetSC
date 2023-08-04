@@ -109,6 +109,7 @@ for(i in 1: length(unique(celltype))){
   col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
   
   if (length(ct) < 8000){len=length(ct)}else{len=8000}
+
   rand_cells <- sample(seq_len(ncol(mat_c)), len)
   
   
@@ -139,7 +140,7 @@ for(i in 1: length(unique(celltype))){
                                          ), 
                                 show_legend=T)
   
-  png(file=file.path(path, paste0("results/heatmaps/annotated/cluster_low_res/", c , ".tiff")),width=18,height=8,units="in", res=1200)
+  png(file=file.path(path, paste0("results/in_house/heatmaps/merged/clusters-tissue-sep/BM/", c , ".tiff")),width=18,height=8,units="in", res=1200)
   
   ht<- Heatmap(mat_c[,rand_cells], 
           column_title = "Single-cell heatmap with 8000 randomly selected cells",
@@ -364,6 +365,7 @@ clust <- celltype
 mean <- aggregate(t(matrix_hq), list(clust), mean)
 
 mean_t <- t(mean[,2:ncol(mean)])
+mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
 colnames(mean_t) <- mean[,"Group.1"]
 
 mean_morph <- aggregate(t(morph_matrix), list(clust), mean)
@@ -405,6 +407,8 @@ Heatmap(mean_t,
         column_title = "Heatmap showing mean per cluster - unscaled",
         top_annotation = column_ha, 
         cluster_columns=T,
+        clustering_distance_columns="pearson", #use euclidian, kendal or pearson
+        clustering_method_columns="single",
         cluster_rows=T,
         show_column_dend = T,
         show_column_names=T,
@@ -416,13 +420,11 @@ Heatmap(mean_t,
 ```
 We can see that cluster 38 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
 
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=13, fig.width=18}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=20, fig.width=18}
 library(scuttle)
 library(bruceR)
 
-set.seed(20230802)
-
-sticky_cluster <- "sticky cell"
+sticky_cluster <- "other"
 
 # Feature-wise scaling
 mean_t_wo_sticky <- mean_t[,colnames(mean_t)!=sticky_cluster]
@@ -443,7 +445,7 @@ col_mean_clPARP_wo_sticky = colorRamp2(c(min(clPARP_mean_wo_sticky),min(clPARP_m
 col_celltype <- metadata(spe)$color_vectors$col_celltype
 col_clusters_wo_sticky <- col_celltype[names(col_celltype)!=sticky_cluster]
 
-mean_metacluster_wo_sticky <- mean_metaclust[mean_metaclust$Group.1!="sticky cell",]$x
+mean_metacluster_wo_sticky <- mean_metaclust[mean_metaclust$Group.1!="other",]$x
 
 column_ha = HeatmapAnnotation(metacluster=mean_metacluster_wo_sticky,
                               celltype = colnames(mean_t_wo_sticky),
@@ -461,19 +463,21 @@ column_ha = HeatmapAnnotation(metacluster=mean_metacluster_wo_sticky,
                                        ), 
                               show_legend=T)
 
+set.seed(210220)
 Heatmap(mean_t_wo_sticky, 
         column_title = "Heatmap showing mean per cluster without sticky cells - scaled",
         top_annotation = column_ha, 
         cluster_columns=T,
-        clustering_distance_columns="pearson", #use euclidian, kendal or pearson
-        clustering_method_columns="ward.D2",
-        #clustering_method_rows="ward.D2",
+        clustering_distance_columns="pearson", #use euclidean, kendall or pearson
+        clustering_method_columns="single", #use single or ward.D2
         cluster_rows=T,
         show_column_dend = T,
         show_column_names=T,
         show_row_names=T,
+        column_dend_height = unit(10, "cm"),
         col=viridis(100)
         )
+
 
 
 ```

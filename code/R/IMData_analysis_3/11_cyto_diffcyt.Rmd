@@ -42,7 +42,7 @@ meta_timepoint <- as.data.frame(meta_timepoint)
 rownames(meta_timepoint) <- meta_timepoint$Study_ID
 meta_timepoint$Study_ID <- NULL
 
-paired_patients <- rownames(meta_timepoint)[meta_timepoint$BM_DE==1 & meta_timepoint$BM_REL==1]
+paired_patients <- rownames(meta_timepoint)[meta_timepoint$BM_DE==1 & meta_timepoint$BM_RE1==1]
 ```
 
 We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
@@ -52,14 +52,14 @@ path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 #spe <- readRDS(file.path(path,"results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="T-cell" & (spe$timepoint=="DE" | spe$timepoint=="RE2") #& spe$study_id%in%paired_patients
-#keep_cols <- spe$tissue=="BM" & (spe$timepoint=="DE" | spe$timepoint=="") & spe$metacluster != "tumor"
+#keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster!="tumor" & spe$metacluster!="LIN- prol." & spe$metacluster!="other" & (spe$timepoint=="DE" | spe$timepoint=="RE1") & spe$study_id%in%paired_patients
+keep_cols <- spe$tissue=="PT" & spe$metacluster=="tumor" & spe$MYCN_amp!=9
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
-sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
+#sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
 #sce$condition <- factor(spe[keep_rows, keep_cols]$control)
-sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_merged)
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype)
 #sce$cluster_id <- factor(spe[keep_rows, keep_cols]$predicted_clusters)
 sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
 
@@ -76,10 +76,12 @@ progress <- replace(x = progress, list =  progress==0, values =  'NoProg')
 progress <- replace(x = progress, list =  progress==1, values =  'Prog')
 sce$progress <- as.factor(progress)
 
+sce$condition <- sce$progress
+
 sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
 
 # Add celltype information to metadata
-metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_merged))
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype))
 #metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$predicted_clusters))
 
 # Add metadata
@@ -278,7 +280,7 @@ plotAbundances(sce, k = "celltype", by = "sample", col_clust=F)
 ```
 It may be quite hard to see the differences in cluster abundances in the plot above, especially for clusters with very low frequency.  And, since boxplots cannot represent multimodal distributions, we show boxplots with jittered points of the sample-level cluster proportions overlaid (Figure \@ref(fig:diff-freqs-plot-props-boxplot)).  The y-axes are scaled to the range of data plotted for each cluster, to better visualize the differences in frequency of lower abundance clusters. For this experiment, it may be interesting to additionally depict the patient information. We do this by plotting a different point shape for each patient. Indeed, we can see that often the direction of abundance changes between the two conditions are concordant among the patients.
 
-```{r diff-freqs-plot-props-boxplot, fig.height = 4, fig.cap = "Relative abundance of the 8 PBMC populations in each sample, in the PBMC dataset, represented with boxplots. Values for the two conditions are indicated with different colors: red for the unstimulated (Ref) and blue for the stimulated with BCR/FcR-XL (BCRXL) samples. Values for each patient are indicated with different shape. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=10, fig.height=22}
+```{r diff-freqs-plot-props-boxplot, fig.height = 4, fig.cap = "Relative abundance of the 8 PBMC populations in each sample, in the PBMC dataset, represented with boxplots. Values for the two conditions are indicated with different colors: red for the unstimulated (Ref) and blue for the stimulated with BCR/FcR-XL (BCRXL) samples. Values for each patient are indicated with different shape. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=10, fig.height=20}
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "patient")
 p
 abundance_table <- as.data.frame(p$data %>% group_by(cluster_id, condition) %>% 

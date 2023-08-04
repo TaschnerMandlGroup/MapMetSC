@@ -1080,7 +1080,7 @@ spe[,spe$tissue=="BM"]$metacluster<- as.vector(BM_metacelltypes)
 spe[,spe$tissue=="PT"]$metacluster<- as.vector(PT_metacelltypes)
 
 n <- length(unique(spe$metacluster))
-col_metacluster <- brewer.pal(n,"Set3")
+col_metacluster <- c(brewer.pal(n-1,"Set3"), brewer.pal(12,"Paired")[12])
 
 metadata(spe)$color_vectors$col_metacluster <- setNames(col_metacluster[1:length(unique(spe$metacluster))], unique(spe$metacluster))
 

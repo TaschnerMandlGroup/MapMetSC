@@ -1007,29 +1007,29 @@ for(i in 1: length(files)){
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
   
-  # plotCells(masks,
-  #           object = spe,
-  #           cell_id = "ObjectNumber", img_id = "sample_id",
-  #           colour_by = "pg_clusters",
-  #           colour = list(pg_clusters = col_clusters),
-  #           display = "single",
-  #           save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0("all_", files[i], "f"))),
-  #           legend = NULL)
-
-
-  col_celltype <- setNames(c("red", "white"), c('yes', 'no'))
-  spe$binary <- 'no'
-  spe[,spe$pg_clusters == as.integer(c)]$binary <- 'yes'
-
-
   plotCells(masks,
             object = spe,
             cell_id = "ObjectNumber", img_id = "sample_id",
-            colour_by = "binary",
-            colour = list(binary = col_celltype),
-            display="single",
-            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
-            legend=NULL)
+            colour_by = "pg_clusters",
+            colour = list(pg_clusters = col_clusters),
+            display = "single",
+            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0("all_", files[i], "f"))),
+            legend = NULL)
+
+
+  # col_celltype <- setNames(c("red", "white"), c('yes', 'no'))
+  # spe$binary <- 'no'
+  # spe[,spe$pg_clusters == as.integer(c)]$binary <- 'yes'
+  # 
+  # 
+  # plotCells(masks,
+  #           object = spe,
+  #           cell_id = "ObjectNumber", img_id = "sample_id",
+  #           colour_by = "binary",
+  #           colour = list(binary = col_celltype),
+  #           display="single",
+  #           save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
+  #           legend=NULL)
 
 }
 
@@ -1080,7 +1080,7 @@ spe[,spe$tissue=="BM"]$metacluster<- as.vector(BM_metacelltypes)
 spe[,spe$tissue=="PT"]$metacluster<- as.vector(PT_metacelltypes)
 
 n <- length(unique(spe$metacluster))
-col_metacluster <- c(brewer.pal(n-1,"Set3"), brewer.pal(12,"Paired")[12])
+col_metacluster <- brewer.pal(n, "Set3")
 
 metadata(spe)$color_vectors$col_metacluster <- setNames(col_metacluster[1:length(unique(spe$metacluster))], unique(spe$metacluster))
 

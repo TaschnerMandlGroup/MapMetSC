@@ -344,7 +344,7 @@ Heatmap(mat[,rand_cells],
 
 Next, we will look at the mean marker expression per cluster. The next two code blocks can be also run for tissue types (PT/BM) separately. 
 
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=15, fig.width=18}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=20, fig.width=28}
 library(scuttle)
 
 set.seed(20230135)
@@ -413,7 +413,8 @@ Heatmap(mean_t,
         show_column_dend = T,
         show_column_names=T,
         show_row_names=T,
-        col=viridis(100)
+        col=viridis(100),
+        column_dend_height = unit(10, "cm")
         )
 
 

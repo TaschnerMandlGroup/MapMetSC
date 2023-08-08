@@ -362,22 +362,23 @@ clust <- celltype
 # morph_matrix <- mat_morph[,spe$tissue==tissue]
 # clust <- celltype[spe$tissue==tissue]
 
+#Mean of high quality markers per cluster
 mean <- aggregate(t(matrix_hq), list(clust), mean)
-
 mean_t <- t(mean[,2:ncol(mean)])
 mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
 colnames(mean_t) <- mean[,"Group.1"]
 
+#Mean of morphological features per cluster
 mean_morph <- aggregate(t(morph_matrix), list(clust), mean)
-
 area_mean = mean_morph[,"area"]
 solidity_mean = mean_morph[,"solidity"]
 aspect_ratio_mean = mean_morph[,"aspect_ratio"]
 
+#Mean of low quality markers per cluster
 mean_lq <- aggregate(t(matrix_lq), list(clust), mean)
-
 clPARP_mean = mean_lq[,"clPARP_Yb176_mean"]
 
+#Metacluster
 mean_metaclust <-aggregate(spe$metacluster, list(clust), max)
 mean_metacluster <- mean_metaclust$x
 
@@ -740,14 +741,14 @@ colnames(mat) <- spe$sample
 data <- data.frame(sample=colnames(mat), celltype)
 data$freq <- 1
 
-data_wide <- data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0)
+data_wide <- data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0) 
 
-write.csv(data_wide, file.path(path, "results/metadata/celltype-per-sample.csv"))
+#write.csv(data_wide, file.path(path, "results/metadata/celltype-per-sample.csv"))
 
 data_long <- data_wide[c(146:170),] %>% pivot_longer(cols = !sample, names_to = "celltype", values_to = "count") 
 
-data_long$celltype <- factor(data_long$celltype, levels=levels(celltype))
-
+#data_long$celltype <- factor(data_long$celltype, levels=levels(celltype))
+data_long$celltype <- factor(data_long$celltype)
  
 # Stacked + percent
 ggplot(data_long, aes(fill=celltype, y=count, x=sample)) + 
@@ -849,5 +850,210 @@ for(i in 1: length(files)){
 
 }
 
+```
+
+Next, we will look at cluster abundance per sample and visualize it together with the clinical data in a heatmap. 
+
+```{r cluster-abundance-per-sample, fig.width=30}
+
+data <- data.frame(sample=spe$sample, celltype=spe$celltype)
+data$freq <- 1
+data_wide <- as.data.frame(data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0))
+rownames(data_wide) <- data_wide$sample
+data_wide <- data_wide[,!colnames(data_wide) %in% c("sample")]
+proportions <- apply(data_wide, 1, prop.table)
+
+scaled_prop <- proportions
+
+mean_imc_score <- aggregate(spe$imc_score, list(spe$sample), mean)
+mean_IMC_score <- mean_imc_score[match(colnames(scaled_prop), mean_imc_score$Group.1),]$x
+col_mean_IMC_score = colorRamp2(c(min(mean_IMC_score),min(mean_IMC_score)+(max(mean_IMC_score)-min(mean_IMC_score))/2, max(mean_IMC_score)), c("blue", "white", "red"))
+
+coldata <- data.frame(colData(spe)[,c("sample", "stainer", "control", "study_id", "timepoint", "stage", "progression", "efs_dur", "MYCN_amp", "ALK_amp", "ALK_mut", "ATRX_del", "TERT_rear", "X1p_loss", "X1q_gain", "X11q_loss", "X17q_gain")]) %>%
+    group_by(sample, stainer, control, study_id, timepoint, stage, progression, efs_dur, MYCN_amp, ALK_amp, ALK_mut, ATRX_del, TERT_rear, X1p_loss, X1q_gain, X11q_loss, X17q_gain) %>% summarise(n=n(), .groups="drop")
+coldata <- coldata[match(colnames(scaled_prop), coldata$sample),]
+
+column_ha = HeatmapAnnotation(imc_score=mean_IMC_score,
+                              control = coldata$control,
+                              patient = coldata$study_id,
+                              timepoint = coldata$timepoint,
+                              stage = coldata$stage,
+                              progression = coldata$progression, 
+                              MYCN_amp = coldata$MYCN_amp, 
+                              ALK_amp = coldata$ALK_amp, 
+                              ALK_mut = coldata$ALK_mut, 
+                              ATRX_del = coldata$ATRX_del, 
+                              TERT_rear = coldata$TERT_rear, 
+                              X1p_loss = coldata$X1p_loss, 
+                              X1q_gain = coldata$X1q_gain, 
+                              X11q_loss = coldata$X11q_loss, 
+                              X17q_gain = coldata$X17q_gain, 
+                              ncells=anno_barplot(coldata$n, height = unit(3, "cm")),
+                              col=list(imc_score=col_mean_IMC_score, 
+                                      control = metadata(spe)$color_vectors$col_control,
+                                      patient = metadata(spe)$color_vectors$col_study_id,
+                                      timepoint = metadata(spe)$color_vectors$col_timepoint,
+                                      stage = metadata(spe)$color_vectors$col_stages,
+                                      progression = metadata(spe)$color_vectors$col_progress, 
+                                      MYCN_amp = metadata(spe)$color_vectors$col_aberrations, 
+                                      ALK_amp = metadata(spe)$color_vectors$col_aberrations, 
+                                      ALK_mut = metadata(spe)$color_vectors$col_aberrations, 
+                                      ATRX_del = metadata(spe)$color_vectors$col_aberrations, 
+                                      TERT_rear = metadata(spe)$color_vectors$col_aberrations, 
+                                      X1p_loss = metadata(spe)$color_vectors$col_aberrations, 
+                                      X1q_gain = metadata(spe)$color_vectors$col_aberrations, 
+                                      X11q_loss = metadata(spe)$color_vectors$col_aberrations, 
+                                      X17q_gain = metadata(spe)$color_vectors$col_aberrations), 
+                              show_legend=T)
+
+Heatmap(scaled_prop,
+        column_labels=paste0(coldata$study_id, "_", coldata$sample),
+        column_names_max_height = unit(12, "cm"),
+        top_annotation = column_ha,
+        column_dend_height = unit(10, "cm"),
+        cluster_columns=T,
+        cluster_rows=F)
+```
+
+Next, we want to look at differential cluster abundance between MNA and nMNA groups.
+```{r differential-cluster-abundance, message=FALSE, fig.height=20, fig.width=20}
+pos_samples <- coldata[which(coldata$MYCN_amp==1 | coldata$MYCN_amp==3),"sample"]$sample
+neg_samples <- coldata[which(coldata$MYCN_amp==0),"sample"]$sample
+
+MNA <- proportions[, pos_samples]
+nMNA <- proportions[, neg_samples]
+
+rg = range(c(MNA, nMNA))
+rg[1] = rg[1] - (rg[2] - rg[1])* 0.02
+rg[2] = rg[2] + (rg[2] - rg[1])* 0.02
+anno_mna_boxplot = function(index) {
+    nr = length(index)
+    pushViewport(viewport(xscale = rg, yscale = c(0.5, nr + 0.5)))
+    for(i in seq_along(index)) {
+        grid.rect(y = nr-i+1, height = 1, default.units = "native")
+        grid.boxplot(MNA[ index[i], ], pos = nr-i+1 + 0.2, box_width = 0.3, 
+            gp = gpar(fill = "red"), direction = "horizontal")
+        grid.boxplot(nMNA[ index[i], ], pos = nr-i+1 - 0.2, box_width = 0.3, 
+            gp = gpar(fill = "green"), direction = "horizontal")
+      }
+    
+    grid.xaxis()
+    popViewport()
+}
+```
+
+We will show the frequency of clusters in control and infiltrated samples in stacked barplots. 
+```{r differential-cluster-abundance, message=FALSE, fig.height=20, fig.width=20}
+data <- data.frame(celltype=spe$celltype, control=spe$control)
+data$freq <- 1
+data_wide <- as.data.frame(data %>% pivot_wider(names_from = c("control"), values_from = "freq", values_fn = sum, values_fill = 0))
+rownames(data_wide) <- data_wide$celltype
+data_wide <- data_wide[,!colnames(data_wide) %in% c("celltype")]
+control_proportions <- t(apply(data_wide, 1, prop.table))
+```
+
+We will show the tissue type in stacked barplots. 
+```{r differential-cluster-abundance, message=FALSE, fig.height=20, fig.width=20}
+data <- data.frame(celltype=spe$celltype, tissue=spe$tissue)
+data$freq <- 1
+data_wide <- as.data.frame(data %>% pivot_wider(names_from = c("tissue"), values_from = "freq", values_fn = sum, values_fill = 0))
+rownames(data_wide) <- data_wide$celltype
+data_wide <- data_wide[,!colnames(data_wide) %in% c("celltype")]
+tissue_proportions <- t(apply(data_wide, 1, prop.table))
+```
+
+Next, we will look at the mean marker expression per cluster and plot metadata in the annotation bars.
+
+```{r mean-per-cluster-with-metadata, message=FALSE, fig.height=20, fig.width=40}
+library(scuttle)
+
+set.seed(20230135)
+
+matrix_hq <- mat_hq
+matrix_lq <- mat_lq
+morph_matrix <- mat_morph
+clust <- celltype
+
+#Mean of high quality markers per cluster
+mean <- aggregate(t(matrix_hq), list(clust), mean)
+mean_t <- t(mean[,2:ncol(mean)])
+mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
+colnames(mean_t) <- mean[,"Group.1"]
+
+#Mean of morphological features per cluster
+mean_morph <- aggregate(t(morph_matrix), list(clust), mean)
+area_mean = mean_morph[,"area"]
+solidity_mean = mean_morph[,"solidity"]
+aspect_ratio_mean = mean_morph[,"aspect_ratio"]
+
+#Mean of low quality markers per cluster
+mean_lq <- aggregate(t(matrix_lq), list(clust), mean)
+clPARP_mean = mean_lq[,"clPARP_Yb176_mean"]
+
+#Mean of low metadata per cluster
+mean_metaclust <-aggregate(spe$metacluster, list(clust), max)
+mean_metacluster <- mean_metaclust$x
+
+col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(area_mean))/2, max(area_mean)), c("blue", "white", "red"))
+col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c("blue", "white", "red"))
+col_mean_aspect_ratio = colorRamp2(c(min(aspect_ratio_mean),min(aspect_ratio_mean)+(max(aspect_ratio_mean)-min(aspect_ratio_mean))/2, max(aspect_ratio_mean)), c("blue", "white", "red"))
+col_mean_clPARP = colorRamp2(c(min(clPARP_mean),min(clPARP_mean)+(max(clPARP_mean)-min(clPARP_mean))/2, max(clPARP_mean)), c("blue", "white", "red"))
+
+row_ha = rowAnnotation(metacluster=mean_metacluster,
+                              celltype = mean[,"Group.1"], 
+                              area=area_mean,
+                              solidity = solidity_mean,
+                              aspect_ratio = aspect_ratio_mean,
+                              clPARP = clPARP_mean,
+                              ncells=anno_barplot(as.data.frame(table(clust))[,"Freq"], height = unit(5, "cm")),
+                              mna=anno_mna_boxplot, width = unit(18, "cm"), 
+                              control = anno_barplot(control_proportions[match(mean[,"Group.1"], rownames(control_proportions)),], gp = gpar(fill = unname(metadata(spe)$color_vectors$col_control[colnames(control_proportions)])), bar_width = 1, height = unit(6, "cm")),
+                              tissue = anno_barplot(tissue_proportions[match(mean[,"Group.1"], rownames(tissue_proportions)),], gp = gpar(fill = unname(metadata(spe)$color_vectors$col_tissue[colnames(tissue_proportions)])), beside = TRUE, attach = TRUE),
+                              col=list(metacluster=metadata(spe)$color_vectors$col_metacluster,
+                                       celltype=metadata(spe)$color_vectors$col_celltype, 
+                                       area=col_mean_area,
+                                       solidity=col_mean_solidity,
+                                       aspect_ratio=col_mean_aspect_ratio,
+                                       clPARP = col_mean_clPARP
+                                       ), 
+                              show_legend=T)
+
+
+h1 <- Heatmap(t(mean_t), 
+        column_title = "Heatmap showing mean marker expression per cluster-scaled",
+        name = "marker_expression", 
+        column_labels=sapply(strsplit(rownames(mean_t), "_"), "[[", 1),
+        left_annotation = row_ha, 
+        cluster_columns=T,
+        clustering_distance_rows="pearson", #use euclidian, kendal or pearson
+        clustering_method_rows="single",
+        cluster_rows=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100),
+        row_dend_width = unit(5, "cm"),
+        column_dend_height = unit(2, "cm"),
+        column_names_gp = gpar(fontsize = 8),
+        )
+
+h2 <- Heatmap(scaled_prop[match(colnames(mean_t), rownames(scaled_prop)),],
+        column_title = "Heatmap showing cluster abundance per sample",
+        name = "cluster_abundance", 
+        column_labels=paste0(coldata$study_id, "_", coldata$sample),
+        column_names_max_height = unit(12, "cm"),
+        top_annotation = column_ha,
+        column_dend_height = unit(10, "cm"),
+        cluster_columns=T,
+        cluster_rows=F,
+        column_names_gp = gpar(fontsize = 8))
+
+lgd1 = Legend(labels = c("pos/het", "neg"), title = "MYCN_amp",
+    legend_gp = gpar(fill = c("red", "green")))
+
+lgd2 = Legend(labels = c("PT", "BM"), title = "tissue",
+    legend_gp = gpar(fill = unname(metadata(spe)$color_vectors$col_tissue[colnames(tissue_proportions)])))
+
+draw(h1+h2, heatmap_legend_list = list(lgd1,lgd2))
 ```
 

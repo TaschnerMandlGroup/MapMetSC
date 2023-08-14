@@ -42,7 +42,7 @@ meta_timepoint <- as.data.frame(meta_timepoint)
 rownames(meta_timepoint) <- meta_timepoint$Study_ID
 meta_timepoint$Study_ID <- NULL
 
-paired_patients <- rownames(meta_timepoint)[meta_timepoint$BM_DE==1 & meta_timepoint$BM_RE2==1]
+paired_patients <- rownames(meta_timepoint)[meta_timepoint$BM_DE==1 & meta_timepoint$BM_RE1==1]
 ```
 
 We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
@@ -52,8 +52,8 @@ path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 #spe <- readRDS(file.path(path,"results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
 keep_rows <- rowData(spe)$use_channel
-#keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster!="tumor" & spe$metacluster!="LIN- prol." & spe$metacluster!="other" & (spe$timepoint=="DE" | spe$timepoint=="RE1") & spe$study_id%in%paired_patients
-keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster!="tumor"
+keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
+# keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$celltype!="other" & spe$metacluster!="tumor" & spe$timepoint=="DE" & spe$MYCN_amp!=9
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
@@ -77,9 +77,10 @@ progress <- replace(x = progress, list =  progress==0, values =  'NoProg')
 progress <- replace(x = progress, list =  progress==1, values =  'Prog')
 sce$progress <- as.factor(progress)
 
-#sce$condition <- sce$tissue
+#sce$condition <- sce$mna
 
 sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
+#sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
 
 # Add celltype information to metadata
 metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype))
@@ -276,13 +277,14 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=30, fig.height=20}
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=30, fig.height=20}
+
 plotAbundances(sce, k = "celltype", by = "sample", col_clust=F)
 ```
 It may be quite hard to see the differences in cluster abundances in the plot above, especially for clusters with very low frequency.  And, since boxplots cannot represent multimodal distributions, we show boxplots with jittered points of the sample-level cluster proportions overlaid (Figure \@ref(fig:diff-freqs-plot-props-boxplot)).  The y-axes are scaled to the range of data plotted for each cluster, to better visualize the differences in frequency of lower abundance clusters. For this experiment, it may be interesting to additionally depict the patient information. We do this by plotting a different point shape for each patient. Indeed, we can see that often the direction of abundance changes between the two conditions are concordant among the patients.
 
-```{r diff-freqs-plot-props-boxplot, fig.height = 4, fig.cap = "Relative abundance of the 8 PBMC populations in each sample, in the PBMC dataset, represented with boxplots. Values for the two conditions are indicated with different colors: red for the unstimulated (Ref) and blue for the stimulated with BCR/FcR-XL (BCRXL) samples. Values for each patient are indicated with different shape. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=10, fig.height=30}
-p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "patient")
+```{r diff-freqs-plot-props-boxplot, fig.height = 4, fig.cap = "Relative abundance of the 8 PBMC populations in each sample, in the PBMC dataset, represented with boxplots. Values for the two conditions are indicated with different colors: red for the unstimulated (Ref) and blue for the stimulated with BCR/FcR-XL (BCRXL) samples. Values for each patient are indicated with different shape. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters.", fig.width=10, fig.height=20}
+p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
 p
 abundance_table <- as.data.frame(p$data %>% group_by(cluster_id, condition) %>% 
     summarise(mean=mean(Freq),
@@ -370,7 +372,7 @@ This avoids cluttering the result table with very rare subpopulations that conta
 For a DA analysis of cluster abundances, filtering is generally not required as most clusters will not be of low-abundance (otherwise there would not have been enough evidence to define the cluster in the first place).
 
 ```{r}
-keep <- filterByExpr(y.ab, group=y.ab$samples$timepoint)
+keep <- filterByExpr(y.ab, group=y.ab$samples$condition)
 #y.ab <- y.ab[keep,]
 summary(keep)
 ```
@@ -384,6 +386,7 @@ We formulate the design matrix without a blocking factor as we assume to have no
 
 ```{r}
 #unpaired
+design <- model.matrix(~0+condition, y.ab$samples) #when list of contrasts is used
 #design <- model.matrix(~condition, y.ab$samples)
 
 #unpaired for multiple factors, e.g. MYCN
@@ -393,7 +396,7 @@ We formulate the design matrix without a blocking factor as we assume to have no
 # colnames(design) <- levels(Group)
 
 #paired analysis between timepoints
-design <- model.matrix(~patient+condition, y.ab$samples)
+#design <- model.matrix(~patient+condition, y.ab$samples)
 
 #multilevel design - comparisons between and within patients
 # patient <- y.ab$samples$patient
@@ -403,11 +406,12 @@ design <- model.matrix(~patient+condition, y.ab$samples)
 # 
 # design <- model.matrix(~patient)
 # 
-# nMNA.RE2 <- mna == "nMNA" & condition=="RE2"
-# MNA.RE2 <- mna == "MNA" & condition=="RE2"
-# unknown.RE2 <- mna == "unknown" & condition=="RE2"
+# NoProg.RE1 <- progression == "NoProg" & condition=="RE1"
+# Prog.RE1 <- progression == "Prog" & condition=="RE1"
+# #unknown.RE2 <- progression == "unknown" & condition=="RE2"
 # 
-# design <- cbind(design, nMNA.RE2, MNA.RE2, unknown.RE2)
+# #design <- cbind(design, nMNA.RE2, MNA.RE2, unknown.RE2)
+# design <- cbind(design, NoProg.RE1, Prog.RE1)
 ```
 
 We use the `estimateDisp()` function to estimate the NB (negative binomial) dispersion for each cluster (Figure \@ref(fig:abplotbcv)).
@@ -431,23 +435,24 @@ We test for differences in abundance between timepoints using `glmQLFTest()`. Wh
 
 ```{r}
 #unpaired multiple factors
-contrasts <- makeContrasts(nMNA.DEvs.RE2 = DE.nMNA-RE2.nMNA,
-                           MNA.DEvs.RE2 = DE.MNA-RE2.MNA,
-                           levels=design)
+# contrasts <- makeContrasts(nMNA.DEvs.RE2 = DE.nMNA-RE2.nMNA,
+#                            MNA.DEvs.RE2 = DE.MNA-RE2.MNA,
+#                            levels=design)
                            
 #for multilevel comparison
 #Clusters that are different at RE2 as compared to DE for MNA patients
-# res <- glmQLFTest(fit.ab, coef="MNA.RE2")
+#res <- glmQLFTest(fit.ab, coef="MNA.RE1")
 #Clusters that are different at RE2 as compared to DE in MNA vs. nMNA
-# res <- glmQLFTest(fit.ab, contrast=c(rep(0, length(unique(patient))), -1,1,0))
+#res <- glmQLFTest(fit.ab, contrast=c(rep(0, length(unique(patient))), -1,1,0))
+#res <- glmQLFTest(fit.ab, contrast=c(rep(0, length(unique(patient))), -1,1))
 
-# colnames(design) <- c("DE", "RE1", "RE2", "REL")
-# contrasts <- makeContrasts(DEvsRE1 = DE-RE1,
-#                            DEvsRE2 = DE-RE2,
-#                            DEvsREL = DE-REL,
-#                            RE1vsREL = RE1-REL,
-#                            RE2vsREL = RE2-REL,
-#                            levels = design)
+colnames(design) <- c("DE", "RE1", "RE2", "REL")
+contrasts <- makeContrasts(DEvsRE1 = DE-RE1,
+                           DEvsRE2 = DE-RE2,
+                           DEvsREL = DE-REL,
+                           RE1vsREL = RE1-REL,
+                           RE2vsREL = RE2-REL,
+                           levels = design)
 
 res <- list()
 
@@ -458,13 +463,13 @@ for (i in 1:ncol(contrasts)){
     #write.csv(as.data.frame(topTags(res[[i]], n=Inf)), file.path(path, paste0("results/public_datasets/Jansky_Lee/differential_abundance/", colnames(contrasts)[i], ".csv")))
 }
 
-
-summary(decideTests(res[[1]]))
-topTags(res[[1]], n=Inf)
+#res <- glmQLFTest(fit.ab)
+summary(decideTests(res[[2]]))
+topTags(res[[2]], n=Inf)
 
 ```
 Next, we will plot these significance values onto a boxplot according to [this](https://www.datanovia.com/en/blog/ggpubr-how-to-add-p-values-generated-elsewhere-to-a-ggplot/).
-```{r, fig.width=16, fig.height=18}
+```{r, fig.width=16, fig.height=8}
 library(tidyr)
 library(ggpubr)
 library(rstatix)
@@ -474,12 +479,13 @@ library(gtools)
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
 
 
-#comparisons <-colnames(contrasts)
+comparisons <-colnames(contrasts)
 #only for one comparison
-comparisons <- c("nMNAvsMNA")
+#comparisons <- c("NoProgvsProg")
 
 plot_list_values <- list()
 plot_list_stars <- list()
+plot_list_fc <- list()
 for(i in 1:length(unique(p$data$cluster_id))){
   cluster_name <- unique(p$data$cluster_id)[i]
   proportions <- data.frame(p$data[p$data$cluster_id == cluster_name, c("sample_id", "condition", "Freq")])
@@ -487,44 +493,65 @@ for(i in 1:length(unique(p$data$cluster_id))){
   p_adj <- c()
   group1 <- c()
   group2 <- c()
+  logFC <- c()
   
-  #for(j in 1:ncol(contrasts)){
-  for(j in 1:1){
-    #stats <- as.data.frame(topTags(res[[j]], n=Inf))
-    stats <- as.data.frame(topTags(res, n=Inf))
+  for(j in 1:ncol(contrasts)){
+  #for(j in 1:1){
+    stats <- as.data.frame(topTags(res[[j]], n=Inf))
+    #stats <- as.data.frame(topTags(res, n=Inf))
     p_adj <- c(p_adj, stats[rownames(stats)==droplevels(cluster_name), "FDR"])
+    logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+    #logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
     group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
     group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
   }
   
-  stats_df <- data.frame(p_adj=p_adj, group1=group1, group2=group2)
+  stats_df <- data.frame(p_adj=p_adj, group1=group1, group2=group2, logFC=logFC)
   stats_df$p_adj_signif <- stars.pval(stats_df$p_adj)
   stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
+  stats_df$p_fc <- paste0(stats_df$logFC, " (", stats_df$p_adj_signif, ")")
   
   plot_list_values[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
                   color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
                   add = "jitter", title=cluster_name, show.legend = F) +
           stat_pvalue_manual(
             stats_df, 
-            y.position = 130, step.increase = 0.2,
+            y.position = max(proportions$Freq), 
+            step.increase = 0.2,
             label = "p_adj"
             )  + 
-          theme(aspect.ratio = 0.8)
+          theme(aspect.ratio = 0.8, legend.position="none") +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
   
   plot_list_stars[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
                 color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
                 add = "jitter", title=cluster_name, show.legend = F) +
         stat_pvalue_manual(
           stats_df, 
-          y.position = 130, step.increase = 0.2,
+          y.position = max(proportions$Freq), 
+          step.increase = 0.2,
           label = "p_adj_signif"
           )  + 
-        theme(aspect.ratio = 0.8)
+        theme(aspect.ratio = 0.8, legend.position="none") +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+  
+  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
+              color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
+              add = "jitter", title=cluster_name, show.legend = F) +
+      stat_pvalue_manual(
+        stats_df, 
+        y.position = max(proportions$Freq), 
+        step.increase = 0.2,
+        label = "p_fc"
+        )  + 
+      theme(aspect.ratio = 2, legend.position="none") +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
 }
 
 
-grid.arrange(grobs = plot_list_values, ncol = 4)
-grid.arrange(grobs = plot_list_stars, ncol = 4)
+grid.arrange(grobs = plot_list_values, ncol = 6)
+grid.arrange(grobs = plot_list_stars, ncol = 6)
+grid.arrange(grobs = plot_list_fc, ncol = 6)
 
 #checking NSCs
 # overview <- data.frame(patient=spe[,spe$control=="no" & spe$celltype=="60_NSC"]$study_id, progression=spe[,spe$control=="no" & spe$celltype=="60_NSC"]$progression) %>% group_by(patient, progression) %>% 

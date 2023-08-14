@@ -130,7 +130,7 @@ library(BiocParallel)
 #mat_red_clustering <- calculateUMAP(mat, ncomponents=5, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam(RNGseed = 221228))
 rownames(mat_red_clustering) <- colnames(spe)
 
-#saveRDS(mat_red_clustering, file.path(path, "results/mat_red_clustering.rds"))
+#saveRDS(mat_red_clustering, file.path(path, "results/in_house/mat_red_clustering.rds"))
 
 mat_red_clustering <- readRDS(file.path(path,"results/in_house/mat_red_clustering.rds"))
 
@@ -149,12 +149,13 @@ library(Rphenoannoy)
 
 set.seed(221228)
 
-Rphenograph_out <- Rphenoannoy(mat_red_clustering, k = 45)
+#Rphenograph_out <- Rphenoannoy(mat_red_clustering, k = 45)
+Rphenograph_out <- Rphenoannoy(t(mat), k = 45) # when performing tissue-separate clustering
 
 clusters <- factor(membership(Rphenograph_out[[2]]))
-saveRDS(clusters, file.path(path, "results/pg_clusters.rds"))
+#saveRDS(clusters, file.path(path, "results/in_house/pg_clusters.rds"))
 
-#clusters <- readRDS(file.path(path, "results/pg_clusters.rds"))
+#clusters <- readRDS(file.path(path, "results/in_house/pg_clusters.rds"))
 spe$pg_clusters <- clusters
 ```
 
@@ -674,9 +675,9 @@ mat_red <- calculateUMAP(mat, n_neighbors=30, BPPARAM = MulticoreParam(RNGseed =
 
 rownames(mat_red) <- colnames(spe)
 
-saveRDS(mat_red, file.path(path, "results/mat_red.rds"))
+saveRDS(mat_red, file.path(path, "results/in_house/mat_red.rds"))
 
-#mat_red <- readRDS(file.path(path,"results/mat_red.rds"))
+#mat_red <- readRDS(file.path(path,"results/in_house/mat_red.rds"))
 
 #Apply changes to SPE object
 reducedDim(spe, "UMAP") <- mat_red
@@ -1041,12 +1042,14 @@ We will then examine the cell types in the images and annotate the clusters base
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(dplyr)
-annotation <- read.csv(file.path(path, "results", "in_house", "annotation_v3.csv"), sep=";")
+annotation <- read.csv(file.path(path, "results", "in_house", "annotation_v4.csv"), sep=";")
 
 #non-merged clusters
 
 # BM_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$BM.annotation.2), annotation$cluster)
 # PT_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$PT.annotation.2), annotation$cluster)
+# BM_cluster_names <- setNames(annotation$BM.level.1, annotation$cluster)
+# PT_cluster_names <- setNames(annotation$PT.level.1, annotation$cluster)
 BM_cluster_names <- setNames(annotation$BM.annotation.2, annotation$cluster)
 PT_cluster_names <- setNames(annotation$PT.annotation.2, annotation$cluster)
 
@@ -1069,8 +1072,8 @@ We will do the same for the metaclusters.
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 
-BM_metacluster_names <- setNames(annotation$BM.metacluster, annotation$cluster)
-PT_metacluster_names <- setNames(annotation$PT.metacluster, annotation$cluster)
+BM_metacluster_names <- setNames(annotation$BM.level.2, annotation$cluster)
+PT_metacluster_names <- setNames(annotation$PT.level.2, annotation$cluster)
 
 BM_metacelltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_metacluster_names)
 PT_metacelltypes <- recode(spe[,spe$tissue=="PT"]$pg_clusters, !!!PT_metacluster_names)
@@ -1160,5 +1163,5 @@ processing and analysis.
 
 ```{r save-objects-read-data}
 
-saveRDS(spe, file.path(path, "results/spe_clustered_2.rds"))
+saveRDS(spe, file.path(path, "results/in_house/spe_clustered_3.rds"))
 ```

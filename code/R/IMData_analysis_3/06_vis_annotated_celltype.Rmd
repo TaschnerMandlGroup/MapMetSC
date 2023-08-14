@@ -140,7 +140,7 @@ for(i in 1: length(unique(celltype))){
                                          ), 
                                 show_legend=T)
   
-  png(file=file.path(path, paste0("results/in_house/heatmaps/merged/clusters-tissue-sep/BM/", c , ".tiff")),width=18,height=8,units="in", res=1200)
+  png(file=file.path(path, paste0("results/in_house/heatmaps/merged/clusters-tissue-sep/", c , ".tiff")),width=18,height=8,units="in", res=1200)
   
   ht<- Heatmap(mat_c[,rand_cells], 
           column_title = "Single-cell heatmap with 8000 randomly selected cells",
@@ -855,7 +855,7 @@ for(i in 1: length(files)){
 Next, we will look at cluster abundance per sample and visualize it together with the clinical data in a heatmap. 
 
 ```{r cluster-abundance-per-sample, fig.width=30}
-
+#spe <- spe_all[,spe_all$metacluster != "tumor" & spe_all$celltype!="other" & spe_all$celltype!="LIN- prol."]
 data <- data.frame(sample=spe$sample, celltype=spe$celltype)
 data$freq <- 1
 data_wide <- as.data.frame(data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0))
@@ -863,6 +863,7 @@ rownames(data_wide) <- data_wide$sample
 data_wide <- data_wide[,!colnames(data_wide) %in% c("sample")]
 proportions <- apply(data_wide, 1, prop.table)
 
+#scaled_prop <- t(apply(proportions, 1, RESCALE, to=0:1))
 scaled_prop <- proportions
 
 mean_imc_score <- aggregate(spe$imc_score, list(spe$sample), mean)
@@ -909,37 +910,12 @@ column_ha = HeatmapAnnotation(imc_score=mean_IMC_score,
 Heatmap(scaled_prop,
         column_labels=paste0(coldata$study_id, "_", coldata$sample),
         column_names_max_height = unit(12, "cm"),
+        clustering_method_columns = "complete",
+        clustering_distance_columns = "euclidean",
         top_annotation = column_ha,
         column_dend_height = unit(10, "cm"),
         cluster_columns=T,
-        cluster_rows=F)
-```
-
-Next, we want to look at differential cluster abundance between MNA and nMNA groups.
-```{r differential-cluster-abundance, message=FALSE, fig.height=20, fig.width=20}
-pos_samples <- coldata[which(coldata$MYCN_amp==1 | coldata$MYCN_amp==3),"sample"]$sample
-neg_samples <- coldata[which(coldata$MYCN_amp==0),"sample"]$sample
-
-MNA <- proportions[, pos_samples]
-nMNA <- proportions[, neg_samples]
-
-rg = range(c(MNA, nMNA))
-rg[1] = rg[1] - (rg[2] - rg[1])* 0.02
-rg[2] = rg[2] + (rg[2] - rg[1])* 0.02
-anno_mna_boxplot = function(index) {
-    nr = length(index)
-    pushViewport(viewport(xscale = rg, yscale = c(0.5, nr + 0.5)))
-    for(i in seq_along(index)) {
-        grid.rect(y = nr-i+1, height = 1, default.units = "native")
-        grid.boxplot(MNA[ index[i], ], pos = nr-i+1 + 0.2, box_width = 0.3, 
-            gp = gpar(fill = "red"), direction = "horizontal")
-        grid.boxplot(nMNA[ index[i], ], pos = nr-i+1 - 0.2, box_width = 0.3, 
-            gp = gpar(fill = "green"), direction = "horizontal")
-      }
-    
-    grid.xaxis()
-    popViewport()
-}
+        cluster_rows=T)
 ```
 
 We will show the frequency of clusters in control and infiltrated samples in stacked barplots. 
@@ -962,7 +938,7 @@ data_wide <- data_wide[,!colnames(data_wide) %in% c("celltype")]
 tissue_proportions <- t(apply(data_wide, 1, prop.table))
 ```
 
-Next, we will look at the mean marker expression per cluster and plot metadata in the annotation bars.
+Next, we will calculate the means per cluster.
 
 ```{r mean-per-cluster-with-metadata, message=FALSE, fig.height=20, fig.width=40}
 library(scuttle)
@@ -998,6 +974,37 @@ col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(a
 col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c("blue", "white", "red"))
 col_mean_aspect_ratio = colorRamp2(c(min(aspect_ratio_mean),min(aspect_ratio_mean)+(max(aspect_ratio_mean)-min(aspect_ratio_mean))/2, max(aspect_ratio_mean)), c("blue", "white", "red"))
 col_mean_clPARP = colorRamp2(c(min(clPARP_mean),min(clPARP_mean)+(max(clPARP_mean)-min(clPARP_mean))/2, max(clPARP_mean)), c("blue", "white", "red"))
+```
+
+Next, we want to look at differential cluster abundance between MNA and nMNA groups.
+```{r differential-cluster-abundance, message=FALSE, fig.height=20, fig.width=20}
+pos_samples <- coldata[which(coldata$MYCN_amp==1 | coldata$MYCN_amp==3),"sample"]$sample
+neg_samples <- coldata[which(coldata$MYCN_amp==0),"sample"]$sample
+
+MNA <- proportions[match(mean[,"Group.1"], rownames(proportions)), pos_samples]
+nMNA <- proportions[match(mean[,"Group.1"], rownames(proportions)), neg_samples]
+
+rg = range(c(MNA, nMNA))
+rg[1] = rg[1] - (rg[2] - rg[1])* 0.02
+rg[2] = rg[2] + (rg[2] - rg[1])* 0.02
+anno_mna_boxplot = function(index) {
+    nr = length(index)
+    pushViewport(viewport(xscale = rg, yscale = c(0.5, nr + 0.5)))
+    for(i in seq_along(index)) {
+        grid.rect(y = nr-i+1, height = 1, default.units = "native")
+        grid.boxplot(MNA[ index[i], ], pos = nr-i+1 + 0.2, box_width = 0.3, 
+            gp = gpar(fill = "red"), direction = "horizontal")
+        grid.boxplot(nMNA[ index[i], ], pos = nr-i+1 - 0.2, box_width = 0.3, 
+            gp = gpar(fill = "green"), direction = "horizontal")
+      }
+    
+    grid.xaxis()
+    popViewport()
+}
+```
+
+Then we will look at the mean marker expression per cluster and plot metadata in the annotation bars.
+```{r mean-per-cluster-heatmap-with-metadata, message=FALSE, fig.height=20, fig.width=40}
 
 row_ha = rowAnnotation(metacluster=mean_metacluster,
                               celltype = mean[,"Group.1"], 
@@ -1051,9 +1058,10 @@ h2 <- Heatmap(scaled_prop[match(colnames(mean_t), rownames(scaled_prop)),],
 lgd1 = Legend(labels = c("pos/het", "neg"), title = "MYCN_amp",
     legend_gp = gpar(fill = c("red", "green")))
 
-lgd2 = Legend(labels = c("PT", "BM"), title = "tissue",
+lgd2 = Legend(labels = c("BM", "PT"), title = "tissue",
     legend_gp = gpar(fill = unname(metadata(spe)$color_vectors$col_tissue[colnames(tissue_proportions)])))
 
 draw(h1+h2, heatmap_legend_list = list(lgd1,lgd2))
+
 ```
 

@@ -15,7 +15,7 @@ In this RMD file, we will plot UMAPs and histograms on the annotated SPE.
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_4.rds"))
 
 ```
 
@@ -426,7 +426,7 @@ We can see that cluster 38 are the sticky cells, which are positive for everythi
 library(scuttle)
 library(bruceR)
 
-sticky_cluster <- "other"
+sticky_cluster <- "sticky cell "
 
 # Feature-wise scaling
 mean_t_wo_sticky <- mean_t[,colnames(mean_t)!=sticky_cluster]
@@ -447,7 +447,7 @@ col_mean_clPARP_wo_sticky = colorRamp2(c(min(clPARP_mean_wo_sticky),min(clPARP_m
 col_celltype <- metadata(spe)$color_vectors$col_celltype
 col_clusters_wo_sticky <- col_celltype[names(col_celltype)!=sticky_cluster]
 
-mean_metacluster_wo_sticky <- mean_metaclust[mean_metaclust$Group.1!="other",]$x
+mean_metacluster_wo_sticky <- mean_metaclust[colnames(mean_t)!=sticky_cluster,]$x
 
 column_ha = HeatmapAnnotation(metacluster=mean_metacluster_wo_sticky,
                               celltype = colnames(mean_t_wo_sticky),

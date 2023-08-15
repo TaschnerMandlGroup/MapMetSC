@@ -150,7 +150,7 @@ library(Rphenoannoy)
 set.seed(221228)
 
 #Rphenograph_out <- Rphenoannoy(mat_red_clustering, k = 45)
-Rphenograph_out <- Rphenoannoy(t(mat), k = 45) # when performing tissue-separate clustering
+Rphenograph_out <- Rphenoannoy(t(mat), k = 45)
 
 clusters <- factor(membership(Rphenograph_out[[2]]))
 #saveRDS(clusters, file.path(path, "results/in_house/pg_clusters.rds"))
@@ -284,7 +284,7 @@ for(i in 1: length(unique(clusters))){
                                          ), 
                                 show_legend=T)
   
-  png(file=file.path(path, paste0("results/heatmaps/clusters", c , ".tiff")),width=18,height=8,units="in", res=1200)
+  png(file=file.path(path, paste0("results/separate/PT_separately/heatmaps_per_cluster/", c , ".tiff")),width=18,height=8,units="in", res=1200)
   
   ht<- Heatmap(mat_c[,rand_cells], 
           column_title = "Single-cell heatmap with 8000 randomly selected cells",
@@ -619,7 +619,7 @@ library(scuttle)
 
 set.seed(20230139)
 
-sticky_cluster <- "53"
+sticky_cluster <- "29"
 
 # Feature-wise scaling
 mean_t_wo_sticky <- mean_t[,levels(clusters)!=sticky_cluster]
@@ -913,7 +913,7 @@ data$freq <- 1
 
 data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "results/metadata/clusters-per-sample.csv"))
+#write.csv(data_wide, file.path(path, "results/metadata/clusters-per-sample.csv"))
 
 data_long <- data_wide[c(146:170),] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
@@ -1008,29 +1008,29 @@ for(i in 1: length(files)){
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
   
-  plotCells(masks,
-            object = spe,
-            cell_id = "ObjectNumber", img_id = "sample_id",
-            colour_by = "pg_clusters",
-            colour = list(pg_clusters = col_clusters),
-            display = "single",
-            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0("all_", files[i], "f"))),
-            legend = NULL)
-
-
-  # col_celltype <- setNames(c("red", "white"), c('yes', 'no'))
-  # spe$binary <- 'no'
-  # spe[,spe$pg_clusters == as.integer(c)]$binary <- 'yes'
-  # 
-  # 
   # plotCells(masks,
   #           object = spe,
   #           cell_id = "ObjectNumber", img_id = "sample_id",
-  #           colour_by = "binary",
-  #           colour = list(binary = col_celltype),
-  #           display="single",
-  #           save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
-  #           legend=NULL)
+  #           colour_by = "pg_clusters",
+  #           colour = list(pg_clusters = col_clusters),
+  #           display = "single",
+  #           save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0("all_", files[i], "f"))),
+  #           legend = NULL)
+
+
+  col_celltype <- setNames(c("red", "white"), c('yes', 'no'))
+  spe$binary <- 'no'
+  spe[,spe$pg_clusters == as.integer(c)]$binary <- 'yes'
+
+
+  plotCells(masks,
+            object = spe,
+            cell_id = "ObjectNumber", img_id = "sample_id",
+            colour_by = "binary",
+            colour = list(binary = col_celltype),
+            display="single",
+            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
+            legend=NULL)
 
 }
 
@@ -1042,7 +1042,7 @@ We will then examine the cell types in the images and annotate the clusters base
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(dplyr)
-annotation <- read.csv(file.path(path, "results", "in_house", "annotation_v4.csv"), sep=";")
+annotation <- read.csv(file.path(path, "results", "separate/PT_separately", "annotation.csv"), sep=";")
 
 #non-merged clusters
 
@@ -1050,14 +1050,14 @@ annotation <- read.csv(file.path(path, "results", "in_house", "annotation_v4.csv
 # PT_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$PT.annotation.2), annotation$cluster)
 # BM_cluster_names <- setNames(annotation$BM.level.1, annotation$cluster)
 # PT_cluster_names <- setNames(annotation$PT.level.1, annotation$cluster)
-BM_cluster_names <- setNames(annotation$BM.annotation.2, annotation$cluster)
+#BM_cluster_names <- setNames(annotation$BM.annotation.2, annotation$cluster)
 PT_cluster_names <- setNames(annotation$PT.annotation.2, annotation$cluster)
 
-BM_celltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_cluster_names)
+#BM_celltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_cluster_names)
 PT_celltypes <- recode(spe[,spe$tissue=="PT"]$pg_clusters, !!!PT_cluster_names)
 
 spe$celltype <- "na"
-spe[,spe$tissue=="BM"]$celltype<- as.vector(BM_celltypes)
+#spe[,spe$tissue=="BM"]$celltype<- as.vector(BM_celltypes)
 spe[,spe$tissue=="PT"]$celltype<- as.vector(PT_celltypes)
 
 set.seed(230820)
@@ -1072,14 +1072,14 @@ We will do the same for the metaclusters.
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 
-BM_metacluster_names <- setNames(annotation$BM.level.2, annotation$cluster)
+#BM_metacluster_names <- setNames(annotation$BM.level.2, annotation$cluster)
 PT_metacluster_names <- setNames(annotation$PT.level.2, annotation$cluster)
 
-BM_metacelltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_metacluster_names)
+#BM_metacelltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_metacluster_names)
 PT_metacelltypes <- recode(spe[,spe$tissue=="PT"]$pg_clusters, !!!PT_metacluster_names)
 
 spe$metacluster <- "na"
-spe[,spe$tissue=="BM"]$metacluster<- as.vector(BM_metacelltypes)
+#spe[,spe$tissue=="BM"]$metacluster<- as.vector(BM_metacelltypes)
 spe[,spe$tissue=="PT"]$metacluster<- as.vector(PT_metacelltypes)
 
 n <- length(unique(spe$metacluster))
@@ -1163,5 +1163,5 @@ processing and analysis.
 
 ```{r save-objects-read-data}
 
-saveRDS(spe, file.path(path, "results/in_house/spe_clustered_3.rds"))
+saveRDS(spe, file.path(path, "results/in_house/spe_clustered_4.rds"))
 ```

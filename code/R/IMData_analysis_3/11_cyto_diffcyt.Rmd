@@ -42,7 +42,7 @@ meta_timepoint <- as.data.frame(meta_timepoint)
 rownames(meta_timepoint) <- meta_timepoint$Study_ID
 meta_timepoint$Study_ID <- NULL
 
-paired_patients <- rownames(meta_timepoint)[meta_timepoint$BM_DE==1 & meta_timepoint$BM_RE1==1]
+paired_patients <- rownames(meta_timepoint)[meta_timepoint$BM_DE==1 & meta_timepoint$BM_RE2==1]
 ```
 
 We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
@@ -52,12 +52,13 @@ path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 #spe <- readRDS(file.path(path,"results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
+keep_cols <- spe$tissue=="PT"  & spe$metacluster=="tumor" 
+#spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
 # keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$celltype!="other" & spe$metacluster!="tumor" & spe$timepoint=="DE" & spe$MYCN_amp!=9
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
-sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
+sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
 #sce$condition <- factor(spe[keep_rows, keep_cols]$control)
 sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype)
 #sce$cluster_id <- factor(spe[keep_rows, keep_cols]$predicted_clusters)
@@ -77,7 +78,7 @@ progress <- replace(x = progress, list =  progress==0, values =  'NoProg')
 progress <- replace(x = progress, list =  progress==1, values =  'Prog')
 sce$progress <- as.factor(progress)
 
-#sce$condition <- sce$mna
+sce$condition <- sce$progress
 
 sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
 #sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
@@ -277,7 +278,8 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=30, fig.height=20}
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=18, fig.height=15}
+#
 
 plotAbundances(sce, k = "celltype", by = "sample", col_clust=F)
 ```
@@ -373,7 +375,7 @@ For a DA analysis of cluster abundances, filtering is generally not required as 
 
 ```{r}
 keep <- filterByExpr(y.ab, group=y.ab$samples$condition)
-#y.ab <- y.ab[keep,]
+y.ab <- y.ab[keep,]
 summary(keep)
 ```
 
@@ -386,8 +388,8 @@ We formulate the design matrix without a blocking factor as we assume to have no
 
 ```{r}
 #unpaired
-design <- model.matrix(~0+condition, y.ab$samples) #when list of contrasts is used
-#design <- model.matrix(~condition, y.ab$samples)
+#design <- model.matrix(~0+condition, y.ab$samples) #when list of contrasts is used
+design <- model.matrix(~condition, y.ab$samples)
 
 #unpaired for multiple factors, e.g. MYCN
 # Group <- factor(paste(y.ab$samples$condition,y.ab$samples$mna,sep="."))
@@ -406,12 +408,15 @@ design <- model.matrix(~0+condition, y.ab$samples) #when list of contrasts is us
 # 
 # design <- model.matrix(~patient)
 # 
-# NoProg.RE1 <- progression == "NoProg" & condition=="RE1"
-# Prog.RE1 <- progression == "Prog" & condition=="RE1"
-# #unknown.RE2 <- progression == "unknown" & condition=="RE2"
+# nMNA.RE2 <- mna == "nMNA" & condition=="RE2"
+# MNA.RE2 <- mna == "MNA" & condition=="RE2"
+# unknown.RE2 <- mna == "unknown" & condition=="RE2"
 # 
-# #design <- cbind(design, nMNA.RE2, MNA.RE2, unknown.RE2)
-# design <- cbind(design, NoProg.RE1, Prog.RE1)
+# NoProg.RE2 <- progression == "NoProg" & condition=="RE2"
+# Prog.RE2 <- progression == "Prog" & condition=="RE2"
+# 
+# design <- cbind(design, nMNA.RE2, MNA.RE2, unknown.RE2)
+# design <- cbind(design, NoProg.RE2, Prog.RE2)
 ```
 
 We use the `estimateDisp()` function to estimate the NB (negative binomial) dispersion for each cluster (Figure \@ref(fig:abplotbcv)).
@@ -469,7 +474,7 @@ topTags(res[[2]], n=Inf)
 
 ```
 Next, we will plot these significance values onto a boxplot according to [this](https://www.datanovia.com/en/blog/ggpubr-how-to-add-p-values-generated-elsewhere-to-a-ggplot/).
-```{r, fig.width=16, fig.height=8}
+```{r, fig.width=16, fig.height=18}
 library(tidyr)
 library(ggpubr)
 library(rstatix)
@@ -479,9 +484,9 @@ library(gtools)
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
 
 
-comparisons <-colnames(contrasts)
+#comparisons <-colnames(contrasts)
 #only for one comparison
-#comparisons <- c("NoProgvsProg")
+comparisons <- c("NoProgvsProg")
 
 plot_list_values <- list()
 plot_list_stars <- list()
@@ -495,13 +500,13 @@ for(i in 1:length(unique(p$data$cluster_id))){
   group2 <- c()
   logFC <- c()
   
-  for(j in 1:ncol(contrasts)){
-  #for(j in 1:1){
-    stats <- as.data.frame(topTags(res[[j]], n=Inf))
-    #stats <- as.data.frame(topTags(res, n=Inf))
+  #for(j in 1:ncol(contrasts)){
+  for(j in 1:1){
+    #stats <- as.data.frame(topTags(res[[j]], n=Inf))
+    stats <- as.data.frame(topTags(res, n=Inf))
     p_adj <- c(p_adj, stats[rownames(stats)==droplevels(cluster_name), "FDR"])
-    logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
-    #logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+    #logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+    logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
     group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
     group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
   }

@@ -363,7 +363,7 @@ clust <- celltype
 # clust <- celltype[spe$tissue==tissue]
 
 #Mean of high quality markers per cluster
-mean <- aggregate(t(matrix_hq), list(clust), mean)
+mean <- aggregate(t(mat_hq), list(clust), mean)
 mean_t <- t(mean[,2:ncol(mean)])
 mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
 colnames(mean_t) <- mean[,"Group.1"]

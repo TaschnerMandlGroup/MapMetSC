@@ -1,0 +1,526 @@
+---
+title: "Differential analaysis of marker expression"
+output: html_document
+date: '2023-08-19'
+---
+
+```{r setup, include=FALSE, cache=FALSE}
+knitr::opts_chunk$set(echo = TRUE, out.width = "120%")
+```
+
+## Load data
+
+We will perform DE analysis following this [tutorial](https://hbctraining.github.io/scRNA-seq/lessons/pseudobulk_DESeq2_scrnaseq.html).
+
+```{r load-prepare-data, message=FALSE}
+library(SpatialExperiment)
+
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+#spe <- readRDS(file.path(path,"results/in_house/spe_clustered_4.rds"))
+
+#Reduce SPE object to the samples of interest
+spe <- spe[,spe$timepoint=="DE"]
+
+# Extract raw counts and metadata to create SingleCellExperiment object
+counts <- counts(spe[rowData(spe)$use_channel,])
+
+metadata <- colData(spe)
+
+# Set up metadata as desired for aggregation and DE analysis
+metadata$cluster_id <- factor(spe$metacluster)
+
+# Create single cell experiment object
+sce <- SingleCellExperiment(assays = list(counts = counts), 
+                           colData = metadata)
+sce$sample_id <- factor(sce$sample) 
+
+# Identify groups for aggregation of counts
+groups <- colData(sce)[, c("metacluster", "sample_id")]
+```
+
+Let’s load the libraries that we will be using for the analysis.
+
+```{r load-libraries, message=FALSE}
+# Load libraries
+library(scater)
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(Matrix.utils) 
+#install.packages("https://cran.r-project.org/src/contrib/Archive/Matrix.utils/Matrix.utils_0.9.8.tar.gz", type = "source", repos = NULL)
+library(edgeR)
+library(dplyr)
+library(magrittr)
+library(Matrix)
+library(purrr)
+library(reshape2)
+library(S4Vectors)
+library(tibble)
+library(SingleCellExperiment)
+library(pheatmap)
+library(apeglm)#
+library(png)
+library(DESeq2)
+library(RColorBrewer)
+```
+
+First, we need to determine the number of clusters and the cluster names present in our dataset.
+
+```{r determine-metrics, message=FALSE}
+# Named vector of cluster names
+kids <- purrr::set_names(levels(factor(sce$cluster_id)))
+kids
+
+# Total number of clusters
+nk <- length(kids)
+nk
+
+# Named vector of sample names
+sids <- purrr::set_names(levels(sce$sample_id))
+
+# Total number of samples 
+ns <- length(sids)
+ns
+```
+
+To perform sample-level differential expression analysis, we need to generate sample-level metadata. To do this, we will reorder samples in the single-cell metadata to match the order of the factor levels of the sample ID, then extract only the sample-level information from the first cell corresponding to that sample. The output of this aggregation is a sparse matrix, and when we take a quick look, we can see that it is a gene by cell type-sample matrix.
+```{r sample-level-metadata, message=FALSE}
+# Generate sample level metadata
+
+## Determine the number of cells per sample
+table(sce$sample_id)
+
+## Turn named vector into a numeric vector of number of cells per sample
+n_cells <- as.numeric(table(sce$sample_id))
+
+## Determine how to reoder the samples (rows) of the metadata to match the order of sample names in sids vector
+m <- match(sids, sce$sample_id)
+
+## Create the sample level metadata by combining the reordered metadata with the number of cells corresponding to each sample.
+ei <- data.frame(colData(sce)[m, ], 
+                  n_cells, row.names = NULL) %>% 
+                select(-"cluster_id")
+ei
+ei <- ei[,-c(2:16, 51, 53:58)] #remove sample-level metadata
+ei
+
+# Aggregate the counts per sample_id and cluster_id
+
+# Subset metadata to only include the cluster and sample IDs to aggregate across
+groups <- colData(sce)[, c("cluster_id", "sample_id")]
+
+# Aggregate across cluster-sample groups
+pb <- aggregate.Matrix(t(counts(sce)), 
+                       groupings = groups, fun = "sum")  
+
+#DESeqDataSet needs countData to be non-negative integers
+pb <- round(pb)
+pb <- pb+1
+
+class(pb)
+
+dim(pb)
+
+pb[1:6, 1:6]
+```
+To perform DE analysis on a per cell type basis, we need to wrangle our data in a couple ways. We need to do the following steps:
+
+1.Split our data by cell type
+2.Transform the matrix so that the genes are the row names and the samples are the column names
+
+We will split our data by cell type; however, not always do all samples contain cells of every cell type. To determine which samples are present for each cell type we can run the following. Then we can turn the matrix into a list that is split into count matrices for each cluster, then transform each data frame so that rows are genes and columns are the samples.
+
+```{r adjust-data-structure, message=FALSE}
+# Not every cluster is present in all samples; create a vector that represents how to split samples
+splitf <- sapply(stringr::str_split(rownames(pb), 
+                                    pattern = "_",  
+                                    n = 2), 
+                 `[`, 1)
+
+# Turn into a list and split the list into components for each cluster and transform, so rows are genes and columns are samples and make rownames as the sample IDs
+pb <- split.data.frame(pb, 
+                       factor(splitf)) %>%
+        lapply(function(u) 
+                set_colnames(t(u), 
+                             stringr::str_match(rownames(u),  "_(.*_.*_.*_.*)")[,2]))
+                             
+                             #strsplit(colnames(pseudobulk_subset), "[.]"), "[[", 1)
+
+class(pb)
+
+# Explore the different components of list
+str(pb)
+
+# Print out the table of cells in each cluster-sample group
+options(width = 100)
+table(sce$cluster_id, sce$sample_id)
+```
+To perform the DE analysis, we need metadata for all samples, including cluster ID, sample ID and the condition(s) of interest (group_id), in addition to any other sample-level metadata (e.g. batch, sex, age, etc.). The ei data frame holds the sample ID and condition information, but we need to combine this information with the cluster IDs.
+
+```{r combine-metadata-with-clusterID, message=FALSE}
+# Get sample names for each of the cell type clusters
+# prep. data.frame for plotting
+get_sample_ids <- function(x){
+        pb[[x]] %>%
+                colnames()
+}
+
+de_samples <- map(1:length(kids), get_sample_ids) %>%
+        unlist()
+
+# Get cluster IDs for each of the samples
+samples_list <- map(1:length(kids), get_sample_ids)
+
+get_cluster_ids <- function(x){
+        rep(names(pb)[x], 
+            each = length(samples_list[[x]]))
+}
+
+de_cluster_ids <- map(1:length(kids), get_cluster_ids) %>%
+        unlist()
+
+```
+
+Finally, let’s create a data frame with the cluster IDs and the corresponding sample IDs. We will merge together the condition information.
+
+```{r combine-metadata-with-clusterID, message=FALSE}
+
+# Create a data frame with the sample IDs, cluster IDs and condition
+
+gg_df <- data.frame(cluster_id = de_cluster_ids,
+                    sample_id = de_samples)
+
+gg_df <- left_join(gg_df, ei[, c("sample_id", "tissue")]) 
+
+
+metadata <- gg_df %>%
+        dplyr::select(cluster_id, sample_id, tissue) 
+        
+metadata        
+
+```
+We can create a clusters vector of all of the cluster cell type IDs in our dataset. Then we can select the cell type we wish to perform the DE analysis on.
+
+```{r clusters-vector, message=FALSE}
+# Generate vector of cluster IDs
+clusters <- levels(factor(metadata$cluster_id))
+clusters
+
+# Subset the metadata to only the tumor cells
+cluster_metadata <- metadata[which(metadata$cluster_id == clusters[12]), ]
+head(cluster_metadata)
+
+# Assign the rownames of the metadata to be the sample IDs
+rownames(cluster_metadata) <- cluster_metadata$sample_id
+head(cluster_metadata)
+
+# Subset the counts to only the tumor cells
+counts <- pb[[clusters[12]]]
+
+cluster_counts <- as.data.frame(counts[, which(colnames(counts) %in% rownames(cluster_metadata))])
+
+# Check that all of the row names of the metadata are the same and in the same order as the column names of the counts in order to use as input to DESeq2
+all(rownames(cluster_metadata) == colnames(cluster_counts))        
+
+```
+
+Now we can create our DESeq2 object to prepare to run the DE analysis. We need to include the counts, metadata, and design formula for our comparison of interest. In the design formula we should also include any other columns in the metadata for which we want to regress out the variation (e.g. batch, sex, age, etc.). We only have our comparison of interest, which is stored as the group_id in our metadata data frame.
+
+```{r DESeq-object, message=FALSE}
+cluster_metadata$condition <- factor(cluster_metadata$tissue)
+dds <- DESeqDataSetFromMatrix(cluster_counts, 
+                              colData = cluster_metadata, 
+                              design = ~ condition) 
+
+```
+
+Next, we will perform sample-level quality control.
+
+```{r qc, message=FALSE, fig.width=15, fig.width=15}
+# Transform counts for data visualization
+rld <- rlog(dds, blind=TRUE, fitType="parametric") #https://www.biostars.org/p/440379/
+
+# Plot PCA
+DESeq2::plotPCA(rld, intgroup = "condition")
+
+# Extract the rlog matrix from the object and compute pairwise correlation values
+rld_mat <- assay(rld)
+rld_cor <- cor(rld_mat)
+
+# Plot heatmap
+pheatmap(rld_cor, annotation = cluster_metadata[, c("condition"), drop=F])
+```
+
+Differential expression analysis with DESeq2 involves multiple steps as displayed in the flowchart below in blue. Briefly, DESeq2 will model the raw counts, using normalization factors (size factors) to account for differences in library depth. Then, it will estimate the gene-wise dispersions and shrink these estimates to generate more accurate estimates of dispersion to model the counts. Finally, DESeq2 will fit the negative binomial model and perform hypothesis testing using the Wald test or Likelihood Ratio Test. All of these steps are explained in detail in our additional materials.We can check the fit of the model to our data by looking at the plot of dispersion estimates.
+
+```{r run-deseq2, message=FALSE}
+# Run DESeq2 differential expression analysis
+dds <- DESeq(dds)
+
+# Plot dispersion estimates
+plotDispEsts(dds)
+```
+Now that we have performed the differential expression analysis, we can explore our results for a particular comparison. To denote our comparison of interest, we need to specify the contrast and perform shrinkage of the log2 fold changes.
+
+```{r compare-between-conditions, message=FALSE}
+# Output results of Wald test for contrast for condition1 vs condition2
+levels(cluster_metadata$condition)[2]
+levels(cluster_metadata$condition)[1]
+
+contrast <- c("condition", levels(cluster_metadata$condition)[2], levels(cluster_metadata$condition)[1])
+
+dds$condition <- relevel(dds$condition, ref = "BM") #https://www.biostars.org/p/448959/
+# resultsNames(dds)
+res <- results(dds, 
+               contrast = contrast,
+               alpha = 0.05)
+
+res <- lfcShrink(dds = dds, coef = 2, type = "apeglm")
+# res <- lfcShrink(dds, 
+#                  contrast =  contrast,
+#                  res=res)
+
+# Turn the results object into a tibble for use with tidyverse functions
+res_tbl <- res %>%
+        data.frame() %>%
+        rownames_to_column(var="gene") %>%
+        as_tibble()
+
+# Check results output
+res_tbl
+```
+
+Next, we can filter our table for only the significant genes using a p-adjusted threshold of 0.05
+
+```{r filter-significant, message=FALSE}
+# Set thresholds
+padj_cutoff <- 0.05
+
+# Subset the significant results
+sig_res <- dplyr::filter(res_tbl, padj < padj_cutoff) %>%
+        dplyr::arrange(padj)
+
+# Check significant genes output
+sig_res
+
+# Write significant results to file
+# write.csv(sig_res,
+#           paste0("results", clusters[1], "_", levels(cluster_metadata$sample)[2], "_vs_", levels(cluster_metadata$sample)[1], "_sig_genes.csv"),
+#           quote = FALSE, 
+#           row.names = FALSE)
+
+```
+
+Now that we have identified the significant genes, we can plot a scatterplot of the top 10 significant genes. This plot is a good check to make sure that we are interpreting our fold change values correctly, as well.
+
+```{r plot-significant, message=FALSE}
+## ggplot of top genes
+normalized_counts <- counts(dds, 
+                            normalized = TRUE)
+
+## Order results by padj values
+top10_sig_genes <- sig_res %>%
+        dplyr::arrange(padj) %>%
+        dplyr::pull(gene) %>%
+        head(n=10)
+
+
+top10_sig_norm <- as.data.frame(normalized_counts) %>%
+        rownames_to_column(var = "gene") %>%
+        dplyr::filter(gene %in% top10_sig_genes)
+
+gathered_top10_sig <- top10_sig_norm %>%
+        gather(colnames(top10_sig_norm)[2:length(colnames(top10_sig_norm))], key = "samplename", value = "normalized_counts")
+
+#Change this according to condition!!
+gathered_top10_sig <- inner_join(ei[, c("sample_id", "tissue" )], gathered_top10_sig, by = c("sample_id" = "samplename"))
+
+## plot using ggplot2
+ggplot(gathered_top10_sig) +
+        geom_point(aes(x = gene, 
+                       y = normalized_counts, 
+                       color = tissue), #Here as well!!
+                   position=position_jitter(w=0.1,h=0)) +
+        scale_y_log10() +
+        xlab("Genes") +
+        ylab("log10 Normalized Counts") +
+        ggtitle("Top 10 Significant DE Genes") +
+        theme_bw() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+        theme(plot.title = element_text(hjust = 0.5))
+```
+
+We can also explore the clustering of the significant genes using the heatmap.
+
+```{r cluster-significant, message=FALSE, fig.height=15, fig.width=20}
+# Extract normalized counts for only the significant genes
+sig_norm <- as.data.frame(normalized_counts) %>%
+        rownames_to_column(var = "gene") %>%
+        dplyr::filter(gene %in% sig_res$gene)
+        
+# Set a color palette
+heat_colors <- brewer.pal(6, "YlOrRd")
+
+# Run pheatmap using the metadata data frame for the annotation
+pheatmap(sig_norm[ , 2:length(colnames(sig_norm))], 
+    color = heat_colors, 
+    cluster_rows = T, 
+    show_rownames = T,
+    labels_row=rownames(normalized_counts),
+    annotation = cluster_metadata[, c("condition", "cluster_id")], 
+    border_color = NA, 
+    fontsize = 10, 
+    scale = "row", 
+    fontsize_row = 10, 
+    height = 20)   
+
+```
+
+```{r volcano-plot, message=FALSE}
+## Obtain logical vector where TRUE values denote padj values < 0.05 and fold change > 1.5 in either direction
+res_table_thres <- res_tbl %>% 
+                  mutate(threshold = padj < 0.05 & abs(log2FoldChange) >= 0.58)
+                  
+## Volcano plot
+ggplot(res_table_thres) +
+    geom_point(aes(x = log2FoldChange, y = -log10(padj), colour = threshold)) +
+    ggtitle("Volcano plot of BM- relative to PT-derived tumor cells") +
+    xlab("log2 fold change") + 
+    ylab("-log10 adjusted p-value") +
+    scale_y_continuous(limits = c(0,50)) +
+    theme(legend.position = "none",
+          plot.title = element_text(size = rel(1.5), hjust = 0.5),
+          axis.title = element_text(size = rel(1.25)))
+```
+The following script will run DESeq2 on all cell type clusters, while contrasting each level of the condition of interest to all other levels using the Wald test. This script can easily be run on the cluster for fast and efficient execution and storage of results.
+
+```{r run-all-clusters, message=FALSE}
+# dir.create("DESeq2")
+# dir.create("DESeq2/pairwise")
+
+# Function to run DESeq2 and get results for all clusters
+## x is index of cluster in clusters vector on which to run function
+## A is the sample group to compare
+## B is the sample group to compare against (base level)
+clusters <- levels(factor(metadata$cluster_id))
+get_dds_resultsAvsB <- function(x, A, B){
+        cluster_metadata <- metadata[which(metadata$cluster_id == clusters[x]), ]
+        rownames(cluster_metadata) <- cluster_metadata$sample_id
+        counts <- pb[[clusters[x]]]
+        cluster_counts <- as.data.frame(counts[, which(colnames(counts) %in% rownames(cluster_metadata))])
+        cluster_metadata$condition <- factor(cluster_metadata$tissue)
+        
+        #all(rownames(cluster_metadata) == colnames(cluster_counts))        
+        
+        dds <- DESeqDataSetFromMatrix(cluster_counts, 
+                                      colData = cluster_metadata, 
+                                      design = ~ condition)
+        
+        # Transform counts for data visualization
+        rld <- rlog(dds, blind=TRUE, fitType = "parametric")
+        
+        # Plot PCA
+        
+        DESeq2::plotPCA(rld, intgroup = "condition")
+        #ggsave(paste0("results/", clusters[x], "_specific_PCAplot.png"))
+        
+        
+        # Extract the rlog matrix from the object and compute pairwise correlation values
+        rld_mat <- assay(rld)
+        rld_cor <- cor(rld_mat)
+        
+        # Plot heatmap
+        # png(paste0("results/", clusters[x], "_specific_heatmap.png"))
+        pheatmap(rld_cor, annotation = cluster_metadata[, c("condition"), drop=F])
+        # dev.off()
+        
+        # Run DESeq2 differential expression analysis
+        dds <- DESeq(dds)
+
+        
+        # Plot dispersion estimates
+        # png(paste0("results/", clusters[x], "_dispersion_plot.png"))
+        plotDispEsts(dds)
+        # dev.off()
+
+        # Output results of Wald test for contrast for A vs B
+        contrast <- c("condition", levels(cluster_metadata$condition)[A], levels(cluster_metadata$condition)[B])
+        
+        # resultsNames(dds)
+        res <- results(dds, 
+                       contrast = contrast,
+                       alpha = 0.05)
+        
+        dds$condition <- relevel(dds$condition, ref = "BM") #https://www.biostars.org/p/448959/
+
+        res <- results(dds, 
+                       contrast = contrast,
+                       alpha = 0.05)
+
+        res <- lfcShrink(dds = dds, coef = 2, type = "apeglm")
+
+        # Set thresholds
+        padj_cutoff <- 0.05
+        
+        # Turn the results object into a tibble for use with tidyverse functions
+        res_tbl <- res %>%
+                as.data.frame() %>%
+                rownames_to_column(var="gene") %>%
+                as_tibble()
+        
+        # write.csv(res_tbl,
+        #           paste0("DESeq2/pairwise/", clusters[x], "_", levels(cluster_metadata$group_id)[A], "_vs_", levels(cluster_metadata$group_id)[B], "_all_genes.csv"),
+        #           quote = FALSE, 
+        #           row.names = FALSE)
+        
+        # Subset the significant results
+        sig_res <- dplyr::filter(res_tbl, padj < padj_cutoff) %>%
+                dplyr::arrange(padj)
+        
+        # write.csv(sig_res,
+        #           paste0("DESeq2/pairwise/", clusters[x], "_", levels(cluster_metadata$group_id)[A], "_vs_", levels(cluster_metadata$group_id)[B], ... = x"_sig_genes.csv"),
+        #           quote = FALSE, 
+        #           row.names = FALSE)
+        
+        ## ggplot of top genes
+        normalized_counts <- counts(dds, 
+                                    normalized = TRUE)
+        
+        ## Order results by padj values
+        top20_sig_genes <- sig_res %>%
+                dplyr::arrange(padj) %>%
+                dplyr::pull(gene) %>%
+                head(n=20)
+        
+        
+        top20_sig_norm <- as.data.frame(normalized_counts) %>%
+                rownames_to_column(var = "gene") %>%
+                dplyr::filter(gene %in% top20_sig_genes)
+        
+        gathered_top20_sig <- top20_sig_norm %>%
+                gather(colnames(top20_sig_norm)[2:length(colnames(top20_sig_norm))], key = "samplename", value = "normalized_counts")
+        
+        gathered_top20_sig <- inner_join(ei[, c("sample_id", "tissue" )], gathered_top20_sig, by = c("sample_id" = "samplename")) #change for other condition
+        
+        ## plot using ggplot2
+        ggplot(gathered_top20_sig) +
+                geom_point(aes(x = gene, 
+                               y = normalized_counts, 
+                               color = tissue), #change for other condition
+                           position=position_jitter(w=0.1,h=0)) +
+                scale_y_log10() +
+                xlab("Genes") +
+                ylab("log10 Normalized Counts") +
+                ggtitle("Top 20 Significant DE Genes") +
+                theme_bw() +
+                theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+                theme(plot.title = element_text(hjust = 0.5))
+        #ggsave(paste0("DESeq2/pairwise/", clusters[x], "_", levels(cluster_metadata$group_id)[A], "_vs_", levels(cluster_metadata$group_id)[B], "_top20_DE_genes.png"))
+        
+}
+
+# Run the script on all clusters comparing stim condition relative to control condition
+map(1:length(clusters), get_dds_resultsAvsB, A = 1, B = 2)
+```
+
+Check out also the Likelihood Ratio Test if required. 

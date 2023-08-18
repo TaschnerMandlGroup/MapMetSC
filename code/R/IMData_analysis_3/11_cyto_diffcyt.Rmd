@@ -52,7 +52,7 @@ path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 #spe <- readRDS(file.path(path,"results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$tissue=="PT"  & spe$metacluster=="tumor" 
+keep_cols <- spe$tissue=="PT"  & spe$metacluster=="tumor"
 #spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
 # keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$celltype!="other" & spe$metacluster!="tumor" & spe$timepoint=="DE" & spe$MYCN_amp!=9
 

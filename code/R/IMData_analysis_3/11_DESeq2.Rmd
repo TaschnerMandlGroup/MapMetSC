@@ -16,10 +16,10 @@ We will perform DE analysis following this [tutorial](https://hbctraining.github
 library(SpatialExperiment)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-#spe <- readRDS(file.path(path,"results/in_house/spe_clustered_4.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_4.rds"))
 
 #Reduce SPE object to the samples of interest
-spe <- spe[,spe$timepoint=="DE"]
+spe <- spe[,spe$progression=="BM" & spe$timepoint=="DE"]
 
 # Extract raw counts and metadata to create SingleCellExperiment object
 counts <- counts(spe[rowData(spe)$use_channel,])
@@ -190,11 +190,11 @@ Finally, let’s create a data frame with the cluster IDs and the corresponding 
 gg_df <- data.frame(cluster_id = de_cluster_ids,
                     sample_id = de_samples)
 
-gg_df <- left_join(gg_df, ei[, c("sample_id", "tissue")]) 
+gg_df <- left_join(gg_df, ei[, c("sample_id", "progression", "study_id")]) 
 
 
 metadata <- gg_df %>%
-        dplyr::select(cluster_id, sample_id, tissue) 
+        dplyr::select(cluster_id, sample_id, progression, study_id) 
         
 metadata        
 
@@ -227,9 +227,11 @@ all(rownames(cluster_metadata) == colnames(cluster_counts))
 Now we can create our DESeq2 object to prepare to run the DE analysis. We need to include the counts, metadata, and design formula for our comparison of interest. In the design formula we should also include any other columns in the metadata for which we want to regress out the variation (e.g. batch, sex, age, etc.). We only have our comparison of interest, which is stored as the group_id in our metadata data frame.
 
 ```{r DESeq-object, message=FALSE}
-cluster_metadata$condition <- factor(cluster_metadata$tissue)
+cluster_metadata$condition <- factor(cluster_metadata$progression)
+#cluster_metadata$study_id <- factor(cluster_metadata$study_id)
 dds <- DESeqDataSetFromMatrix(cluster_counts, 
                               colData = cluster_metadata, 
+                              #design = ~ condition+study_id)
                               design = ~ condition) 
 
 ```
@@ -269,7 +271,7 @@ levels(cluster_metadata$condition)[1]
 
 contrast <- c("condition", levels(cluster_metadata$condition)[2], levels(cluster_metadata$condition)[1])
 
-dds$condition <- relevel(dds$condition, ref = "BM") #https://www.biostars.org/p/448959/
+dds$condition <- relevel(dds$condition, ref = "0") #https://www.biostars.org/p/448959/ #change if other condition used, e.g. "BM"
 # resultsNames(dds)
 res <- results(dds, 
                contrast = contrast,
@@ -308,7 +310,7 @@ sig_res
 #           paste0("results", clusters[1], "_", levels(cluster_metadata$sample)[2], "_vs_", levels(cluster_metadata$sample)[1], "_sig_genes.csv"),
 #           quote = FALSE, 
 #           row.names = FALSE)
-
+arrange(sig_res, padj)
 ```
 
 Now that we have identified the significant genes, we can plot a scatterplot of the top 10 significant genes. This plot is a good check to make sure that we are interpreting our fold change values correctly, as well.
@@ -333,13 +335,13 @@ gathered_top10_sig <- top10_sig_norm %>%
         gather(colnames(top10_sig_norm)[2:length(colnames(top10_sig_norm))], key = "samplename", value = "normalized_counts")
 
 #Change this according to condition!!
-gathered_top10_sig <- inner_join(ei[, c("sample_id", "tissue" )], gathered_top10_sig, by = c("sample_id" = "samplename"))
+gathered_top10_sig <- inner_join(ei[, c("sample_id", "progression" )], gathered_top10_sig, by = c("sample_id" = "samplename"))
 
 ## plot using ggplot2
 ggplot(gathered_top10_sig) +
         geom_point(aes(x = gene, 
                        y = normalized_counts, 
-                       color = tissue), #Here as well!!
+                       color = progression), #Here as well!!
                    position=position_jitter(w=0.1,h=0)) +
         scale_y_log10() +
         xlab("Genes") +
@@ -366,7 +368,7 @@ pheatmap(sig_norm[ , 2:length(colnames(sig_norm))],
     color = heat_colors, 
     cluster_rows = T, 
     show_rownames = T,
-    labels_row=rownames(normalized_counts),
+    #labels_row=rownames(normalized_counts),
     annotation = cluster_metadata[, c("condition", "cluster_id")], 
     border_color = NA, 
     fontsize = 10, 
@@ -408,7 +410,7 @@ get_dds_resultsAvsB <- function(x, A, B){
         rownames(cluster_metadata) <- cluster_metadata$sample_id
         counts <- pb[[clusters[x]]]
         cluster_counts <- as.data.frame(counts[, which(colnames(counts) %in% rownames(cluster_metadata))])
-        cluster_metadata$condition <- factor(cluster_metadata$tissue)
+        cluster_metadata$condition <- factor(cluster_metadata$progression)
         
         #all(rownames(cluster_metadata) == colnames(cluster_counts))        
         
@@ -451,7 +453,7 @@ get_dds_resultsAvsB <- function(x, A, B){
                        contrast = contrast,
                        alpha = 0.05)
         
-        dds$condition <- relevel(dds$condition, ref = "BM") #https://www.biostars.org/p/448959/
+        dds$condition <- relevel(dds$condition, ref = "0") #https://www.biostars.org/p/448959/
 
         res <- results(dds, 
                        contrast = contrast,
@@ -500,18 +502,18 @@ get_dds_resultsAvsB <- function(x, A, B){
         gathered_top20_sig <- top20_sig_norm %>%
                 gather(colnames(top20_sig_norm)[2:length(colnames(top20_sig_norm))], key = "samplename", value = "normalized_counts")
         
-        gathered_top20_sig <- inner_join(ei[, c("sample_id", "tissue" )], gathered_top20_sig, by = c("sample_id" = "samplename")) #change for other condition
+        gathered_top20_sig <- inner_join(ei[, c("sample_id", "progression" )], gathered_top20_sig, by = c("sample_id" = "samplename")) #change for other condition
         
         ## plot using ggplot2
         ggplot(gathered_top20_sig) +
                 geom_point(aes(x = gene, 
                                y = normalized_counts, 
-                               color = tissue), #change for other condition
+                               color = progression), #change for other condition
                            position=position_jitter(w=0.1,h=0)) +
                 scale_y_log10() +
                 xlab("Genes") +
                 ylab("log10 Normalized Counts") +
-                ggtitle("Top 20 Significant DE Genes") +
+                ggtitle(paste0("Top 20 Significant DE Genes in ", clusters[x])) +
                 theme_bw() +
                 theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
                 theme(plot.title = element_text(hjust = 0.5))

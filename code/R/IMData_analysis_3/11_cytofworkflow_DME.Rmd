@@ -52,7 +52,7 @@ We will first read in the previously generated `SpatialExperiment` object and tr
 # spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 #spe <- readRDS(file.path(path,"results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$timepoint=="DE"
+keep_cols <- spe$tissue=="BM" & spe$timepoint=="DE"
 #spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
 # keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$celltype!="other" & spe$metacluster!="tumor" & spe$timepoint=="DE" & spe$MYCN_amp!=9
 
@@ -73,8 +73,9 @@ marker_class <-ifelse(rownames(spe)[keep_rows] %in% type_markers, "type",
 row_data <- data.frame(cbind(channel_name, marker_name), row.names=marker_name)
 row_data$marker_class <- as.factor(marker_class)
 
-counts = assay(spe, "counts")[keep_rows, keep_cols]
-rownames(counts) = marker_name
+counts <- assay(spe, "counts")[keep_rows, keep_cols]
+counts <- counts +1 #to avoid having so many zeros
+rownames(counts) <- marker_name
 sce <- SingleCellExperiment(assays=list(counts=counts, exprs=counts), rowData=row_data)
 
 #add coldata
@@ -166,10 +167,13 @@ d_counts <- calcCounts(d_se)
 d_medians <- calcMedians(d_se)
 
 # Create design matrix
+#design <- createDesignMatrix(experiment_info, cols_design = c("condition", "patient"))
 design <- createDesignMatrix(experiment_info, cols_design = "condition")
 
 # Create contrast matrix
-contrast <- createContrast(c(0, 1))
+contrast <- createContrast(c(0, 1)) # unpaired
+#contrast <- createContrast(c(0, 1, rep(0, length(unique(experiment_info$patient))-1))) #paired
+nrow(contrast) == ncol(design)
 
 # Test for differential states (DS) within clusters with limma
 res_DS_limma <- testDS_limma(d_counts, d_medians, design, contrast, 
@@ -191,6 +195,7 @@ res_DS_LMM <- testDS_LMM(d_counts, d_medians, design, contrast,
 FDR_cutoff = 0.1
 rowData(res_DS_limma)[rowData(res_DS_limma)$p_adj<FDR_cutoff,]
 result_limma<- data.frame(rowData(res_DS_limma))
+result_cluster_limma <- result_limma[result_limma$cluster_id=="monocyte",]
 result_LMM<- data.frame(rowData(res_DS_LMM))
 
 # Test for differential states (DS) within clusters (using default method 'diffcyt-DS-limma') - this is generating new clusters - does not work with our sce or d_se object
@@ -318,7 +323,7 @@ DGEList object, then the following commands perform the TMM normalization and di
 the normalization factors.
 
 ```{r}
-y.ab <- calcNormFactors(y.ab)
+#y.ab <- calcNormFactors(y.ab) better results without normalization
 ```
 
 We use the `estimateDisp()` function to estimate the NB (negative binomial) dispersion for each cluster (Figure \@ref(fig:abplotbcv)).
@@ -449,7 +454,7 @@ colnames(pseudobulk_t) <- pseudobulk[,"Group.1"]
 
 #comparisons <-colnames(contrasts)
 #only for one comparison
-comparisons <- c("NoProgvsProg")
+comparisons <- c("BMvsPT")
 
 plot_list <- list()
 for (j in 1:length(unique(sce$cluster_id))){
@@ -502,7 +507,7 @@ n <- detectCores()
 # df$patient <- as.factor(sapply(strsplit(rownames(df), "[_]"), "[[", 3))
 # df$tissue <- as.factor(sapply(strsplit(rownames(df), "[_]"), "[[", 5))
 
-clust <- "tumor"
+clust <- "NK"
 sce_subset <- sce[,sce$cluster_id==clust]
 
 df <- as.data.frame(t(counts(sce_subset)))
@@ -513,7 +518,7 @@ df$condition <- sce_subset$condition
 df$mna <- sce_subset$mna
 df$tissue <- sce_subset$tissue
 
-glmm_fit = CytoGLMM::cytoglm(df,
+glmm_fit = CytoGLMM::cytoglmm(df,
                               protein_names = proteins,
                               condition = "condition",
                               group = "patient")

@@ -992,6 +992,7 @@ We will now visualize the clusters in a few samples to see if they make sense.
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(cytomapper)
+library(stringr)
 
 tissue = "BM"
 

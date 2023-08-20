@@ -26,33 +26,23 @@ library(tidyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
+#spe <- readRDS(file.path(path,"results/in_house/spe_clustered_fine.rds"))
 
 meta_path <- file.path(path, '20230617_metadata_complete.csv')
 meta_all = read.csv(meta_path)
 
-samples <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor"]$fm_id)
-meta_positive <-meta_all[meta_all$control == 'no'& meta_all$Sample%in%samples,]
-meta_pos_reduced <- meta_positive[c("Study_ID", "Tissue", "Timepoint")]
-meta_pos_reduced$new <- 1 
-meta_pos_reduced_tidy <- meta_pos_reduced %>% pivot_wider(names_from = c("Tissue", "Timepoint"), values_from = "new")
-meta_timepoint <- meta_pos_reduced_tidy[, c("Study_ID", "PT_DE", "BM_DE", "BM_RE1", "BM_RE2", "BM_REL")]
-meta_timepoint[is.na(meta_timepoint)] <- 0
-meta_timepoint <- as.data.frame(meta_timepoint)
-rownames(meta_timepoint) <- meta_timepoint$Study_ID
-meta_timepoint$Study_ID <- NULL
-
-paired_patients <- rownames(meta_timepoint)[meta_timepoint$BM_DE==1 & meta_timepoint$BM_RE2==1]
+BM_patients <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "DE"]$study_id)
+PT_patients <- unique(spe[,spe$tissue=="PT"& spe$metacluster=="tumor"]$study_id)
+paired_patients <- intersect(BM_patients, PT_patients)
 ```
 
 We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
 
 ```{r read-data-pheno, message=FALSE}
-path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
+#spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 #spe <- readRDS(file.path(path,"results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$tissue=="PT"  & spe$metacluster=="tumor"
+keep_cols <- spe$metacluster=="tumor" & spe$timepoint=="DE" & spe$study_id%in%paired_patients #&(spe$timepoint=="DE" | spe$timepoint=="RE2") 
 #spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
 # keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$celltype!="other" & spe$metacluster!="tumor" & spe$timepoint=="DE" & spe$MYCN_amp!=9
 
@@ -78,9 +68,9 @@ progress <- replace(x = progress, list =  progress==0, values =  'NoProg')
 progress <- replace(x = progress, list =  progress==1, values =  'Prog')
 sce$progress <- as.factor(progress)
 
-sce$condition <- sce$progress
+sce$condition <- sce$tissue
 
-sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
+sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 #sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
 
 # Add celltype information to metadata
@@ -389,7 +379,7 @@ We formulate the design matrix without a blocking factor as we assume to have no
 ```{r}
 #unpaired
 #design <- model.matrix(~0+condition, y.ab$samples) #when list of contrasts is used
-design <- model.matrix(~condition, y.ab$samples)
+#esign <- model.matrix(~condition, y.ab$samples)
 
 #unpaired for multiple factors, e.g. MYCN
 # Group <- factor(paste(y.ab$samples$condition,y.ab$samples$mna,sep="."))
@@ -398,7 +388,7 @@ design <- model.matrix(~condition, y.ab$samples)
 # colnames(design) <- levels(Group)
 
 #paired analysis between timepoints
-#design <- model.matrix(~patient+condition, y.ab$samples)
+design <- model.matrix(~patient+condition, y.ab$samples)
 
 #multilevel design - comparisons between and within patients
 # patient <- y.ab$samples$patient
@@ -484,9 +474,9 @@ library(gtools)
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
 
 
-#comparisons <-colnames(contrasts)
+comparisons <-colnames(contrasts)
 #only for one comparison
-comparisons <- c("NoProgvsProg")
+#comparisons <- c("novsyes")
 
 plot_list_values <- list()
 plot_list_stars <- list()
@@ -500,13 +490,13 @@ for(i in 1:length(unique(p$data$cluster_id))){
   group2 <- c()
   logFC <- c()
   
-  #for(j in 1:ncol(contrasts)){
-  for(j in 1:1){
-    #stats <- as.data.frame(topTags(res[[j]], n=Inf))
-    stats <- as.data.frame(topTags(res, n=Inf))
+  for(j in 1:ncol(contrasts)){
+  #for(j in 1:1){
+    stats <- as.data.frame(topTags(res[[j]], n=Inf))
+    #stats <- as.data.frame(topTags(res, n=Inf))
     p_adj <- c(p_adj, stats[rownames(stats)==droplevels(cluster_name), "FDR"])
-    #logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
-    logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+    logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+    #logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
     group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
     group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
   }

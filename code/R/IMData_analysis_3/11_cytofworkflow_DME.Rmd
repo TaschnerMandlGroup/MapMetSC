@@ -52,7 +52,7 @@ We will first read in the previously generated `SpatialExperiment` object and tr
 # spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 #spe <- readRDS(file.path(path,"results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$tissue=="BM" & spe$timepoint=="DE"
+keep_cols <- spe$tissue=="BM" & spe$timepoint=="DE" & spe$metacluster=="tumor"
 #spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
 # keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$celltype!="other" & spe$metacluster!="tumor" & spe$timepoint=="DE" & spe$MYCN_amp!=9
 
@@ -63,6 +63,12 @@ type_markers <- c("MPO_Y89_mean", "CD44_In115_mean", "CD11b_Nd142_mean", "HLA-DR
 
 # Define cell_state_markers 
 state_markers <- c("CD274_Gd160_mean", "S100B_Dy161_mean", "CD279_Ho165_mean", "Ki-67_Tm169_mean", "GZMB_Yb173_mean")
+
+# delete when not using mean-80
+# type_markers <- paste0(type_markers, "-80")
+# state_markers <- paste0(state_markers, "-80")
+# keep_rows <- rownames(spe)%in% c(type_markers, state_markers) 
+# keep_rows <- tumor_markers
 
 # Add rowData
 channel_name <- sapply(strsplit(rownames(rowData(spe)[keep_rows,]), "_"), "[[", 2)
@@ -454,7 +460,7 @@ colnames(pseudobulk_t) <- pseudobulk[,"Group.1"]
 
 #comparisons <-colnames(contrasts)
 #only for one comparison
-comparisons <- c("BMvsPT")
+comparisons <- c("NoProgvsProg")
 
 plot_list <- list()
 for (j in 1:length(unique(sce$cluster_id))){
@@ -507,7 +513,7 @@ n <- detectCores()
 # df$patient <- as.factor(sapply(strsplit(rownames(df), "[_]"), "[[", 3))
 # df$tissue <- as.factor(sapply(strsplit(rownames(df), "[_]"), "[[", 5))
 
-clust <- "NK"
+clust <- "tumor"
 sce_subset <- sce[,sce$cluster_id==clust]
 
 df <- as.data.frame(t(counts(sce_subset)))

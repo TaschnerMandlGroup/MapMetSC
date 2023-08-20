@@ -1,0 +1,605 @@
+---
+title: "Subphenotyping of metaclusters"
+output: html_document
+date: '2022-12-28'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Some tumor cells, especially in the BM, are strongly affected by lateral spillover and are assigned to a separate cluster of cells with a high level of background signal (e.g. MPO or CD15). For granulocytes, it would be of great benefit to be able to include morphological features for clustering, as these differ between immature (very round) and mature (polymorphic/low roundness) granulocytes. Hence, we decided to perform subclassification (1) on the  tumor metacluster using tumor markers only to avoid classification to be driven by background signal and (2) on the granulocyte metacluster using BM cells only with granulocyte markers and morphological features. PT derived granulocytes will be merged into a granulocyte cluster, as subclassification is not necessary due to their low presence at the primary site. 
+
+```{r read-data}
+library(SpatialExperiment)
+
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_fine_mean-80.rds"))
+
+granulocyte_markers <- c("MPO_Y89_mean", "CD44_In115_mean", "CD11b_Nd142_mean", "HLA-DR_Nd143_mean", "HLA-ABC_Sm147_mean", "CD24_Eu151_mean", "CD45_Eu153_mean", "CD34_Gd156_mean", "CD10_Gd158_mean", "CXCR4_Tb159_mean", "CD274_Gd160_mean", "Ki-67_Tm169_mean",  "Vimentin_Pt196_mean", "CD15_Bi209_mean")
+granulocyte_markers <- paste0(granulocyte_markers, "-80")
+granulocyte_mat <- assay(spe, "exprs")[rownames(spe)%in%granulocyte_markers, spe$metacluster=="granulocyte" & spe$tissue=="BM"]
+granulocyte_mat <- rbind(granulocyte_mat, 
+                         "area"=spe[, colnames(granulocyte_mat)]$area_clipped, 
+                         "solidity"=spe[, colnames(granulocyte_mat)]$solidity_clipped, 
+                         "aspect_ratio"=spe[, colnames(granulocyte_mat)]$aspect_ratio_clipped)
+
+tumor_markers <- c("CD44_In115_mean", "PRPH_Nd144_mean", "HLA-ABC_Sm147_mean", "LUM_Sm149_mean", "CD24_Eu151_mean", "GD2_Gd155_mean", "CXCR4_Tb159_mean", "CD274_Gd160_mean", "S100B_Dy161_mean", "SOX10_Dy162_mean", "CHGA_Dy164_mean", "GATA3_Er168_mean", "Ki-67_Tm169_mean", "CD56_Er170_mean", "ELAVL4_Yb174_mean", "Vimentin_Pt196_mean")
+tumor_markers <- paste0(tumor_markers, "-80")
+tumor_mat <- assay(spe, "exprs")[rownames(spe)%in%tumor_markers, spe$metacluster=="tumor"]
+```
+
+Before we perform subclustering, we will plot the granulocyte matrix and tumor matrix in a heatmap as a quality control step.
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+library(ComplexHeatmap)
+library(viridis)
+library(circlize)
+library(RColorBrewer)
+library(paletteer)
+
+set.seed(20230618) 
+
+mat <- tumor_mat
+celltype <- spe[,colnames(mat)]$celltype
+tissue <- spe[,colnames(mat)]$tissue
+
+area = spe[,colnames(mat)]$area_clipped
+solidity =  spe[,colnames(mat)]$solidity_clipped
+aspect_ratio =  spe[,colnames(mat)]$aspect_ratio_clipped
+
+col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
+
+#Get same number of PT and BM cells
+pt_index <- which(tissue=="PT")
+bm_index <- which(tissue=="BM")
+rand_cells_pt <- sample(seq_len(length(pt_index)), 4000)
+rand_cells_bm <- sample(seq_len(length(bm_index)), 4000)
+pt_index_rand <- pt_index[rand_cells_pt]
+bm_index_rand <- bm_index[rand_cells_bm]
+rand_cells <- c(pt_index_rand, bm_index_rand)
+
+col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+col_aspect_ratio = colorRamp2(c(min(aspect_ratio[rand_cells]),min(aspect_ratio[rand_cells])+(max(aspect_ratio[rand_cells])-min(aspect_ratio[rand_cells]))/2, max(aspect_ratio[rand_cells])), c("blue", "white", "red"))
+
+column_ha = HeatmapAnnotation(cluster = celltype[rand_cells],
+                              tissue = tissue[rand_cells],
+                              area = area[rand_cells],
+                              solidity = solidity[rand_cells],
+                              aspect_ratio = aspect_ratio[rand_cells],
+                              col=list(cluster=metadata(spe)$color_vector$col_celltype, 
+                                       tissue=col_tissue,
+                                       area = col_area,
+                                       solidity = col_solidity,
+                                       aspect_ratio = col_aspect_ratio
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap showing 4000 random cells per tissue type",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(celltype[rand_cells], decreasing=F),
+        show_column_dend = T,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
+
+We can already see that the clustering based on only tumor markers could be improved. 
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+
+set.seed(20230618) 
+
+mat <- granulocyte_mat
+celltype <- spe[,colnames(mat)]$celltype
+
+rand_cells <- sample(seq_len(ncol(mat)), 8000)
+
+column_ha = HeatmapAnnotation(cluster = celltype[rand_cells],
+                              col=list(cluster=metadata(spe)$color_vector$col_celltype
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap showing 4000 random cells",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(celltype[rand_cells], decreasing=F),
+        show_column_dend = T,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
+
+Here we can see that the inclusion of morphological features could lead to an improvement of the clustering. 
+Let's perform the subclustering in both metaclusters. 
+
+```{r phenograph-clustering}
+library(Rphenoannoy)
+
+set.seed(221228)
+Rphenograph_out <- Rphenoannoy(t(tumor_mat), k = 45)
+tumor_clusters <- factor(membership(Rphenograph_out[[2]]))
+
+set.seed(221228)
+Rphenograph_out <- Rphenoannoy(t(granulocyte_mat), k = 45)
+granulocyte_clusters <- factor(membership(Rphenograph_out[[2]]))
+```
+
+We will evaluate the results in single-cell and mean-per-cluster heatmaps. 
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+
+set.seed(20230618) 
+
+mat <- tumor_mat
+celltype <- tumor_clusters
+tissue <- spe[,colnames(mat)]$tissue
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col_clusters = setNames(sample(col_vector_74, length(unique(tumor_clusters))), unique(tumor_clusters))
+
+area = spe[,colnames(mat)]$area_clipped
+solidity =  spe[,colnames(mat)]$solidity_clipped
+aspect_ratio =  spe[,colnames(mat)]$aspect_ratio_clipped
+
+col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
+
+#Get same number of PT and BM cells
+pt_index <- which(tissue=="PT")
+bm_index <- which(tissue=="BM")
+rand_cells_pt <- sample(seq_len(length(pt_index)), 4000)
+rand_cells_bm <- sample(seq_len(length(bm_index)), 4000)
+pt_index_rand <- pt_index[rand_cells_pt]
+bm_index_rand <- bm_index[rand_cells_bm]
+rand_cells <- c(pt_index_rand, bm_index_rand)
+
+col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+col_aspect_ratio = colorRamp2(c(min(aspect_ratio[rand_cells]),min(aspect_ratio[rand_cells])+(max(aspect_ratio[rand_cells])-min(aspect_ratio[rand_cells]))/2, max(aspect_ratio[rand_cells])), c("blue", "white", "red"))
+
+column_ha = HeatmapAnnotation(cluster = celltype[rand_cells],
+                              tissue = tissue[rand_cells],
+                              area = area[rand_cells],
+                              solidity = solidity[rand_cells],
+                              aspect_ratio = aspect_ratio[rand_cells],
+                              col=list(cluster=col_clusters, 
+                                       tissue=col_tissue,
+                                       area = col_area,
+                                       solidity = col_solidity,
+                                       aspect_ratio = col_aspect_ratio
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap showing 4000 random cells per tissue type",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(celltype[rand_cells], decreasing=F),
+        show_column_dend = T,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=20, fig.width=28}
+library(scuttle)
+library(bruceR)
+
+set.seed(20230135)
+
+#calculate mean heatmap over all cells
+matrix <- tumor_mat
+clust <- tumor_clusters
+
+#Mean of high quality markers per cluster
+mean <- aggregate(t(matrix), list(clust), mean)
+mean_t <- t(mean[,2:ncol(mean)])
+mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
+colnames(mean_t) <- mean[,"Group.1"]
+
+column_ha = HeatmapAnnotation(celltype = mean[,"Group.1"], 
+                              ncells=anno_barplot(as.data.frame(table(clust))[,"Freq"], height = unit(3, "cm")),
+                              col=list(celltype=col_clusters
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mean_t, 
+        column_title = "Heatmap showing mean per cluster- scaled",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        # clustering_distance_columns="pearson", #use euclidian, kendal or pearson
+        # clustering_method_columns="single",
+        cluster_rows=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100),
+        column_dend_height = unit(10, "cm")
+        )
+
+
+```
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+
+set.seed(20230618) 
+granulocyte_clusters <- spe[,colnames(granulocyte_mat)]$celltype_fine
+mat <- granulocyte_mat
+celltype <- granulocyte_clusters
+col_clusters = setNames(sample(col_vector_74, length(unique(granulocyte_clusters))), unique(granulocyte_clusters))
+
+rand_cells <- sample(seq_len(ncol(mat)), 8000)
+column_ha = HeatmapAnnotation(cluster = celltype[rand_cells],
+                              col=list(cluster=col_clusters
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap showing 4000 random cells",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(celltype[rand_cells], decreasing=F),
+        show_column_dend = T,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
+
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=20, fig.width=28}
+
+set.seed(20230135)
+
+#calculate mean heatmap over all cells
+matrix <- granulocyte_mat
+clust <- granulocyte_clusters
+
+#Mean of high quality markers per cluster
+mean <- aggregate(t(matrix), list(clust), mean)
+mean_t <- t(mean[,2:ncol(mean)])
+mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
+colnames(mean_t) <- mean[,"Group.1"]
+
+column_ha = HeatmapAnnotation(celltype = mean[,"Group.1"], 
+                              ncells=anno_barplot(as.data.frame(table(clust))[,"Freq"], height = unit(3, "cm")),
+                              col=list(celltype=col_clusters
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mean_t, 
+        column_title = "Heatmap showing mean per cluster- scaled",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        # clustering_distance_columns="pearson", #use euclidian, kendal or pearson
+        # clustering_method_columns="single",
+        cluster_rows=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100),
+        column_dend_height = unit(10, "cm")
+        )
+
+
+```
+Finally, we will attach the new clusters to the SPE object. 
+
+```{r save-object, message=FALSE}
+spe$celltype_fine <- spe$celltype
+
+tumor_cluster_names <- setNames(paste0("tum_", unique(tumor_clusters)), unique(tumor_clusters))
+tumor_celltypes <- recode(tumor_clusters, !!!tumor_cluster_names)
+spe[,colnames(tumor_mat)]$celltype_fine <- as.vector(tumor_celltypes)
+
+granulocyte_cluster_names <- setNames(paste0("gran_", unique(granulocyte_clusters)), unique(granulocyte_clusters))
+granulocyte_celltypes <- recode(granulocyte_clusters, !!!granulocyte_cluster_names)
+spe[,colnames(granulocyte_mat)]$celltype_fine <- as.vector(granulocyte_celltypes)
+
+saveRDS(spe, file.path(path, "results/in_house/spe_clustered_fine_mean-80.rds"))
+```
+
+And perform a sanity check.
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+library(ComplexHeatmap)
+library(viridis)
+library(circlize)
+library(RColorBrewer)
+library(paletteer)
+
+set.seed(20230618) 
+
+mat <- granulocyte_mat
+celltype <- spe[,spe$metacluster=="granulocyte" & spe$tissue=="BM"]$celltype_fine
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col_clusters = setNames(sample(col_vector_74, length(unique(celltype))), unique(celltype))
+
+rand_cells <- sample(seq_len(ncol(mat)), 8000)
+
+column_ha = HeatmapAnnotation(cluster = celltype[rand_cells],
+                              col=list(cluster=col_clusters
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap showing 4000 random cells",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(as.integer(sapply(strsplit(celltype[rand_cells], "_"), "[[", 2)), decreasing=F),
+        show_column_dend = T,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+
+set.seed(20230618) 
+
+mat <- tumor_mat
+celltype <- spe[,spe$metacluster=="tumor"]$celltype_fine
+col_clusters = setNames(sample(col_vector_74, length(unique(celltype))), unique(celltype))
+tissue <- spe[,colnames(mat)]$tissue
+
+area = spe[,colnames(mat)]$area_clipped
+solidity =  spe[,colnames(mat)]$solidity_clipped
+aspect_ratio =  spe[,colnames(mat)]$aspect_ratio_clipped
+
+col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
+
+#Get same number of PT and BM cells
+pt_index <- which(tissue=="PT")
+bm_index <- which(tissue=="BM")
+rand_cells_pt <- sample(seq_len(length(pt_index)), 4000)
+rand_cells_bm <- sample(seq_len(length(bm_index)), 4000)
+pt_index_rand <- pt_index[rand_cells_pt]
+bm_index_rand <- bm_index[rand_cells_bm]
+rand_cells <- c(pt_index_rand, bm_index_rand)
+
+col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[rand_cells])-min(area[rand_cells]))/2, max(area[rand_cells])), c("blue", "white", "red"))
+col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
+col_aspect_ratio = colorRamp2(c(min(aspect_ratio[rand_cells]),min(aspect_ratio[rand_cells])+(max(aspect_ratio[rand_cells])-min(aspect_ratio[rand_cells]))/2, max(aspect_ratio[rand_cells])), c("blue", "white", "red"))
+
+column_ha = HeatmapAnnotation(cluster = celltype[rand_cells],
+                              tissue = tissue[rand_cells],
+                              area = area[rand_cells],
+                              solidity = solidity[rand_cells],
+                              aspect_ratio = aspect_ratio[rand_cells],
+                              col=list(cluster=col_clusters, 
+                                       tissue=col_tissue,
+                                       area = col_area,
+                                       solidity = col_solidity,
+                                       aspect_ratio = col_aspect_ratio
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mat[,rand_cells], 
+        column_title = "Single-cell heatmap showing 4000 random cells per tissue type",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(as.integer(sapply(strsplit(celltype[rand_cells], "_"), "[[", 2)), decreasing=F),
+        show_column_dend = T,
+        show_column_names=F,
+        col=viridis(100)
+        )
+```
+
+Now we will plot these heatmaps per cluster.
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+
+set.seed(20230521)
+
+spe <- spe_all[, spe_all$metacluster=="tumor"]
+tumor_markers <- c("CD44_In115_mean", "PRPH_Nd144_mean", "HLA-ABC_Sm147_mean", "LUM_Sm149_mean", "CD24_Eu151_mean", "GD2_Gd155_mean", "CXCR4_Tb159_mean", "CD274_Gd160_mean", "S100B_Dy161_mean", "SOX10_Dy162_mean", "CHGA_Dy164_mean", "GATA3_Er168_mean", "Ki-67_Tm169_mean", "CD56_Er170_mean", "ELAVL4_Yb174_mean", "Vimentin_Pt196_mean")
+
+mat_hq <- assay(spe, "exprs")[rownames(spe)%in%tumor_markers, ]
+mat_lq <- assay(spe, "exprs")[!rownames(spe)%in%tumor_markers, ]
+
+mat_morph<- rbind("area"=spe$area_clipped, 
+                  "solidity"=spe$solidity_clipped, 
+                  "aspect_ratio"=spe$aspect_ratio_clipped)
+
+celltype <- spe$celltype_fine
+
+for(i in 1: length(unique(celltype))){
+
+  c <- unique(celltype)[i]
+
+  mat_c <- mat_hq[,celltype==c]
+  ct <- celltype[celltype==c]
+  tis <- spe$tissue[celltype==c]
+  
+  col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+  col_tissue = c("PT" = "deepskyblue", "BM" = "orange")
+  
+  if (length(ct) < 8000){len=length(ct)}else{len=8000}
+
+  rand_cells <- sample(seq_len(ncol(mat_c)), len)
+  
+  
+  area_c = mat_morph["area",celltype==c]
+  solidity_c = mat_morph["solidity",celltype==c]
+  aspect_ratio_c = mat_morph["aspect_ratio",celltype==c]
+  
+  clPARP_c = mat_lq["clPARP_Yb176_mean",celltype==c]
+  
+  col_area_c = colorRamp2(c(min(area_c[rand_cells]),min(area_c[rand_cells])+(max(area_c[rand_cells])-min(area_c[rand_cells]))/2, max(area_c[rand_cells])), c("blue", "white", "red"))
+  col_solidity_c = colorRamp2(c(min(solidity_c[rand_cells]),min(solidity_c[rand_cells])+(max(solidity_c[rand_cells])-min(solidity_c[rand_cells]))/2, max(solidity_c[rand_cells])), c("blue", "white", "red"))
+  col_aspect_ratio_c = colorRamp2(c(min(aspect_ratio_c[rand_cells]),min(aspect_ratio_c[rand_cells])+(max(aspect_ratio_c[rand_cells])-min(aspect_ratio_c[rand_cells]))/2, max(aspect_ratio_c[rand_cells])), c("blue", "white", "red"))
+  
+  col_clPARP_c = colorRamp2(c(min(clPARP_c[rand_cells]),min(clPARP_c[rand_cells])+(max(clPARP_c[rand_cells])-min(clPARP_c[rand_cells]))/2, max(clPARP_c[rand_cells])), c("blue", "white", "red"))
+  
+  column_ha = HeatmapAnnotation(tissue = tis[rand_cells],
+                                area = area_c[rand_cells],
+                                solidity = solidity_c[rand_cells],
+                                aspect_ratio = aspect_ratio_c[rand_cells],
+                                clPARP = clPARP_c[rand_cells],
+                                col=list(tissue=col_tissue,
+                                         area = col_area_c,
+                                         solidity = col_solidity_c,
+                                         aspect_ratio = col_aspect_ratio_c,
+                                         clPARP = col_clPARP_c
+                                         ), 
+                                show_legend=T)
+  
+  png(file=file.path(path, paste0("results/in_house/heatmaps/subclustered/tumor/", c , ".tiff")),width=18,height=8,units="in", res=1200)
+  
+  ht<- Heatmap(mat_c[,rand_cells], 
+          column_title = "Single-cell heatmap with 8000 randomly selected cells",
+          top_annotation = column_ha, 
+          cluster_columns=F,
+          column_order= order(tis[rand_cells], decreasing=F),
+          show_column_dend = T,
+          show_column_names=F,
+          col=viridis(100)
+          )
+  draw(ht)
+  
+  dev.off()
+}
+
+```
+
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+
+set.seed(20230521)
+
+spe <- spe_all[, spe_all$metacluster=="granulocyte" & spe_all$tissue=="BM"]
+
+granulocyte_markers <- c("MPO_Y89_mean", "CD44_In115_mean", "CD11b_Nd142_mean", "HLA-DR_Nd143_mean", "HLA-ABC_Sm147_mean", "CD24_Eu151_mean", "CD45_Eu153_mean", "CD34_Gd156_mean", "CD10_Gd158_mean", "CXCR4_Tb159_mean", "CD274_Gd160_mean", "Ki-67_Tm169_mean",  "Vimentin_Pt196_mean", "CD15_Bi209_mean")
+
+mat_hq <- assay(spe, "exprs")[rownames(spe)%in%granulocyte_markers, ]
+mat_lq <- assay(spe, "exprs")[!rownames(spe)%in%granulocyte_markers, ]
+mat_morph<- rbind("area"=spe$area_clipped, 
+                  "solidity"=spe$solidity_clipped, 
+                  "aspect_ratio"=spe$aspect_ratio_clipped)
+
+celltype <- spe$celltype_fine
+
+for(i in 1: length(unique(celltype))){
+
+  c <- unique(celltype)[i]
+
+  mat_c <- mat_hq[,celltype==c]
+  ct <- celltype[celltype==c]
+  tis <- spe$tissue[celltype==c]
+  
+  col_marker = colorRamp2(c(0, 2.5, 0.5), c("blue", "white", "red"))
+  
+  if (length(ct) < 8000){len=length(ct)}else{len=8000}
+
+  rand_cells <- sample(seq_len(ncol(mat_c)), len)
+  
+  
+  area_c = mat_morph["area",celltype==c]
+  solidity_c = mat_morph["solidity",celltype==c]
+  aspect_ratio_c = mat_morph["aspect_ratio",celltype==c]
+  
+  clPARP_c = mat_lq["clPARP_Yb176_mean",celltype==c]
+  
+  col_area_c = colorRamp2(c(min(area_c[rand_cells]),min(area_c[rand_cells])+(max(area_c[rand_cells])-min(area_c[rand_cells]))/2, max(area_c[rand_cells])), c("blue", "white", "red"))
+  col_solidity_c = colorRamp2(c(min(solidity_c[rand_cells]),min(solidity_c[rand_cells])+(max(solidity_c[rand_cells])-min(solidity_c[rand_cells]))/2, max(solidity_c[rand_cells])), c("blue", "white", "red"))
+  col_aspect_ratio_c = colorRamp2(c(min(aspect_ratio_c[rand_cells]),min(aspect_ratio_c[rand_cells])+(max(aspect_ratio_c[rand_cells])-min(aspect_ratio_c[rand_cells]))/2, max(aspect_ratio_c[rand_cells])), c("blue", "white", "red"))
+  
+  col_clPARP_c = colorRamp2(c(min(clPARP_c[rand_cells]),min(clPARP_c[rand_cells])+(max(clPARP_c[rand_cells])-min(clPARP_c[rand_cells]))/2, max(clPARP_c[rand_cells])), c("blue", "white", "red"))
+  
+  column_ha = HeatmapAnnotation(area = area_c[rand_cells],
+                                solidity = solidity_c[rand_cells],
+                                aspect_ratio = aspect_ratio_c[rand_cells],
+                                clPARP = clPARP_c[rand_cells],
+                                col=list(area = col_area_c,
+                                         solidity = col_solidity_c,
+                                         aspect_ratio = col_aspect_ratio_c,
+                                         clPARP = col_clPARP_c
+                                         ), 
+                                show_legend=T)
+  
+  png(file=file.path(path, paste0("results/in_house/heatmaps/subclustered/granulocyte/", c , ".tiff")),width=18,height=8,units="in", res=1200)
+  
+  ht<- Heatmap(mat_c[,rand_cells], 
+          column_title = "Single-cell heatmap with 8000 randomly selected cells",
+          top_annotation = column_ha, 
+          cluster_columns=F,
+          column_order= order(tis[rand_cells], decreasing=F),
+          show_column_dend = T,
+          show_column_names=F,
+          col=viridis(100)
+          )
+  draw(ht)
+  
+  dev.off()
+}
+
+```
+
+```{r barplot-cluster-per-sample, fig.width=18}
+ # library
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+
+col_clusters<- col_clusters[order(as.integer(names(col_clusters)))]
+
+colnames(mat) <- spe[,colnames(tumor_mat)]$sample
+data <- data.frame(sample=colnames(mat), celltype)
+data$freq <- 1
+
+data_wide <- data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0) 
+#write.csv(data_wide, file.path(path, "results/metadata/celltype-per-sample.csv"))
+```
+
+We will now visualize the clusters in a few samples to see if they make sense.
+
+```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
+library(cytomapper)
+
+tissue = "TU"
+
+files <- list.files(file.path(path, "masks_temp", tissue))
+
+for(i in 1: length(files)){
+  
+  masks <- loadImages(file.path(path, "masks_temp", tissue, files[i]), as.is = TRUE)
+  
+  # delete later
+  names(masks) <- str_match(files[i], "^.*_.*_(.*_.*_.*_.*_.*).tif")[,2]
+  c <- str_match(files[i], "^(.*_.*)_.*_.*_.*_.*_.*")[,2]
+  
+  mcols(masks) <- DataFrame(sample_id = names(masks))
+
+
+  col_celltype <- setNames(c("red", "white"), c('yes', 'no'))
+  spe$binary <- 'no'
+  spe[,spe$celltype_fine == c]$binary <- 'yes'
+
+
+  plotCells(masks,
+            object = spe,
+            cell_id = "ObjectNumber", img_id = "sample_id",
+            colour_by = "binary",
+            colour = list(binary = col_celltype),
+            display="single",
+            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
+            legend=NULL)
+
+}
+
+```

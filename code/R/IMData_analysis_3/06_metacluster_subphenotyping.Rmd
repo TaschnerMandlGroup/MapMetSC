@@ -14,10 +14,10 @@ Some tumor cells, especially in the BM, are strongly affected by lateral spillov
 library(SpatialExperiment)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_fine_mean-80.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_fine.rds"))
 
 granulocyte_markers <- c("MPO_Y89_mean", "CD44_In115_mean", "CD11b_Nd142_mean", "HLA-DR_Nd143_mean", "HLA-ABC_Sm147_mean", "CD24_Eu151_mean", "CD45_Eu153_mean", "CD34_Gd156_mean", "CD10_Gd158_mean", "CXCR4_Tb159_mean", "CD274_Gd160_mean", "Ki-67_Tm169_mean",  "Vimentin_Pt196_mean", "CD15_Bi209_mean")
-granulocyte_markers <- paste0(granulocyte_markers, "-80")
+#granulocyte_markers <- paste0(granulocyte_markers, "-80")
 granulocyte_mat <- assay(spe, "exprs")[rownames(spe)%in%granulocyte_markers, spe$metacluster=="granulocyte" & spe$tissue=="BM"]
 granulocyte_mat <- rbind(granulocyte_mat, 
                          "area"=spe[, colnames(granulocyte_mat)]$area_clipped, 
@@ -25,7 +25,7 @@ granulocyte_mat <- rbind(granulocyte_mat,
                          "aspect_ratio"=spe[, colnames(granulocyte_mat)]$aspect_ratio_clipped)
 
 tumor_markers <- c("CD44_In115_mean", "PRPH_Nd144_mean", "HLA-ABC_Sm147_mean", "LUM_Sm149_mean", "CD24_Eu151_mean", "GD2_Gd155_mean", "CXCR4_Tb159_mean", "CD274_Gd160_mean", "S100B_Dy161_mean", "SOX10_Dy162_mean", "CHGA_Dy164_mean", "GATA3_Er168_mean", "Ki-67_Tm169_mean", "CD56_Er170_mean", "ELAVL4_Yb174_mean", "Vimentin_Pt196_mean")
-tumor_markers <- paste0(tumor_markers, "-80")
+#tumor_markers <- paste0(tumor_markers, "-80")
 tumor_mat <- assay(spe, "exprs")[rownames(spe)%in%tumor_markers, spe$metacluster=="tumor"]
 ```
 
@@ -134,7 +134,7 @@ granulocyte_clusters <- factor(membership(Rphenograph_out[[2]]))
 
 We will evaluate the results in single-cell and mean-per-cluster heatmaps. 
 
-```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+```{r single-cell-heatmap-clusters, message=FALSE, fig.width=15}
 
 set.seed(20230618) 
 
@@ -190,7 +190,7 @@ Heatmap(mat[,rand_cells],
         col=viridis(100)
         )
 ```
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=20, fig.width=28}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.width=15}
 library(scuttle)
 library(bruceR)
 
@@ -224,13 +224,13 @@ Heatmap(mean_t,
         show_column_names=T,
         show_row_names=T,
         col=viridis(100),
-        column_dend_height = unit(10, "cm")
+        column_dend_height = unit(5, "cm")
         )
 
 
 ```
 
-```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+```{r single-cell-heatmap-clusters, message=FALSE, fig.width=15}
 
 set.seed(20230618) 
 granulocyte_clusters <- spe[,colnames(granulocyte_mat)]$celltype_fine
@@ -256,7 +256,7 @@ Heatmap(mat[,rand_cells],
         )
 ```
 
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=20, fig.width=28}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.width=15}
 
 set.seed(20230135)
 
@@ -288,7 +288,7 @@ Heatmap(mean_t,
         show_column_names=T,
         show_row_names=T,
         col=viridis(100),
-        column_dend_height = unit(10, "cm")
+        column_dend_height = unit(5, "cm")
         )
 
 

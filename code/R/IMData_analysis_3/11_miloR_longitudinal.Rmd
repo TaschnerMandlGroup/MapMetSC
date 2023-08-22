@@ -11,7 +11,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-As a next step, we will test miloR on only the tumor cells to detect neighborhoods that are differentially abundant during different timepoints (crtl, DE, RE1, RE2, REL).
+As a next step, we will test miloR on only the tumor cells to detect neighborhoods that are differentially abundant during different timepoints (crtl, PT_DE, BM_DE, RE1, RE2, REL).
 
 ```{r setup, message=FALSE, warning=FALSE}
 library(miloR)
@@ -31,7 +31,7 @@ path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 spe <- readRDS(file.path(path,"results/in_house/spe_clustered_fine.rds"))
 
 rand_cells <- sample(seq_len(ncol(spe)), 50000)
-markers <- paste0(rownames(spe)[rowData(spe)$use_channel], "-80")
+#markers <- paste0(rownames(spe)[rowData(spe)$use_channel], "-80")
 sce <- spe[rowData(spe)$use_channel, rand_cells]
 #sce <- spe[rowData(spe)$use_channel, spe$metacluster!="tumor" & spe$tissue=="BM"]
 logcounts(sce) <- log(counts(sce) + 1)
@@ -161,14 +161,14 @@ rownames(design) <- design$sample
 
 ## Reorder rownames to match columns of nhoodCounts(milo)
 design <- design[colnames(nhoodCounts(milo)), , drop=FALSE]
-table(design$control)
+table(design$progression)
 
 design
 ```
 To demonstrate the use of contrasts we will fit the whole model to the whole data set, but we will compare sequential pairs of time points. I’ll start with PT_DE vs BM_DE to illustrate the syntax.
 ```{r}
 rownames(design) <- design$sample
-contrast.1 <- c("timepointPT_DE - timepointBM_DE") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+contrast.1 <- c("timepointBM_DE - timepointBM_RE2") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 ```
 
 ## Computing neighbourhood connectivity
@@ -186,8 +186,9 @@ Now we can do the DA test, explicitly defining our experimental design. In this 
 
 ```{r}
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-#da_results <- testNhoods(milo, design = ~ 0 + timepoint, design.df = design, model.contrasts = contrast.1, fdr.weighting="graph-overlap")
-da_results <- testNhoods(milo, design = ~ control, design.df = design, fdr.weighting="graph-overlap")
+da_results <- testNhoods(milo, design = ~ 0 + timepoint, design.df = design, model.contrasts = contrast.1, fdr.weighting="graph-overlap")
+#da_results <- testNhoods(milo, design = ~ progression, design.df = design, reduced.dim="PCA")
+
 head(da_results)
 table(da_results$SpatialFDR < 0.1)
 ```
@@ -256,7 +257,7 @@ nh_graph_pl <- plotNhoodGraphDA(milo, da_results, layout="umap",alpha=0.1)
 umap_pl + nh_graph_pl +
   plot_layout(guides="collect")
 
-dittoDimPlot(sce, var = "celltype_fine", 
+dittoDimPlot(sce, var = "metacluster", 
              reduction.use = "umap", size = 1,
              do.label = TRUE) +
     ggtitle("Fine clusters on umap")
@@ -327,7 +328,11 @@ In many cases, such as this example, DA neighbourhoods are found in different ar
 milo <- buildNhoodGraph(milo)
 
 ## Find groups
-da_results <- groupNhoods(milo, da_results, max.lfc.delta = 10)
+
+#merge.discord 	
+#A logical scalar that overrides the default behaviour and allows adjacent neighbourhoods to be merged if they have discordant log fold change signs. Using this argument is generally discouraged, but may be useful for constructing an empirical null group of cells, regardless of DA sign.
+
+da_results <- groupNhoods(milo, da_results, max.lfc.delta = 10, merge.discord=T)
 head(da_results)
 da_results[da_results$SpatialFDR<0.05,]
 ```
@@ -451,14 +456,14 @@ We can visualize the expression in neighbourhoods using `plotNhoodExpressionGrou
 set.seed(42)
 plotNhoodExpressionGroups(milo, da_results, #features=intersect(rownames(milo), markers[1:10]),
                           features=rownames(milo), 
-                          subset.nhoods = da_results$NhoodGroup %in% c('2','3', '4'), 
+                          #subset.nhoods = da_results$NhoodGroup %in% c('2','3', '4'), 
                           scale=TRUE,
                           assay="logcounts",
                           grid.space = "fixed")
 
 plotNhoodExpressionGroups(milo, da_results, #features=intersect(rownames(milo), markers[1:10]),
                           features=rownames(milo), 
-                          subset.nhoods = da_results$NhoodGroup %in% c('4','5', '6'), 
+                          subset.nhoods = da_results$NhoodGroup %in% c('2','3', '4'), 
                           scale=TRUE,
                           assay="logcounts",
                           grid.space = "fixed")
@@ -478,8 +483,8 @@ table(da_tmp$celltype, da_tmp$Nhood)
 In some cases you might want to test for differential expression between cells in different conditions *within* the same neighbourhood group. You can do that using `testDiffExp`:
 
 ```{r, warning=FALSE}
-dge_6 <- testDiffExp(embryo_milo, da_results, design = ~ stage, meta.data = data.frame(colData(embryo_milo)),
-                     subset.row = rownames(embryo_milo)[1:5], subset.nhoods=da_results$NhoodGroup=="6")
+dge_6 <- testDiffExp(milo, da_results, design = ~ tissue, meta.data = data.frame(colData(milo)),
+                     subset.row = rownames(milo), subset.nhoods=da_results$NhoodGroup=="2")
 
 dge_6
 ```

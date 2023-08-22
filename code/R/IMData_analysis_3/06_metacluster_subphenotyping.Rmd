@@ -14,7 +14,7 @@ Some tumor cells, especially in the BM, are strongly affected by lateral spillov
 library(SpatialExperiment)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_fine.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_4.rds"))
 
 granulocyte_markers <- c("MPO_Y89_mean", "CD44_In115_mean", "CD11b_Nd142_mean", "HLA-DR_Nd143_mean", "HLA-ABC_Sm147_mean", "CD24_Eu151_mean", "CD45_Eu153_mean", "CD34_Gd156_mean", "CD10_Gd158_mean", "CXCR4_Tb159_mean", "CD274_Gd160_mean", "Ki-67_Tm169_mean",  "Vimentin_Pt196_mean", "CD15_Bi209_mean")
 #granulocyte_markers <- paste0(granulocyte_markers, "-80")
@@ -130,6 +130,9 @@ tumor_clusters <- factor(membership(Rphenograph_out[[2]]))
 set.seed(221228)
 Rphenograph_out <- Rphenoannoy(t(granulocyte_mat), k = 45)
 granulocyte_clusters <- factor(membership(Rphenograph_out[[2]]))
+
+#tumor_clusters <- spe[, spe$metacluster=="tumor"]$celltype_fine
+#granulocyte_clusters <- spe[, spe$metacluster=="granulocyte" & spe$tissue=="BM"]$celltype_fine
 ```
 
 We will evaluate the results in single-cell and mean-per-cluster heatmaps. 
@@ -280,11 +283,12 @@ column_ha = HeatmapAnnotation(celltype = mean[,"Group.1"],
 Heatmap(mean_t, 
         column_title = "Heatmap showing mean per cluster- scaled",
         top_annotation = column_ha, 
-        cluster_columns=T,
+        cluster_columns=F,
         # clustering_distance_columns="pearson", #use euclidian, kendal or pearson
         # clustering_method_columns="single",
+        column_order= order(unname(mean_t["solidity",]), decreasing=F),
         cluster_rows=T,
-        show_column_dend = T,
+        #show_column_dend = T,
         show_column_names=T,
         show_row_names=T,
         col=viridis(100),
@@ -549,6 +553,46 @@ for(i in 1: length(unique(celltype))){
 
 ```
 
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.width=15}
+
+set.seed(20230135)
+
+#calculate mean heatmap over all cells
+matrix <- granulocyte_mat[,granulocyte_clusters != "gran_25"]
+clust <- granulocyte_clusters[granulocyte_clusters != "gran_25"]
+
+#Mean of high quality markers per cluster
+mean <- aggregate(t(matrix), list(clust), mean)
+mean_t <- t(mean[,2:ncol(mean)])
+mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
+colnames(mean_t) <- mean[,"Group.1"]
+
+column_ha = HeatmapAnnotation(celltype = mean[,"Group.1"], 
+                              ncells=anno_barplot(as.data.frame(table(clust))[,"Freq"], height = unit(3, "cm")),
+                              col=list(celltype=col_clusters
+                                       ), 
+                              show_legend=T)
+
+
+Heatmap(mean_t, 
+        column_title = "Heatmap showing mean per cluster- scaled",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        # clustering_distance_columns="pearson", #use euclidian, kendal or pearson
+        # clustering_method_columns="single",
+        column_order= order(unname(mean_t["solidity",]), decreasing=F),
+        cluster_rows=T,
+        #show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100),
+        column_dend_height = unit(5, "cm")
+        )
+
+
+```
+
+
 ```{r barplot-cluster-per-sample, fig.width=18}
  # library
 library(ggplot2)
@@ -556,14 +600,21 @@ library(tidyverse)
 library(dplyr)
 library(tidyr)
 
-col_clusters<- col_clusters[order(as.integer(names(col_clusters)))]
-
-colnames(mat) <- spe[,colnames(tumor_mat)]$sample
+mat <- granulocyte_mat 
+colnames(mat) <- spe[,colnames(granulocyte_mat)]$sample_id
 data <- data.frame(sample=colnames(mat), celltype)
 data$freq <- 1
 
 data_wide <- data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0) 
-#write.csv(data_wide, file.path(path, "results/metadata/celltype-per-sample.csv"))
+
+# first remember the names
+n <- data_wide$sample
+
+# transpose all but the first column (name)
+data_wide <- as.data.frame(t(data_wide[,-1]))
+colnames(data_wide) <- n
+
+write.csv(data_wide, file.path(path, "results/in_house/metadata/image_per_celltype_gran.csv"), row.names=T)
 ```
 
 We will now visualize the clusters in a few samples to see if they make sense.
@@ -571,17 +622,17 @@ We will now visualize the clusters in a few samples to see if they make sense.
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(cytomapper)
 
-tissue = "TU"
+tissue = "BM"
 
-files <- list.files(file.path(path, "masks_temp", tissue))
+files <- list.files(file.path(path, "results/in_house/colored_masks/granulocyte/masks_temp", tissue))
 
 for(i in 1: length(files)){
   
-  masks <- loadImages(file.path(path, "masks_temp", tissue, files[i]), as.is = TRUE)
+  masks <- loadImages(file.path(path, "results/in_house/colored_masks/granulocyte/masks_temp", tissue, files[i]), as.is = TRUE)
   
   # delete later
   names(masks) <- str_match(files[i], "^.*_.*_(.*_.*_.*_.*_.*).tif")[,2]
-  c <- str_match(files[i], "^(.*_.*)_.*_.*_.*_.*_.*")[,2]
+  c <- str_match(files[i], "^(.*)_.*_.*_.*_.*_.*_.*")[,2]
   
   mcols(masks) <- DataFrame(sample_id = names(masks))
 
@@ -597,7 +648,7 @@ for(i in 1: length(files)){
             colour_by = "binary",
             colour = list(binary = col_celltype),
             display="single",
-            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
+            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/granulocyte/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
             legend=NULL)
 
 }

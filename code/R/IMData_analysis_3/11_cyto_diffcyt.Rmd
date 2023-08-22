@@ -42,15 +42,15 @@ We will first read in the previously generated `SpatialExperiment` object and tr
 #spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
 #spe <- readRDS(file.path(path,"results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$metacluster=="tumor" & spe$timepoint=="DE" & spe$study_id%in%paired_patients #&(spe$timepoint=="DE" | spe$timepoint=="RE2") 
+keep_cols <- spe$tissue=="BM" & (spe$timepoint=="DE" | spe$timepoint=="") & !spe$pg_clusters%in%c("52", "47", "49", "44", "50", "48", "43", "46") #&(spe$timepoint=="DE" | spe$timepoint=="RE2") 
 #spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
 # keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$celltype!="other" & spe$metacluster!="tumor" & spe$timepoint=="DE" & spe$MYCN_amp!=9
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
 sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
-#sce$condition <- factor(spe[keep_rows, keep_cols]$control)
-sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype)
+sce$condition <- factor(spe[keep_rows, keep_cols]$control)
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$pg_clusters)
 #sce$cluster_id <- factor(spe[keep_rows, keep_cols]$predicted_clusters)
 sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
@@ -68,13 +68,13 @@ progress <- replace(x = progress, list =  progress==0, values =  'NoProg')
 progress <- replace(x = progress, list =  progress==1, values =  'Prog')
 sce$progress <- as.factor(progress)
 
-sce$condition <- sce$tissue
+#sce$condition <- sce$progress
 
 sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 #sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
 
 # Add celltype information to metadata
-metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype))
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$pg_clusters))
 #metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$predicted_clusters))
 
 # Add metadata
@@ -365,7 +365,7 @@ For a DA analysis of cluster abundances, filtering is generally not required as 
 
 ```{r}
 keep <- filterByExpr(y.ab, group=y.ab$samples$condition)
-y.ab <- y.ab[keep,]
+#y.ab <- y.ab[keep,]
 summary(keep)
 ```
 
@@ -379,7 +379,7 @@ We formulate the design matrix without a blocking factor as we assume to have no
 ```{r}
 #unpaired
 #design <- model.matrix(~0+condition, y.ab$samples) #when list of contrasts is used
-#esign <- model.matrix(~condition, y.ab$samples)
+design <- model.matrix(~condition, y.ab$samples)
 
 #unpaired for multiple factors, e.g. MYCN
 # Group <- factor(paste(y.ab$samples$condition,y.ab$samples$mna,sep="."))
@@ -388,7 +388,7 @@ We formulate the design matrix without a blocking factor as we assume to have no
 # colnames(design) <- levels(Group)
 
 #paired analysis between timepoints
-design <- model.matrix(~patient+condition, y.ab$samples)
+#design <- model.matrix(~patient+condition, y.ab$samples)
 
 #multilevel design - comparisons between and within patients
 # patient <- y.ab$samples$patient
@@ -474,9 +474,9 @@ library(gtools)
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
 
 
-comparisons <-colnames(contrasts)
+#comparisons <-colnames(contrasts)
 #only for one comparison
-#comparisons <- c("novsyes")
+comparisons <- c("novsyes")
 
 plot_list_values <- list()
 plot_list_stars <- list()
@@ -490,13 +490,13 @@ for(i in 1:length(unique(p$data$cluster_id))){
   group2 <- c()
   logFC <- c()
   
-  for(j in 1:ncol(contrasts)){
-  #for(j in 1:1){
-    stats <- as.data.frame(topTags(res[[j]], n=Inf))
-    #stats <- as.data.frame(topTags(res, n=Inf))
+  #for(j in 1:ncol(contrasts)){
+  for(j in 1:1){
+    #stats <- as.data.frame(topTags(res[[j]], n=Inf))
+    stats <- as.data.frame(topTags(res, n=Inf))
     p_adj <- c(p_adj, stats[rownames(stats)==droplevels(cluster_name), "FDR"])
-    logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
-    #logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+    #logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+    logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
     group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
     group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
   }

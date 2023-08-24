@@ -21,6 +21,7 @@ multi-channel images and segmentation masks that can be read into `R` using the
 
 ```{r, message=FALSE}
 library(imcRtools)
+#testing
 library(cytomapper)
 library(BiocParallel)
 ```
@@ -183,7 +184,7 @@ library(RColorBrewer)
 library(circlize)
 library(paletteer)
 
-meta_path <- file.path(path, '20230617_metadata_complete.csv')
+meta_path <- file.path(path, '20230823_metadata_complete.csv')
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))

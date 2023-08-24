@@ -14,7 +14,6 @@ In this RMD file, we will perform clustering on the curated data (after excludin
 ```{r read-data}
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-
 spe <- readRDS(file.path(path,"results/in_house/spe_1px-curated.rds"))
 
 ```
@@ -150,12 +149,11 @@ library(Rphenoannoy)
 set.seed(221228)
 
 #Rphenograph_out <- Rphenoannoy(mat_red_clustering, k = 45)
-Rphenograph_out <- Rphenoannoy(t(mat), k = 45)
 
-clusters <- factor(membership(Rphenograph_out[[2]]))
+#clusters <- factor(membership(Rphenograph_out[[2]]))
 #saveRDS(clusters, file.path(path, "results/in_house/pg_clusters.rds"))
 
-#clusters <- readRDS(file.path(path, "results/in_house/pg_clusters.rds"))
+clusters <- readRDS(file.path(path, "results/in_house/pg_clusters.rds"))
 spe$pg_clusters <- clusters
 ```
 
@@ -614,12 +612,12 @@ Heatmap(mean_t,
 ```
 We can see that cluster 53 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
 
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=10}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=12}
 library(scuttle)
 
 set.seed(20230139)
 
-sticky_cluster <- "29"
+sticky_cluster <- "53"
 
 # Feature-wise scaling
 mean_t_wo_sticky <- mean_t[,levels(clusters)!=sticky_cluster]
@@ -656,6 +654,7 @@ column_ha = HeatmapAnnotation(cluster = droplevels(mean[levels(clusters)!=sticky
 Heatmap(mean_t_wo_sticky, 
         column_title = "Cluster-means heatmap with phenograph clusters (1px -mean)-scaled",
         top_annotation = column_ha, 
+        row_labels=sapply(strsplit(rownames(mean_t_wo_sticky), "_"), "[[", 1),
         cluster_columns=T,
         cluster_rows=T,
         show_column_dend = T,
@@ -671,16 +670,38 @@ Then, we will perform dimensionality reduction by UMAP for visualization.
 
 ```{r UMAP, message=FALSE}
 
-mat_red <- calculateUMAP(mat, n_neighbors=30, BPPARAM = MulticoreParam(RNGseed = 221228))
+#mat_red <- calculateUMAP(mat, n_neighbors=30, BPPARAM = MulticoreParam(RNGseed = 221228))
 
 rownames(mat_red) <- colnames(spe)
 
-saveRDS(mat_red, file.path(path, "results/in_house/mat_red.rds"))
+#saveRDS(mat_red, file.path(path, "results/in_house/mat_red.rds"))
 
-#mat_red <- readRDS(file.path(path,"results/in_house/mat_red.rds"))
+mat_red <- readRDS(file.path(path,"results/in_house/mat_red.rds"))
 
 #Apply changes to SPE object
 reducedDim(spe, "UMAP") <- mat_red
+```
+
+We will first plot the clusters in the UMAP.
+
+```{r cell type umap, fig.width=15, message=FALSE}
+library(dittoSeq)
+library(scater)
+library(patchwork)
+library(cowplot)
+library(viridis)
+
+
+## UMAP colored by cell type and expression - dittoDimPlot
+p1 <- dittoDimPlot(spe, var = "pg_clusters", 
+             reduction.use = "UMAP", size = 1,
+             do.label = TRUE,
+             legend.show=F) +
+  scale_color_manual(values = col_clusters) + 
+  theme(legend.title = element_blank()) +
+  ggtitle("PG clusters on UMAP")
+
+p1
 ```
 
 Next we will visualize the tissue type in the UMAP space.
@@ -998,7 +1019,8 @@ tissue = "BM"
 
 files <- list.files(file.path(path, "masks_temp", tissue))
 
-for(i in 1: length(files)){
+#for(i in 1: length(files)){
+for(i in 1: 1){
   
   masks <- loadImages(file.path(path, "masks_temp", tissue, files[i]), as.is = TRUE)
   
@@ -1030,132 +1052,173 @@ for(i in 1: length(files)){
             colour_by = "binary",
             colour = list(binary = col_celltype),
             display="single",
-            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
-            legend=NULL)
+            #save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
+            #legend=NULL
+            )
 
 }
 
 ```
-
 
 We will then examine the cell types in the images and annotate the clusters based on literature.
 
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(dplyr)
-annotation <- read.csv(file.path(path, "results", "separate/PT_separately", "annotation.csv"), sep=";")
+annotation <- read.csv(file.path(path, "results", "in_house", "annotation_v5.csv"), sep=";")
 
 #non-merged clusters
-
 # BM_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$BM.annotation.2), annotation$cluster)
 # PT_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$PT.annotation.2), annotation$cluster)
-# BM_cluster_names <- setNames(annotation$BM.level.1, annotation$cluster)
-# PT_cluster_names <- setNames(annotation$PT.level.1, annotation$cluster)
-#BM_cluster_names <- setNames(annotation$BM.annotation.2, annotation$cluster)
+BM_cluster_names <- setNames(annotation$BM.annotation.2, annotation$cluster)
 PT_cluster_names <- setNames(annotation$PT.annotation.2, annotation$cluster)
 
-#BM_celltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_cluster_names)
+BM_celltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_cluster_names)
 PT_celltypes <- recode(spe[,spe$tissue=="PT"]$pg_clusters, !!!PT_cluster_names)
 
 spe$celltype <- "na"
-#spe[,spe$tissue=="BM"]$celltype<- as.vector(BM_celltypes)
+spe[,spe$tissue=="BM"]$celltype<- as.vector(BM_celltypes)
 spe[,spe$tissue=="PT"]$celltype<- as.vector(PT_celltypes)
-
-set.seed(230820)
-col_clusters <- setNames(sample(col_vector_433, length(unique(spe$celltype))), unique(spe$celltype))
-metadata(spe)$color_vectors$col_celltype <- col_clusters
-
-#metadata(spe)$color_vectors$col_BM_celltype <- setNames(unname(col_clusters), BM_cluster_names)
-#metadata(spe)$color_vectors$col_PT_celltype <- setNames(unname(col_clusters), PT_cluster_names)
-#metadata(spe)$color_vectors$col_celltype <- c(metadata(spe)$color_vectors$col_BM_celltype, metadata(spe)$color_vectors$col_PT_celltype)
 ```
 We will do the same for the metaclusters.
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 
-#BM_metacluster_names <- setNames(annotation$BM.level.2, annotation$cluster)
-PT_metacluster_names <- setNames(annotation$PT.level.2, annotation$cluster)
+BM_metacluster_names <- setNames(annotation$BM.metacluster, annotation$cluster)
+PT_metacluster_names <- setNames(annotation$PT.metacluster, annotation$cluster)
 
-#BM_metacelltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_metacluster_names)
+BM_metacelltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_metacluster_names)
 PT_metacelltypes <- recode(spe[,spe$tissue=="PT"]$pg_clusters, !!!PT_metacluster_names)
 
 spe$metacluster <- "na"
-#spe[,spe$tissue=="BM"]$metacluster<- as.vector(BM_metacelltypes)
+spe[,spe$tissue=="BM"]$metacluster<- as.vector(BM_metacelltypes)
 spe[,spe$tissue=="PT"]$metacluster<- as.vector(PT_metacelltypes)
 
-n <- length(unique(spe$metacluster))
-col_metacluster <- brewer.pal(n, "Set3")
-
-metadata(spe)$color_vectors$col_metacluster <- setNames(col_metacluster[1:length(unique(spe$metacluster))], unique(spe$metacluster))
-
 ```
 
-Now we will plot 41 distinct, manually selected colors.
+Since, the granulocytes are wrongly classified with immature and mature clusters being a mixture of both round and segmented nuclei, we will try to cluster this metacluster based on the morphological feature roundness only.
+```{r granulocyte_subclustering, fig.width=15}
+
+spe_gran <- spe[,spe$metacluster=="granulocyte" & spe$tissue=="BM"]
+
+col_celltype_gran <- setNames(c("#a6611a", "#dfc27d", "#80cdc1", "#018571"), c('neutrophil', 'band_cell', 'myelocyte', 'myeloblast'))
+spe_gran$gran_type <- 'neutrophil'
+spe_gran[,spe_gran$solidity>=0.83 & spe_gran$solidity<0.93]$gran_type <- 'band_cell'
+spe_gran[,spe_gran$solidity>=0.93 & spe_gran$solidity<0.97]$gran_type <- 'myelocyte'
+spe_gran[,spe_gran$solidity>=0.97]$gran_type <- 'myeloblast'
+
+files <- list.files(file.path(path, "masks_temp/BM"))
+#for(i in 1: length(files)){
+for(i in 1: 1){
+  masks <- loadImages(file.path(path, "masks_temp/BM", files[i]), as.is = TRUE)
+  
+  mcols(masks) <- DataFrame(sample_id = names(masks))
+
+  plotCells(masks,
+            object = spe_gran,
+            cell_id = "ObjectNumber", img_id = "sample_id",
+            colour_by = "gran_type",
+            colour = list(gran_type = col_celltype_gran),
+            display="single",
+            #save_plot = list(filename = file.path(path, "results/summary", paste0("2", files[i], "f"))),
+            #legend=NULL
+            )
+  
+    # plotCells(masks,
+    #         object = spe,
+    #         cell_id = "ObjectNumber", img_id = "sample_id",
+    #         colour_by = "celltype",
+    #         colour = list(celltype = metadata(spe)$color_vector$col_celltype),
+    #         display="single",
+    #         save_plot = list(filename = file.path(path, "results/summary", paste0("2", files[i], "f"))),
+    #         legend=NULL
+    #         )
+}
+```
+
+We will now assign the determined granulocyte subtypes for the BM cells. 
+
+```{r granulocyte_subclustering, fig.width=15}
+#assign new granulocyte celltypes
+spe[,colnames(spe_gran)]$celltype <- spe_gran$gran_type
+spe[,spe$tissue=="PT" & spe$metacluster=="granulocyte"]$celltype <- "neutrophil"
+```
+
+We will manually select distinct colors.
+
 ```{r colors, message=FALSE, fig.height=17}
+col_clusters <- c("CD10+ CXCR4dim"=rgb(255,255,162, maxColorValue = 255),
+                "CD10+"=rgb(255,221,57, maxColorValue = 255),
+                #"3"=rgb(246,246,0, maxColorValue = 255),
+                "other"=rgb(255,255,209, maxColorValue = 255),
+                "Ki67+ CXCR4+"=rgb(254,217,166, maxColorValue = 255),
+                "MSC"=rgb(253,180,98, maxColorValue = 255),
+                "S100B- pot. NK"=rgb(255,137,0, maxColorValue = 255),
+                "S100B+ pot. NK"=rgb(241,75,2, maxColorValue = 255),
+                "HLA-DR+ CXCR4+"=rgb(152,78,163, maxColorValue = 255),
+                "B cell"=rgb(192,159,202, maxColorValue = 255),
+                "naive CD8 T cell"=rgb(188,128,189, maxColorValue = 255),
+                "naive CD4 T cell"=rgb(190,174,212, maxColorValue = 255),
+                "S100B+ CD8 T cell"=rgb(253,218,236, maxColorValue = 255),
+                "GZMB+ PD1+ CD8 T cell"=rgb(251,154,153, maxColorValue = 255),
+                "GZMB+ PD1- CD8 T cell"=rgb(242,3,137, maxColorValue = 255),
+                "T cell"=rgb(251,128,114, maxColorValue = 255),
+                "PD1+ CD4 T cell"=rgb(254,142,175, maxColorValue = 255),
+                "PDL1+ CD8 T cell"=rgb(240,0,240, maxColorValue = 255),
+                "S100B+ CD4 T cell"=rgb(227,26,28, maxColorValue = 255),
+                "dense T cell region"=rgb(147,3,0, maxColorValue = 255),
+                "ELAVL4- CHGA- tumor"=rgb(230,245,201, maxColorValue = 255),
+                "CD24- CHGA- tumor"=rgb(204,235,197, maxColorValue = 255),
+                "ELAVL4+"=rgb(179,222,105, maxColorValue = 255),
+                "sympathoblast"=rgb(198,255,72, maxColorValue = 255),
+                "LUMhigh tumor"=rgb(65,208,57, maxColorValue = 255),
+                "GD2+CD56+"=rgb(60,119,97, maxColorValue = 255),
+                "CD14+ PDL1- monocyte"=rgb(104,180,238, maxColorValue = 255),
+                "monoblast"=rgb(128,177,211, maxColorValue = 255),
+                "CD14- PDL1- monocyte"=rgb(51,180,180, maxColorValue = 255),
+                "CHGA+ GATA3neg TC"=rgb(102,166,30, maxColorValue = 255),
+                "cycling sympathoblast"=rgb(149,144,89, maxColorValue = 255),
+                "CXCR4high sympathoblast"=rgb(210,205,126, maxColorValue = 255),
+                "CD44high tumor"=rgb(27,158,119, maxColorValue = 255),
+                "GD2low tumor"=rgb(102,194,165, maxColorValue = 255),
+                "CD14+ PDL1+ monocyte"=rgb(39,130,187, maxColorValue = 255),
+                "CD14- PDL1+ monocyte"=rgb(166,206,227, maxColorValue = 255),
+                "pDC"=rgb(212,241,240, maxColorValue = 255),
+                "band_cell"=rgb(169,189,210, maxColorValue = 255),
+                "myelocyte"=rgb(217,217,217, maxColorValue = 255),          
+                #"granulocyte"=rgb(251,241,232, maxColorValue = 255),
+                "myeloblast"=rgb(2,0,138, maxColorValue = 255),
+                "neutrophil"=rgb(113,113,113, maxColorValue = 255),
+                "fibroblast"=rgb(212,89,67, maxColorValue = 255),
+                "schwann cell"=rgb(156,76,24, maxColorValue = 255),
+                "LIN- Ki67+"=rgb(174,129,37, maxColorValue = 255),
+                "HPC"=rgb(212,143,75, maxColorValue = 255),
+                "HSC"=rgb(143,109,113, maxColorValue = 255))
 
-n <- length(unique(clusters))
+pie(rep(1, length(col_clusters)), col=col_clusters, labels=names(col_clusters))
 
-
-col_clusters <- c(rgb(255,255,162, maxColorValue = 255),
-                rgb(255,221,57, maxColorValue = 255),
-                rgb(246,246,0, maxColorValue = 255),
-                rgb(255,255,209, maxColorValue = 255),
-                rgb(254,217,166, maxColorValue = 255),
-                rgb(253,180,98, maxColorValue = 255),
-                rgb(255,137,0, maxColorValue = 255),
-                rgb(241,75,2, maxColorValue = 255),
-                rgb(152,78,163, maxColorValue = 255),
-                rgb(188,128,189, maxColorValue = 255),
-                rgb(190,174,212, maxColorValue = 255),
-                rgb(253,218,236, maxColorValue = 255),
-                rgb(251,154,153, maxColorValue = 255),
-                rgb(242,3,137, maxColorValue = 255),
-                rgb(251,128,114, maxColorValue = 255),
-                rgb(254,142,175, maxColorValue = 255),
-                rgb(240,0,240, maxColorValue = 255),
-                rgb(227,26,28, maxColorValue = 255),
-                rgb(147,3,0, maxColorValue = 255),
-                rgb(230,245,201, maxColorValue = 255),
-                rgb(204,235,197, maxColorValue = 255),
-                rgb(179,222,105, maxColorValue = 255),
-                rgb(198,255,72, maxColorValue = 255),
-                rgb(65,208,57, maxColorValue = 255),
-                rgb(60,119,97, maxColorValue = 255),
-                rgb(104,180,238, maxColorValue = 255),
-                rgb(128,177,211, maxColorValue = 255),
-                rgb(51,180,180, maxColorValue = 255),
-                rgb(102,166,30, maxColorValue = 255),
-                rgb(149,144,89, maxColorValue = 255),
-                rgb(210,205,126, maxColorValue = 255),
-                rgb(27,158,119, maxColorValue = 255),
-                rgb(102,194,165, maxColorValue = 255),
-                rgb(39,130,187, maxColorValue = 255),
-                rgb(166,206,227, maxColorValue = 255),
-                rgb(212,241,240, maxColorValue = 255),
-                rgb(169,189,210, maxColorValue = 255),
-                rgb(217,217,217, maxColorValue = 255),          
-                rgb(251,241,232, maxColorValue = 255),
-                rgb(2,0,138, maxColorValue = 255),
-                rgb(113,113,113, maxColorValue = 255),
-                rgb(212,89,67, maxColorValue = 255),
-                rgb(156,76,24, maxColorValue = 255),
-                rgb(174,129,37, maxColorValue = 255),
-                rgb(212,143,75, maxColorValue = 255),
-                rgb(143,109,113, maxColorValue = 255))
-
-pie(rep(1,n), col=col_clusters, labels=col_clusters)
-
-col_clusters <- setNames(col_clusters, c(0:(length(unique(clusters))-1)))
-
-metadata(spe)$color_vector$col_clusters <- col_clusters
-
-n <- length(unique(spe$celltype))
-
-col_celltype <- setNames(col_clusters, levels(spe$celltype))
-pie(rep(1,n), col=col_celltype, labels=levels(spe$celltype))
-
-metadata(spe)$color_vector$col_celltype <- col_celltype
+metadata(spe)$color_vectors$col_celltype <- col_clusters
 ```
+
+```{r colors, message=FALSE, fig.height=17}
+col_metacluster <- c("tumor"="palegreen4",
+                  "T-cell"="#FB8072",
+                  "NK"="indianred",
+                  "monocyte"="#8DD3C7",
+                  "granulocyte"="#80B1D3",
+                  "dendritic"="paleturquoise2",
+                  "B-cells"="#BC80BD",
+                  "other"="goldenrod1",
+                  "mesenchymal"="tan2",
+                  "progenitor"="tan4",
+                  "LIN- prol."="tan"
+                )
+                
+pie(rep(1, length(col_metacluster)), col=col_metacluster, labels=names(col_metacluster))
+
+metadata(spe)$color_vectors$col_metacluster <- col_metacluster
+```
+
 
 ## Save objects
 

@@ -88,7 +88,7 @@ expression, respectively.
 Both functions are highly flexible and return `ggplot` objects which can
 be further modified.
 
-```{r cell type umap, fig.width=30, fig.height=15, message=FALSE}
+```{r cell type umap, fig.width=15, message=FALSE}
 library(dittoSeq)
 library(scater)
 library(patchwork)
@@ -99,7 +99,7 @@ library(viridis)
 ## UMAP colored by cell type and expression - dittoDimPlot
 p1 <- dittoDimPlot(spe, var = "celltype", 
              reduction.use = "UMAP", size = 1,
-             do.label = TRUE,
+             do.label = T,
              legend.show=F) +
   scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) +
   #scale_color_manual(values = col_clusters) + 

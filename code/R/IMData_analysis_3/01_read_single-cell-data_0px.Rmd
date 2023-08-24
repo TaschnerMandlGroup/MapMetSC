@@ -138,7 +138,7 @@ spe$fm_id <- str_match(spe$sample, "_.*_(.*)_")[,2]
 spe$tissue <- str_match(spe$sample, "^.*_.*_(.*)")[,2] 
 spe$tissue[spe$tissue=="TU"] = "PT"
 
-meta <- read.csv(file.path(path, '20230617_metadata_complete.csv'))
+meta <- read.csv(file.path(path, '20230823_metadata_complete.csv'))
 
 spe$puncture_side <- meta$Puncture_side[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$infiltration_right <- meta$Infiltration_right[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]

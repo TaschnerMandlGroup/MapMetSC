@@ -344,7 +344,7 @@ Heatmap(mat[,rand_cells],
 
 Next, we will look at the mean marker expression per cluster. The next two code blocks can be also run for tissue types (PT/BM) separately. 
 
-```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=20, fig.width=28}
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.width=16, fig.height=12}
 library(scuttle)
 
 set.seed(20230135)
@@ -353,7 +353,7 @@ set.seed(20230135)
 matrix_hq <- mat_hq
 matrix_lq <- mat_lq
 morph_matrix <- mat_morph
-clust <- celltype
+clust <- spe$celltype
 
 #calculate heatmap over tissue-derived cells
 # tissue <- "PT"
@@ -408,14 +408,15 @@ Heatmap(mean_t,
         column_title = "Heatmap showing mean per cluster - unscaled",
         top_annotation = column_ha, 
         cluster_columns=T,
-        clustering_distance_columns="pearson", #use euclidian, kendal or pearson
+        clustering_distance_columns="pearson", #use euclidean, kendall or pearson
         clustering_method_columns="single",
         cluster_rows=T,
+        row_labels=sapply(strsplit(rownames(mean_t), "_"), "[[", 1),
         show_column_dend = T,
         show_column_names=T,
         show_row_names=T,
         col=viridis(100),
-        column_dend_height = unit(10, "cm")
+        column_dend_height = unit(8, "cm")
         )
 
 
@@ -426,7 +427,7 @@ We can see that cluster 38 are the sticky cells, which are positive for everythi
 library(scuttle)
 library(bruceR)
 
-sticky_cluster <- "sticky cell "
+sticky_cluster <- "other"
 
 # Feature-wise scaling
 mean_t_wo_sticky <- mean_t[,colnames(mean_t)!=sticky_cluster]
@@ -465,19 +466,19 @@ column_ha = HeatmapAnnotation(metacluster=mean_metacluster_wo_sticky,
                                        ), 
                               show_legend=T)
 
-set.seed(210220)
 Heatmap(mean_t_wo_sticky, 
-        column_title = "Heatmap showing mean per cluster without sticky cells - scaled",
+        column_title = "Heatmap showing mean per cluster - unscaled",
         top_annotation = column_ha, 
         cluster_columns=T,
-        clustering_distance_columns="pearson", #use euclidean, kendall or pearson
-        clustering_method_columns="single", #use single or ward.D2
+        clustering_distance_columns="pearson", #use euclidean, kendal or pearson
+        clustering_method_columns="single",
         cluster_rows=T,
+        row_labels=sapply(strsplit(rownames(mean_t_wo_sticky), "_"), "[[", 1),
         show_column_dend = T,
         show_column_names=T,
         show_row_names=T,
-        column_dend_height = unit(10, "cm"),
-        col=viridis(100)
+        col=viridis(100),
+        column_dend_height = unit(8, "cm")
         )
 
 
@@ -730,29 +731,35 @@ mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
 ```
 
 Next, we will visualize the cluster per sample and the sample per cluster as described [here](https://r-graph-gallery.com/48-grouped-barplot-with-ggplot2.html).
-```{r barplot-cluster-per-sample, fig.width=18}
+```{r barplot-cluster-per-sample, fig.width=12}
  # library
 library(ggplot2)
 library(tidyverse)
 
+col_celltype <- metadata(spe)$color_vectors$col_celltype
 col_celltype<- col_celltype[order(as.integer(names(col_celltype)))]
 
 colnames(mat) <- spe$sample
+
+#for more informative sample names
+colnames(mat) <- paste0(spe$tissue, "_", "MYCN:", spe$MYCN_amp, "_time:", spe$timepoint, "_Prog:", spe$progression, "_crtl:", spe$control, "_", spe$fm_id)
+
 data <- data.frame(sample=colnames(mat), celltype)
 data$freq <- 1
 
 data_wide <- data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0) 
 
 #write.csv(data_wide, file.path(path, "results/metadata/celltype-per-sample.csv"))
-
-data_long <- data_wide[c(146:170),] %>% pivot_longer(cols = !sample, names_to = "celltype", values_to = "count") 
+data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "celltype", values_to = "count") 
+data_long <- data_long[order(data_long$sample),]
+data_long <- data_long[grepl("BM", data_long$sample) & (grepl("MYCN:1", data_long$sample)| grepl("MYCN:3", data_long$sample)),]
 
 #data_long$celltype <- factor(data_long$celltype, levels=levels(celltype))
 data_long$celltype <- factor(data_long$celltype)
  
 # Stacked + percent
 ggplot(data_long, aes(fill=celltype, y=count, x=sample)) + 
-  ggtitle("Clusters per PT sample") +
+  ggtitle("Clusters per BM sample") +
   geom_bar(position="fill", stat="identity") + 
   scale_fill_manual(values = col_celltype) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
@@ -810,17 +817,17 @@ We will now visualize the clusters in a few samples to see if they make sense.
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(cytomapper)
 
-files <- list.files(file.path(path, "masks_temp"))
+files <- list.files(file.path(path, "masks_temp/BM"))
 
 for(i in 1: length(files)){
   
-  masks <- loadImages(file.path(path, "masks_temp", files[i]), as.is = TRUE)
+  masks <- loadImages(file.path(path, "masks_temp/BM", files[i]), as.is = TRUE)
   
   # tmp <- sub('.*clust_', '', files[i])
   # names(masks) <- sub("\\.tif.*", "", tmp)
   # c <- sub("\\_clust.*", "", files[i])
   
-  c <- "Tumor_1"
+  #c <- "Tumor_1"
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
   
@@ -830,23 +837,23 @@ for(i in 1: length(files)){
             colour_by = "celltype",
             colour = list(celltype = metadata(spe)$color_vector$col_celltype),
             display = "single",
-            save_plot = list(filename = file.path(path, "results/colored_masks/max_sample_per_cluster/", paste0("all_", files[i], "f"))),
+            save_plot = list(filename = file.path(path, "results/summary", paste0("all_", files[i], "f"))),
             legend = NULL)
 
 
-  col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
-  spe$binary <- 'no'
-  spe[,spe$celltype == c]$binary <- 'yes'
-
-
-  plotCells(masks,
-            object = spe,
-            cell_id = "ObjectNumber", img_id = "sample_id",
-            colour_by = "binary",
-            colour = list(binary = col_celltype_bin),
-            display="single",
-            save_plot = list(filename = file.path(path, "results/colored_masks/max_sample_per_cluster", paste0(files[i], "f"))),
-            legend=NULL)
+  # col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
+  # spe$binary <- 'no'
+  # spe[,spe$celltype == c]$binary <- 'yes'
+  # 
+  # 
+  # plotCells(masks,
+  #           object = spe,
+  #           cell_id = "ObjectNumber", img_id = "sample_id",
+  #           colour_by = "binary",
+  #           colour = list(binary = col_celltype_bin),
+  #           display="single",
+  #           save_plot = list(filename = file.path(path, "results/colored_masks/max_sample_per_cluster", paste0(files[i], "f"))),
+  #           legend=NULL)
 
 }
 
@@ -854,8 +861,8 @@ for(i in 1: length(files)){
 
 Next, we will look at cluster abundance per sample and visualize it together with the clinical data in a heatmap. 
 
-```{r cluster-abundance-per-sample, fig.width=30}
-#spe <- spe_all[,spe_all$metacluster != "tumor" & spe_all$celltype!="other" & spe_all$celltype!="LIN- prol."]
+```{r cluster-abundance-per-sample, fig.width=15, fig.height=12}
+#spe <- spe_all[,spe_all$tissue=="PT"]
 data <- data.frame(sample=spe$sample, celltype=spe$celltype)
 data$freq <- 1
 data_wide <- as.data.frame(data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0))
@@ -913,7 +920,7 @@ Heatmap(scaled_prop,
         clustering_method_columns = "complete",
         clustering_distance_columns = "euclidean",
         top_annotation = column_ha,
-        column_dend_height = unit(10, "cm"),
+        column_dend_height = unit(5, "cm"),
         cluster_columns=T,
         cluster_rows=T)
 ```
@@ -1064,4 +1071,5 @@ lgd2 = Legend(labels = c("BM", "PT"), title = "tissue",
 draw(h1+h2, heatmap_legend_list = list(lgd1,lgd2))
 
 ```
+
 

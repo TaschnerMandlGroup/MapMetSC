@@ -218,11 +218,11 @@ dittoBarPlot(spe, var = "celltype", group.by = "sample", #var.labels.reorder=clu
     scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 # by sample_id -count
-dittoBarPlot(spe, var = "celltype", scale = "count", group.by = "sample", retain.factor.levels=T, legend.show=F) +
+dittoBarPlot(spe, var = "celltype", scale = "count", group.by = "sample", retain.factor.levels=T, legend.show=T) +
     scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 # by patient_id - percentage
-dittoBarPlot(spe, var = "celltype", group.by = "study_id", retain.factor.levels=T) +
+dittoBarPlot(spe[,spe$tissue=="PT" & spe$metacluster=="tumor"], var = "celltype", group.by = "MYCN_amp", retain.factor.levels=T) +
     scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
 
 # by patient_id - count

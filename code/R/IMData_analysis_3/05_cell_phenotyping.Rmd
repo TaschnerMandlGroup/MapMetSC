@@ -1227,5 +1227,5 @@ processing and analysis.
 
 ```{r save-objects-read-data}
 
-saveRDS(spe, file.path(path, "results/in_house/spe_clustered_4.rds"))
+saveRDS(spe, file.path(path, "results/in_house/spe_clustered_5.rds"))
 ```

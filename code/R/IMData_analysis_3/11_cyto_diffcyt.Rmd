@@ -26,31 +26,27 @@ library(tidyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-#spe <- readRDS(file.path(path,"results/in_house/spe_clustered_fine.rds"))
-
-meta_path <- file.path(path, '20230617_metadata_complete.csv')
-meta_all = read.csv(meta_path)
-
-BM_patients <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "DE"]$study_id)
-PT_patients <- unique(spe[,spe$tissue=="PT"& spe$metacluster=="tumor"]$study_id)
-paired_patients <- intersect(BM_patients, PT_patients)
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_5.rds"))
 ```
 
 We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
 
 ```{r read-data-pheno, message=FALSE}
-#spe <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
-#spe <- readRDS(file.path(path,"results/public_datasets/Jansky_Lee/spe_predicted-clusters_Jansky-Lee_2.RDS"))
+BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "DE"]$study_id)
+BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "RE1"]$study_id)
+#PT_patients <- unique(spe[,spe$tissue=="PT"& spe$metacluster=="tumor"]$study_id)
+paired_patients <- intersect(BM_patients_1, BM_patients_2)
+
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$tissue=="BM" & (spe$timepoint=="DE" | spe$timepoint=="") & !spe$pg_clusters%in%c("52", "47", "49", "44", "50", "48", "43", "46") #&(spe$timepoint=="DE" | spe$timepoint=="RE2") 
+keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" &(spe$timepoint=="DE" | spe$timepoint=="RE1") & spe$study_id%in%paired_patients
 #spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
 # keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$celltype!="other" & spe$metacluster!="tumor" & spe$timepoint=="DE" & spe$MYCN_amp!=9
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
-sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
-sce$condition <- factor(spe[keep_rows, keep_cols]$control)
-sce$cluster_id <- factor(spe[keep_rows, keep_cols]$pg_clusters)
+sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
+#sce$condition <- factor(spe[keep_rows, keep_cols]$control)
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype)
 #sce$cluster_id <- factor(spe[keep_rows, keep_cols]$predicted_clusters)
 sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
@@ -74,7 +70,7 @@ sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, k
 #sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
 
 # Add celltype information to metadata
-metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$pg_clusters))
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype))
 #metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$predicted_clusters))
 
 # Add metadata
@@ -268,10 +264,10 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=18, fig.height=15}
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.height=8, fig.width=18}
 #
 
-plotAbundances(sce, k = "celltype", by = "sample", col_clust=F)
+plotAbundances(sce, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype)
 ```
 It may be quite hard to see the differences in cluster abundances in the plot above, especially for clusters with very low frequency.  And, since boxplots cannot represent multimodal distributions, we show boxplots with jittered points of the sample-level cluster proportions overlaid (Figure \@ref(fig:diff-freqs-plot-props-boxplot)).  The y-axes are scaled to the range of data plotted for each cluster, to better visualize the differences in frequency of lower abundance clusters. For this experiment, it may be interesting to additionally depict the patient information. We do this by plotting a different point shape for each patient. Indeed, we can see that often the direction of abundance changes between the two conditions are concordant among the patients.
 
@@ -379,7 +375,7 @@ We formulate the design matrix without a blocking factor as we assume to have no
 ```{r}
 #unpaired
 #design <- model.matrix(~0+condition, y.ab$samples) #when list of contrasts is used
-design <- model.matrix(~condition, y.ab$samples)
+#design <- model.matrix(~condition, y.ab$samples)
 
 #unpaired for multiple factors, e.g. MYCN
 # Group <- factor(paste(y.ab$samples$condition,y.ab$samples$mna,sep="."))
@@ -388,7 +384,7 @@ design <- model.matrix(~condition, y.ab$samples)
 # colnames(design) <- levels(Group)
 
 #paired analysis between timepoints
-#design <- model.matrix(~patient+condition, y.ab$samples)
+design <- model.matrix(~patient+condition, y.ab$samples)
 
 #multilevel design - comparisons between and within patients
 # patient <- y.ab$samples$patient
@@ -464,7 +460,7 @@ topTags(res[[2]], n=Inf)
 
 ```
 Next, we will plot these significance values onto a boxplot according to [this](https://www.datanovia.com/en/blog/ggpubr-how-to-add-p-values-generated-elsewhere-to-a-ggplot/).
-```{r, fig.width=16, fig.height=18}
+```{r, fig.width=20, fig.height=6}
 library(tidyr)
 library(ggpubr)
 library(rstatix)
@@ -476,7 +472,7 @@ p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_i
 
 #comparisons <-colnames(contrasts)
 #only for one comparison
-comparisons <- c("novsyes")
+comparisons <- c("DEvsRE1")
 
 plot_list_values <- list()
 plot_list_stars <- list()
@@ -506,29 +502,29 @@ for(i in 1:length(unique(p$data$cluster_id))){
   stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
   stats_df$p_fc <- paste0(stats_df$logFC, " (", stats_df$p_adj_signif, ")")
   
-  plot_list_values[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
-                  color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
-                  add = "jitter", title=cluster_name, show.legend = F) +
-          stat_pvalue_manual(
-            stats_df, 
-            y.position = max(proportions$Freq), 
-            step.increase = 0.2,
-            label = "p_adj"
-            )  + 
-          theme(aspect.ratio = 0.8, legend.position="none") +
-      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
-  
-  plot_list_stars[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
-                color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
-                add = "jitter", title=cluster_name, show.legend = F) +
-        stat_pvalue_manual(
-          stats_df, 
-          y.position = max(proportions$Freq), 
-          step.increase = 0.2,
-          label = "p_adj_signif"
-          )  + 
-        theme(aspect.ratio = 0.8, legend.position="none") +
-      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+  # plot_list_values[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
+  #                 color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
+  #                 add = "jitter", title=cluster_name, show.legend = F) +
+  #         stat_pvalue_manual(
+  #           stats_df, 
+  #           y.position = max(proportions$Freq), 
+  #           step.increase = 0.2,
+  #           label = "p_adj"
+  #           )  + 
+  #         theme(aspect.ratio = 0.8, legend.position="none") +
+  #     scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+  # 
+  # plot_list_stars[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
+  #               color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
+  #               add = "jitter", title=cluster_name, show.legend = F) +
+  #       stat_pvalue_manual(
+  #         stats_df, 
+  #         y.position = max(proportions$Freq), 
+  #         step.increase = 0.2,
+  #         label = "p_adj_signif"
+  #         )  + 
+  #       theme(aspect.ratio = 0.8, legend.position="none") +
+  #     scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
   
   plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
               color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
@@ -536,17 +532,17 @@ for(i in 1:length(unique(p$data$cluster_id))){
       stat_pvalue_manual(
         stats_df, 
         y.position = max(proportions$Freq), 
-        step.increase = 0.2,
+        step.increase = 0.8,
         label = "p_fc"
         )  + 
-      theme(aspect.ratio = 2, legend.position="none") +
+      theme(aspect.ratio = 1, legend.position="none") +
       scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
 }
 
 
-grid.arrange(grobs = plot_list_values, ncol = 6)
-grid.arrange(grobs = plot_list_stars, ncol = 6)
-grid.arrange(grobs = plot_list_fc, ncol = 6)
+# grid.arrange(grobs = plot_list_values, ncol = 6)
+# grid.arrange(grobs = plot_list_stars, ncol = 6)
+grid.arrange(grobs = plot_list_fc, ncol = 5)
 
 #checking NSCs
 # overview <- data.frame(patient=spe[,spe$control=="no" & spe$celltype=="60_NSC"]$study_id, progression=spe[,spe$control=="no" & spe$celltype=="60_NSC"]$progression) %>% group_by(patient, progression) %>% 

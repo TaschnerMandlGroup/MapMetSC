@@ -23,21 +23,21 @@ library(monocle3)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-rna <- readRDS(file.path(path,"results/public_datasets/Jansky/adrenal_gland_Seurat.RDS"))
+rna <- readRDS(file.path(path,"results/public_datasets/Kameneva/data/Seurat/adrenal.human.seurat.scrublet.rds"))
+#rna <- readRDS(file.path(path,"results/public_datasets/Jansky/adrenal_medulla_Seurat.RDS"))
 
 #only for Fetahu et al.
-monocle_cell_dataset <- readRDS(file.path(path,"public_datasets/Fetahu/rna_integrated_monocle.rds"))
-rna <- as.Seurat(monocle_cell_dataset, data=NULL)
-rna <- RenameAssays(object = rna, originalexp = 'RNA')
-celltype_details <- readRDS(file.path(path,"results/public_datasets/Fetahu/metadata.rds"))
-rna@active.ident <- setNames(pull(celltype_details[match(celltype_details$cell,colnames(rna)),"cellont_cluster"], "cellont_cluster"),
-                             pull(celltype_details[match(celltype_details$cell,colnames(rna)), "cell"], "cell"))
+# monocle_cell_dataset <- readRDS(file.path(path,"public_datasets/Fetahu/rna_integrated_monocle.rds"))
+# rna <- as.Seurat(monocle_cell_dataset, data=NULL)
+# rna <- RenameAssays(object = rna, originalexp = 'RNA')
+# celltype_details <- readRDS(file.path(path,"results/public_datasets/Fetahu/metadata.rds"))
+# rna@active.ident <- setNames(pull(celltype_details[match(celltype_details$cell,colnames(rna)),"cellont_cluster"], "cellont_cluster"),
+#                              pull(celltype_details[match(celltype_details$cell,colnames(rna)), "cell"], "cell"))
 
 #rna@assays$RNA@data <- NormalizeData(rna@assays$RNA@counts) # only for Lee et al.
 DefaultAssay(rna) <- "RNA"
 
-
-protein <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
+protein <- readRDS(file.path(path,"results/in_house/spe_clustered_5.rds"))
 protein <- protein[rowData(protein)$use_channel,]
 col_celltype <- metadata(protein)$color_vectors$col_celltype
 ```
@@ -61,12 +61,8 @@ Idents(protein) <- "celltype"
 
 common_features <- intersect(row.names(rna), row.names(protein))
 
-# filtering cells without expression in common genes
-#indx <- colSums(rna[common_features,])!=0
-#rna <- rna[,indx]
-
-#indx <- colSums(protein[common_features,])!=0
-#protein <- protein[,indx]
+tumor_markers <- c("ELAVL4", "CXCR4", "HLA-A", "CD24", "CD44", "NCAM1", "GATA3", "VIM", "MKI67", "ST8SIA1", "PRPH", "LUM", "CHGA", "SOX10", "S100B")
+common_features <- common_features[common_features%in%tumor_markers]
 ```
 
 # Quality control on public dataset
@@ -101,8 +97,9 @@ Heatmap(protein_mean_scaled,
 
 ```
 
-```{r mean-per-cluster-rna, fig.height=15, message=FALSE}
+```{r mean-per-cluster-rna, fig.height=6, fig.width=5, message=FALSE}
 
+#rna_clusters <- rna@meta.data$fate
 rna_clusters <- rna@active.ident
 rna_data <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
 rna_mean <- aggregate(t(rna_data), list(rna_clusters), mean)
@@ -125,26 +122,35 @@ Heatmap(rna_mean_scaled,
         )
 
 ```
+We will then visualize the two datasets by UMAP.
+
+```{r umap-rna, fig.width=10, fig.height=7, message=FALSE}
+library(RColorBrewer)
+library(paletteer)
+set.seed(230712)
+
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+col_rna_clusters = setNames(sample(col_vector_433, length(unique(rna@active.ident))), unique(rna@active.ident))
+
+#DimPlot(rna, reduction="ProjectedUMAP", cols=col_rna_clusters)
+DimPlot(rna, reduction="umap", cols=col_rna_clusters)
+
+```
+
+```{r umap-protein, message=FALSE, fig.width=10, fig.height=7}
+set.seed(230713)
+rand_cells <- sample(seq_len(ncol(protein)), 10000)
+DimPlot(protein[,rand_cells], reduction="UMAP", cols=col_celltype)
+```
+
 For further analysis we will exclude CD8A and the sticky cells.
 ```{r data-curation, message=FALSE}
-protein <- subset(x=protein, idents = c("53_sticky cells"), invert=TRUE)
 protein <- protein[,protein@meta.data$metacluster=="tumor"]
-#protein <- protein[,protein@meta.data$metacluster=="tumor" | protein@active.ident=="78_schwann cells" | protein@active.ident =="78_SCP"]
-rna <- subset(x=rna, idents = c("Immune cells", "Adrenal cortex", "Erythrocytes", "Hepatocytes", "Muscle progenitor cells", "Myocytes", "Myofibroblasts", "Mesenchymal cells", "Endothelial cells"), invert=TRUE)
-
-#protein <- protein[,protein@meta.data$metacluster=="tumor"]
-
-common_features <- common_features[!common_features%in%c("CD8A")]
-
-# indx <- colSums(rna[common_features,])!=0
-# rna <- rna[,indx]
-# 
-# indx <- colSums(protein[common_features,])!=0
-# protein <- protein[,indx]
+#rna <- subset(x = rna, subset=fate%in%c("sympathoblasts", "chromaffin", "SCP"))
 ```
 
 We will next plot the two together to look at similarity.
-```{r mean-per-cluster-combined, fig.height=15, message=FALSE}
+```{r mean-per-cluster-combined, fig.height=7, fig.width=7, message=FALSE}
 set.seed(230717)
 protein_clusters <- protein@active.ident
 protein_data <- GetAssayData(protein, assay = "originalexp", slot = "data")[common_features, ]
@@ -153,7 +159,7 @@ protein_mean_t <- t(protein_mean[,2:ncol(protein_mean)])
 colnames(protein_mean_t) <- protein_mean[,"Group.1"]
 protein_mean_scaled <- t(apply(protein_mean_t, 1, RESCALE, to=0:1))
 
-rna_clusters <- rna@active.ident
+rna_clusters <- droplevels(rna@active.ident)
 rna_data <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
 rna_mean <- aggregate(t(rna_data), list(rna_clusters), mean)
 rna_mean_t <- t(rna_mean[,2:ncol(rna_mean)])
@@ -183,7 +189,7 @@ Heatmap(mean_scaled,
 ```
 
 We will then look at cluster similarity in the PCA plot.
-```{r pca-plot, fig.height=20, fig.width=20, message=FALSE}
+```{r pca-plot, message=FALSE}
 library("FactoMineR")
 library("factoextra")
 library("tidyr")
@@ -197,47 +203,19 @@ data$modality <- as.factor(modality)
 fviz_pca_ind(data.pca, repel=T, habillage=data$modality)
 ```
 
-
-We will then visualize the two datasets by UMAP.
-
-```{r umap-rna, fig.width=8, fig.height=4, message=FALSE}
-library(RColorBrewer)
-library(paletteer)
-set.seed(230713)
-col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-col_rna_clusters = setNames(sample(col_vector_433, length(unique(rna@active.ident))), unique(rna@active.ident))
-
-DimPlot(rna, reduction="umap", cols=col_rna_clusters)
-
-```
-
-
-```{r umap-protein, message=FALSE, fig.width=20, fig.height=15}
-set.seed(230713)
-col_protein_clusters = setNames(sample(col_vector_433, length(unique(protein@active.ident))), unique(protein@active.ident))
-DimPlot(protein, reduction="UMAP", cols=col_protein_clusters, raster=F)
-```
-
 #Transfer labels with singleR
 
 Finally, we will test singleR to transfer labels from the RNA to the protein dataset. 
 
-```{r single-r, fig.height=15, fig.width= 15, message=FALSE}
+```{r single-r, fig.height=3, fig.width= 10, message=FALSE}
 library(BiocParallel)
 library(SingleR)
 
 rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
 rna_clusters <- rna@active.ident
-#rm(rna)
-protein_mat <- GetAssayData(protein, assay = "originalexp", slot = "data")[common_features, ]
+protein_mat <- GetAssayData(protein, assay = "originalexp", slot = "counts")[common_features, ]
 
 predicted_labels <- SingleR(test = protein_mat, ref = rna_mat, labels = rna_clusters, BPPARAM = MulticoreParam())
-
-protein_sce <- readRDS(file.path(path,"results/in_house/spe_clustered.rds"))
-protein_sce <- protein_sce[,protein_sce$celltype!="53_sticky cells"]
-protein_sce <- protein_sce[,protein_sce$metacluster=="tumor"]
-protein_sce$predicted_tumor_clusters <- predicted_labels$labels
-saveRDS(protein_sce, file.path(path,"results/public_datasets/Jansky/results/spe_predicted_tumor_clusters.rds"))
 
 plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 16000),])
 #plotScoreHeatmap(predicted_labels)
@@ -245,7 +223,7 @@ plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 16000)
 
 Next, we will look at the marker expression in a single-cell heatmap and plot the true and predicted labels in the top annotation bar.
 
-```{r heatmap prediciton, fig.height=10, fig.width= 15, message=FALSE}
+```{r heatmap prediciton, fig.height=5, fig.width= 8, message=FALSE}
 library(RColorBrewer)
 set.seed(20230517)
 
@@ -263,7 +241,7 @@ col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 
 col_predicted_labels = setNames(sample(col_vector_433, length(unique(predicted_label))), unique(predicted_label))
-col_true_labels = setNames(sample(col_vector_433, length(unique(true_label))), unique(true_label))
+col_true_labels = setNames(brewer.pal(11, "Paired"), unique(true_label))
 
 count <- min(table(predicted_label))
 count <- 500
@@ -276,17 +254,19 @@ for (i in 1: length(unique(predicted_label))){
   rand_cells <- c(rand_cells, rand_idx)
 }
 
-#rand_cells <- sample(seq_len(ncol(rna_mat)), 8000)
+rand_cells <- sample(seq_len(ncol(rna_mat)), 4800)
 
 column_ha = HeatmapAnnotation(predicted_label = predicted_label[rand_cells],
-                              #true_cluster = true_label[rand_cells],
+                              true_cluster = true_label[rand_cells],
                               col=list(predicted_label=col_predicted_labels, 
-                                       true_label=col_true_labels 
+                                       true_label=col_true_labels
                                        ), 
                               show_legend=T)
 
 
-Heatmap(as.matrix(protein_mat[,rand_cells]), 
+protein_mat_scaled <- t(apply(protein_mat[,rand_cells], 1, RESCALE, to=0:1))
+
+Heatmap(as.matrix(protein_mat_scaled), 
         column_title = "Protein data- scHeatmap - true and predicted labels",
         top_annotation = column_ha, 
         cluster_columns=F,
@@ -297,7 +277,7 @@ Heatmap(as.matrix(protein_mat[,rand_cells]),
         )
 ```
 
-```{r mean-per-cluster-protein, fig.height=11, fig.width=10, message=FALSE}
+```{r mean-per-cluster-protein, fig.height= 5, fig.width= 5, message=FALSE}
 library(bruceR)
 
 mat <- protein_mat
@@ -308,16 +288,13 @@ mean_t <- t(mean[,2:ncol(mean)])
 colnames(mean_t) <- mean[,"Group.1"]
 mean_scaled <- t(apply(mean_t, 1, RESCALE, to=0:1))
 
-column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(predicted_labels$labels))[,"Freq"], height = unit(3, "cm")),
-                              col=list(predicted_label=col_predicted_labels, 
-                                       true_label=col_true_labels 
-                                       ), 
+column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(predicted_labels$labels))[,"Freq"], height = unit(1, "cm")), 
                               show_legend=F)
 
-tumor_markers <- c("ELAVL4", "CXCR4", "MME", "CD74", "HLA-A", "CD274", "GATA3", "VIM", "MKI67", "CD44", "NCAM1", "ST8SIA1", "PRPH", "LUM", "CHGA", "SOX10", "S100B")
+#tumor_markers <- c("ELAVL4", "CXCR4", "MME", "CD74", "HLA-A", "CD274", "GATA3", "VIM", "MKI67", "CD44", "NCAM1", "ST8SIA1", "PRPH", "LUM", "CHGA", "SOX10", "S100B")
 
 
-Heatmap(mean_scaled[tumor_markers,], 
+Heatmap(mean_scaled[common_features,], 
         column_title = "Mean per cluster (protein data)",
         top_annotation = column_ha, 
         cluster_columns=T,
@@ -331,14 +308,12 @@ Heatmap(mean_scaled[tumor_markers,],
 
 Finally we will explore the mapping results in a barplot.
 
-```{r evaluate-barplot, fig.width=20, message=FALSE}
+```{r evaluate-barplot, fig.width=6, message=FALSE}
 
 data <- data.frame(RNA_clusters=predicted_label, protein_clusters=protein@active.ident)
 
 data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("protein_clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
-
-write.csv(data_wide, file.path(path,"results/public_datasets/Jansky/results/predicted_rna_per_protein_tumor_cluster.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !RNA_clusters, names_to = "protein_clusters", values_to = "count") 
 
@@ -365,6 +340,4 @@ proportion_2 <- unname(apply(data, 2, function(x){sort(x, decreasing=T)[2]}))
 assignments <- as.data.frame(cbind("protein_cluster" = protein_clust, "predicted_RNA_cluster_1" = predicted_rna_clust_1, "proportion_1"=proportion_1, "predicted_RNA_cluster_2" = predicted_rna_clust_2, "proportion_2"=proportion_2))
 
 assignments
-
-write.csv(assignments, file.path(path,"results/public_datasets/Jansky/results/similarity_assignments_tumor_woSchwann.csv"))
 ```

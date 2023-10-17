@@ -88,7 +88,7 @@ expression, respectively.
 Both functions are highly flexible and return `ggplot` objects which can
 be further modified.
 
-```{r cell type umap, fig.width=15, message=FALSE}
+```{r cell type umap, fig.width=15, fig.height=15, message=FALSE}
 library(dittoSeq)
 library(scater)
 library(patchwork)
@@ -97,11 +97,11 @@ library(viridis)
 
 
 ## UMAP colored by cell type and expression - dittoDimPlot
-p1 <- dittoDimPlot(spe, var = "celltype", 
+p1 <- dittoDimPlot(spe, var = "metacluster", 
              reduction.use = "UMAP", size = 1,
              do.label = T,
              legend.show=F) +
-  scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) +
+  scale_color_manual(values = metadata(spe)$color_vectors$col_metacluster) +
   #scale_color_manual(values = col_clusters) + 
   theme(legend.title = element_blank()) +
   ggtitle("Celltype on UMAP")
@@ -112,7 +112,10 @@ p2 <- dittoDimPlot(spe, var = "ELAVL4_Yb174_mean", assay = "exprs",
     scale_color_viridis()
   
 p1 + p2
+tiff(filename = "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/poster/metacluster_UMAP.tiff",
+     width = 151, height = 123, units = "mm", res=600)
 p1
+dev.off()
 ```
 ```{r cell type umap, fig.width=30, fig.height=15, message=FALSE}
 

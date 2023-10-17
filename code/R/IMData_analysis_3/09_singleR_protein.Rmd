@@ -66,8 +66,8 @@ set.seed(230713)
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 col_rna_clusters = setNames(sample(col_vector_433, length(unique(rna@active.ident))), unique(rna@active.ident))
 
-DimPlot(rna, reduction="ProjectedUMAP", cols=col_rna_clusters)
-#DimPlot(rna, reduction="umap", cols=col_rna_clusters)
+#DimPlot(rna, reduction="ProjectedUMAP", cols=col_rna_clusters)
+DimPlot(rna, reduction="umap", cols=col_rna_clusters)
 
 ```
 

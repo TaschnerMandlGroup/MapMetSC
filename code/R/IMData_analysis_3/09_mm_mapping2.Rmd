@@ -1,0 +1,264 @@
+---
+title: "Multimodal reference mapping tested on our own data"
+output:
+  html_document:
+    theme: united
+    df_print: kable
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+---
+
+# Intro: Seurat v4 Reference Mapping
+
+This vignette introduces the process of mapping query datasets to annotated references in Seurat. In this example, we map one of the first scRNA-seq datasets released by 10X Genomics of 2,700 PBMC to our [recently described CITE-seq reference of 162,000 PBMC measured with 228 antibodies](https://doi.org/10.1016/j.cell.2021.04.048). We chose this example to demonstrate how supervised analysis guided by a reference dataset can help to enumerate cell states that would be challenging to find with [unsupervised analysis](pbmc3k_tutorial.html). In a second example, we demonstrate how to serially map Human Cell Atlas datasets of human BMNC profiled from different individuals onto a consistent reference.
+
+We have [previously demonstrated](integration_mapping.html) how to use reference-mapping approach to annotate cell labels in a query dataset . In Seurat v4, we have substantially improved the speed and memory requirements for integrative tasks including reference mapping, and also include new functionality to project query cells onto a previously computed UMAP visualization.
+
+In this vignette, we demonstrate how to use a previously established reference to interpret an scRNA-seq query:
+
+* Annotate each query cell based on a set of reference-defined cell states
+* Project each query cell onto a previously computed UMAP visualization
+* Impute the predicted levels of surface proteins that were measured in the CITE-seq reference
+
+To run multi-modal mapping, we will first load single-cell RNAseq data from a single-cell adrenal gland atlas by [Jansky et al.](https://adrenal.kitz-heidelberg.de/developmental_programs_NB_viz/), and our imaging-based single-cell data
+
+```{r load-data, cache=FALSE}
+library(Seurat)
+library(SingleCellExperiment)
+library(dplyr)
+library(tidyr)
+library(monocle3)
+
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+
+reference <- readRDS(file.path(path,"results/public_datasets/Kameneva/data/Seurat/adrenal.human.seurat.scrublet.rds"))
+#reference <- readRDS(file.path(path,"results/public_datasets/Jansky/adrenal_medulla_Seurat.RDS"))
+
+DefaultAssay(reference) <- "RNA"
+
+protein <- readRDS(file.path(path,"results/in_house/spe_clustered_5.rds"))
+protein_celltype_colors <- metadata(protein)$color_vectors$col_celltype
+protein <- protein[rowData(protein)$use_channel,]
+```
+# Set common features 
+Next, we will set common features between the reference and query dataset. Therefore,we have to rename the features in the imaging dataset to the names of the corresponding genes. 
+
+```{r set common features, message=FALSE}
+
+protein2gene <- read.csv(file.path(path,"results/public_datasets/protein2gene.csv"), sep=";")
+
+code <- setNames(protein2gene$genes, protein2gene$protein)
+rownames(protein) <- recode(rownames(protein), !!!code)
+rowData(protein)$name <- rownames(protein)
+rowData(protein)$channel <- rownames(protein)
+
+protein <- as.Seurat(protein, counts = "counts", data = "exprs")
+Idents(protein) <- "celltype"
+
+common_features <- intersect(row.names(reference), row.names(protein))
+
+#tumor_markers <- c("ELAVL4", "CXCR4", "HLA-A", "CD24", "CD44", "NCAM1", "GATA3", "VIM", "MKI67", "ST8SIA1", "PRPH", "LUM", "CHGA", "SOX10", "S100B")
+tumor_markers <- c("ELAVL4", "CD44", "VIM", "MKI67", "PRPH", "CHGA", "SOX10", "S100B")
+common_features <- common_features[common_features%in%tumor_markers]
+```
+
+We will then visualize our reference (RNA) and query (protein) dataset.
+
+```{r ref.dimplot}
+DimPlot(object = reference, reduction = "umap", label = TRUE, label.size = 3, repel = TRUE) + NoLegend()
+```
+
+Since the Jansky dataset did not save the UMAP model, we will have to re-run the UMAP dimensionality reduction. Default seed is 42.
+
+```{r dim-reduction}
+# reference <- reference[,reference@active.ident%in%c(14,19,22)]
+# reference <- RunUMAP(object = reference, reduction = "pca", reduction.key = "UMAP_new", reduction.name = "umap.new", dims = 1:15, return.model=T)
+# saveRDS(reference, file.path(path,"results/public_datasets/Kameneva/adrenal.human.seurat.scrublet_medulla_UMAPmodel.rds"))
+reference <- readRDS(file.path(path,"results/public_datasets/Kameneva/adrenal.human.seurat.scrublet_medulla_UMAPmodel.rds"))
+#reference <- readRDS(file.path(path,"results/public_datasets/Jansky/adrenal_medulla_Seurat_UMAPmodel.RDS"))
+reference <- reference[rownames(reference)%in%common_features, ]
+```
+
+We will re-run the plot to see if the umap changed.
+
+```{r ref.dimplot}
+DimPlot(object = reference, reduction = "umap.new", label = TRUE, label.size = 3, repel = TRUE) + NoLegend()
+#we will reduce the dataset to the adrenal medullary cells only - only for Kameneva data
+
+```
+
+We can see that it looks very similar but now we have a UMAP model. We will then show the tumor cells of our dataset in a UMAP. 
+
+```{r ref.dimplot}
+protein <- protein[rownames(protein)%in%common_features,protein@meta.data$metacluster=="tumor"]
+DimPlot(object = protein, reduction = "UMAP", label = TRUE, label.size = 3, repel = TRUE, cols=protein_celltype_colors) + NoLegend()
+```
+
+## Mapping
+
+The reference was normalized using log normalization, so we use the same approach to normalize the query here.
+
+```{r 3k.preprocess, results="hide"}
+
+protein <- NormalizeData(object = protein)
+```
+
+We then find anchors between reference and query. 
+
+```{r transfer.anchors}
+library(future)
+library(parallel)
+options(future.globals.maxSize= 1048576000)
+plan("multisession", workers = detectCores() - 2)
+anchors <- FindTransferAnchors(
+  reference = reference,
+  query = protein,
+  reference.assay = "RNA", 
+  query.assay = "originalexp", 
+  normalization.method = "LogNormalize",
+  reduction="cca",
+  dims = 1:20
+)
+```
+
+We then transfer cell type labels and rna data from the reference to the query. Additionally, we project the query data onto the UMAP structure of the reference. 
+
+```{r transfer}
+
+plan("multisession", workers = detectCores() - 2)
+protein <- MapQuery(
+    anchorset = anchors,
+    query = protein,
+    reference = reference,
+    refdata = list(
+      celltype = reference@meta.data$fate,
+      #celltype = reference@active.ident,
+      imputed_protein = GetAssayData(reference, assay = "RNA", slot = "data")[common_features, ]
+      ),
+    reference.reduction = "pca",
+    reduction.model="umap.new"
+  )
+```
+
+## Explore the mapping results
+
+We can now visualize the query cells. They have been projected into a UMAP visualization defined by the reference, and each has received annotations.
+
+```{r 3k.refdimplots, fig.width=20, fig.height=8}
+library(RColorBrewer)
+library(ggplot2)
+
+protein_high.score <- protein[,apply(protein@assays$prediction.score.celltype@data, 2, max) > 0.75]
+  
+prot_color = setNames(brewer.pal(11,"Paired"), unique(protein@active.ident))
+p1=DimPlot(reference, reduction = "umap.new",group.by="fate",label = TRUE, label.size = 3, repel = TRUE)+ ggtitle("reference-scRNAseq data- Jansky")# + NoLegend()
+p2=DimPlot(protein_high.score, reduction = "ref.umap", label = TRUE, label.size = 3, repel = TRUE, cols=prot_color)+ ggtitle("query-IMC data with true labels") #+ NoLegend()
+p3=DimPlot(protein_high.score, reduction = "ref.umap", group.by = "predicted.celltype", label = TRUE, label.size = 3, repel = TRUE)+ ggtitle("query-IMC data with inferred labels")# + NoLegend()
+
+
+p1+p2+p3
+```
+
+Each prediction is assigned a score between 0 and 1.
+
+```{r 3k.featureplots1, fig.width = 10, fig.height =4}
+protein_high.score <- protein
+
+# Get the assay data
+matrix <- protein_high.score@assays$prediction.score.celltype@data
+
+# Set values below 0.75 to zero
+matrix[matrix < 0.75] <- 0
+
+# Replace the old assay data with the modified data
+protein_high.score@assays$prediction.score.celltype@data <- matrix
+
+#FeaturePlot(protein, features = c("Bridge", "cycling Neuroblasts", "late Neuroblasts", "Neuroblasts", "connecting Chromaffin cells", "SCPs", "late SCPs"),  reduction = "ref.umap", cols = c("lightgrey", "darkred"), ncol = 3) & theme(plot.title = element_text(size = 10))
+FeaturePlot(protein_high.score, features = c("chromaffin", "SCP", "sympathoblasts"),  reduction = "ref.umap", cols = c("lightgrey", "darkred"), ncol = 3) & theme(plot.title = element_text(size = 10))
+```
+```{r 3k.featureplots1, fig.width = 7.5, fig.height =10}
+library(cowplot)
+
+celltypes <- protein@meta.data$celltype
+celltype_unique <- unique(protein@meta.data$celltype)
+
+mat_red = protein@reductions$ref.umap@cell.embeddings
+plot_list <- list()
+
+bin_col <- setNames(c(adjustcolor("gray90",alpha.f=1), "palegreen4"), c(FALSE,TRUE))
+
+for(i in 1: length(celltype_unique)){
+
+  sample_binary <- celltypes == celltype_unique[i] & unname(apply(protein@assays$prediction.score.celltype@data, 2, max) > 0.75)
+  
+  background <- as.data.frame(mat_red[!sample_binary,])
+  foreground <- as.data.frame(mat_red[sample_binary,])
+  plot_list[[i]] <- ggplot(background, aes(x=refUMAP_1, y=refUMAP_2) ) +
+    geom_point(color="gray90", size=0.05) + 
+    #stat_density_2d(mapping=aes(fill = ..level..), data=foreground, geom = "polygon", show.legend=F) +
+    geom_point(data=foreground, color="palegreen4", show.legend=F, size=0.05, alpha=0.25) +
+    ggtitle(celltype_unique[i]) +
+    scale_fill_continuous(type = "viridis") +
+    theme(plot.title = element_text(size = 5), 
+          axis.title = element_text(size=5), 
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), 
+          axis.line = element_line(colour = "black"))
+
+}
+plot <- plot_grid(plotlist = plot_list, nrow=4, ncol=3) 
+
+plot
+```
+```{r mean-per-cluster-protein, fig.height=4, fig.width=10, message=FALSE}
+library(scuttle)
+library(bruceR)
+library(ComplexHeatmap)
+library(viridis)
+
+protein_clusters <- protein@meta.data$predicted.celltype
+protein_data <- GetAssayData(protein, assay = "originalexp", slot = "counts")[common_features, ]
+
+rand_cells <- sample(seq_len(ncol(as.matrix(protein_data))), 4000)
+
+column_ha = HeatmapAnnotation(cluster = protein_clusters[rand_cells],
+                              show_legend=T)
+
+Heatmap(as.matrix(protein_data)[,rand_cells], 
+        column_title = "Single-cell values (protein data)",
+        top_annotation = column_ha, 
+        cluster_columns=F,
+        column_order= order(protein_clusters[rand_cells], decreasing=F),
+        show_column_dend = F,
+        show_column_names=F,
+        show_row_names=T,
+        col=viridis(100)
+        )
+
+```
+
+```{r mean-per-cluster-protein, fig.height=6, fig.width=6, message=FALSE}
+
+protein_clusters <- protein@meta.data$predicted.celltype
+protein_data <- GetAssayData(protein, assay = "originalexp", slot = "data")[common_features, ]
+protein_mean <- aggregate(t(protein_data), list(protein_clusters), mean)
+
+protein_mean_t <- t(protein_mean[,2:ncol(protein_mean)])
+colnames(protein_mean_t) <- protein_mean[,"Group.1"]
+protein_mean_scaled <- t(apply(protein_mean_t, 1, RESCALE, to=0:1))
+
+column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(protein_clusters))[,"Freq"], height = unit(1, "cm")),
+                              show_legend=F)
+
+Heatmap(protein_mean_scaled, 
+        column_title = "Mean per cluster (protein data)",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+
+```
+

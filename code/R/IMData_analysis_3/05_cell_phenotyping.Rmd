@@ -1019,8 +1019,8 @@ tissue = "BM"
 
 files <- list.files(file.path(path, "masks_temp", tissue))
 
-#for(i in 1: length(files)){
-for(i in 1: 1){
+for(i in 1: length(files)){
+#for(i in 1: 1){
   
   masks <- loadImages(file.path(path, "masks_temp", tissue, files[i]), as.is = TRUE)
   
@@ -1052,8 +1052,8 @@ for(i in 1: 1){
             colour_by = "binary",
             colour = list(binary = col_celltype),
             display="single",
-            #save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
-            #legend=NULL
+            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
+            legend=NULL
             )
 
 }
@@ -1215,6 +1215,7 @@ col_metacluster <- c("tumor"="palegreen4",
                 )
                 
 pie(rep(1, length(col_metacluster)), col=col_metacluster, labels=names(col_metacluster))
+
 
 metadata(spe)$color_vectors$col_metacluster <- col_metacluster
 ```

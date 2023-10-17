@@ -15,8 +15,7 @@ In this RMD file, we will plot UMAPs and histograms on the annotated SPE.
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_4.rds"))
-
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_6.rds"))
 ```
 
 
@@ -67,13 +66,13 @@ column_ha = HeatmapAnnotation(celltype = celltype[rand_cells],
                               area = area[rand_cells],
                               solidity = solidity[rand_cells],
                               aspect_ratio = aspect_ratio[rand_cells],
-                              clPARP = clPARP[rand_cells],
+                              #clPARP = clPARP[rand_cells],
                               col=list(celltype=metadata(spe)$color_vectors$col_celltype, 
                                        tissue=col_tissue,
                                        area = col_area,
                                        solidity = col_solidity,
-                                       aspect_ratio = col_aspect_ratio,
-                                       clPARP = col_clPARP
+                                       aspect_ratio = col_aspect_ratio#,
+                                       #clPARP = col_clPARP
                                        ), 
                               show_legend=T)
 
@@ -160,7 +159,7 @@ for(i in 1: length(unique(celltype))){
 
 Next we will look at the single cell heatmap ordered by the identified phenograph clusters and sample the same number of cells from BM and PT samples. 
 
-```{r single-cell-heatmap-clusters, message=FALSE, fig.height=17}
+```{r single-cell-heatmap-clusters, message=FALSE, fig.height=7, fig.width=14}
 library(ComplexHeatmap)
 library(viridis)
 library(circlize)
@@ -185,20 +184,20 @@ col_area = colorRamp2(c(min(area[rand_cells]),min(area[rand_cells])+(max(area[ra
 col_solidity = colorRamp2(c(min(solidity[rand_cells]),min(solidity[rand_cells])+(max(solidity[rand_cells])-min(solidity[rand_cells]))/2, max(solidity[rand_cells])), c("blue", "white", "red"))
 col_aspect_ratio = colorRamp2(c(min(aspect_ratio[rand_cells]),min(aspect_ratio[rand_cells])+(max(aspect_ratio[rand_cells])-min(aspect_ratio[rand_cells]))/2, max(aspect_ratio[rand_cells])), c("blue", "white", "red"))
 
-col_clPARP = colorRamp2(c(min(clPARP[rand_cells]),min(clPARP[rand_cells])+(max(clPARP[rand_cells])-min(clPARP[rand_cells]))/2, max(clPARP[rand_cells])), c("blue", "white", "red"))
+#col_clPARP = colorRamp2(c(min(clPARP[rand_cells]),min(clPARP[rand_cells])+(max(clPARP[rand_cells])-min(clPARP[rand_cells]))/2, max(clPARP[rand_cells])), c("blue", "white", "red"))
 
 column_ha = HeatmapAnnotation(cluster = celltype[rand_cells],
                               tissue = tissue[rand_cells],
                               area = area[rand_cells],
                               solidity = solidity[rand_cells],
                               aspect_ratio = aspect_ratio[rand_cells],
-                              clPARP = clPARP[rand_cells],
+                              #clPARP = clPARP[rand_cells],
                               col=list(cluster=metadata(spe)$color_vector$col_celltype, 
-                                       tissue=col_tissue,
+                                       tissue=metadata(spe)$color_vectors$col_tissue,
                                        area = col_area,
                                        solidity = col_solidity,
-                                       aspect_ratio = col_aspect_ratio,
-                                       clPARP = col_clPARP
+                                       aspect_ratio = col_aspect_ratio#,
+                                       #clPARP = col_clPARP
                                        ), 
                               show_legend=T)
 
@@ -207,6 +206,7 @@ Heatmap(mat[,rand_cells],
         column_title = "Single-cell heatmap showing 4000 random cells per tissue type",
         top_annotation = column_ha, 
         cluster_columns=F,
+        row_labels=sapply(strsplit(rownames(mat), "_"), "[[", 1),
         column_order= order(celltype[rand_cells], decreasing=F),
         show_column_dend = T,
         show_column_names=F,
@@ -377,6 +377,7 @@ aspect_ratio_mean = mean_morph[,"aspect_ratio"]
 #Mean of low quality markers per cluster
 mean_lq <- aggregate(t(matrix_lq), list(clust), mean)
 clPARP_mean = mean_lq[,"clPARP_Yb176_mean"]
+FN1_mean = mean_lq[,"Fibronectin_La139_mean"]
 
 #Metacluster
 mean_metaclust <-aggregate(spe$metacluster, list(clust), max)
@@ -386,39 +387,62 @@ col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(a
 col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c("blue", "white", "red"))
 col_mean_aspect_ratio = colorRamp2(c(min(aspect_ratio_mean),min(aspect_ratio_mean)+(max(aspect_ratio_mean)-min(aspect_ratio_mean))/2, max(aspect_ratio_mean)), c("blue", "white", "red"))
 col_mean_clPARP = colorRamp2(c(min(clPARP_mean),min(clPARP_mean)+(max(clPARP_mean)-min(clPARP_mean))/2, max(clPARP_mean)), c("blue", "white", "red"))
+col_mean_FN1 = colorRamp2(c(min(FN1_mean),min(FN1_mean)+(max(FN1_mean)-min(FN1_mean))/2, max(FN1_mean)), c("blue", "white", "red"))
 
 column_ha = HeatmapAnnotation(metacluster=mean_metacluster,
                               celltype = mean[,"Group.1"], 
                               area=area_mean,
                               solidity = solidity_mean,
                               aspect_ratio = aspect_ratio_mean,
-                              clPARP = clPARP_mean,
-                              ncells=anno_barplot(as.data.frame(table(clust))[,"Freq"], height = unit(3, "cm")),
+                              # clPARP = clPARP_mean,
+                              # FN1 = FN1_mean,
+                              ncells=anno_barplot(as.data.frame(table(clust))[,"Freq"], height = unit(0.6, "cm")),
                               col=list(metacluster=metadata(spe)$color_vectors$col_metacluster,
                                        celltype=metadata(spe)$color_vectors$col_celltype, 
                                        area=col_mean_area,
                                        solidity=col_mean_solidity,
-                                       aspect_ratio=col_mean_aspect_ratio,
-                                       clPARP = col_mean_clPARP
+                                       aspect_ratio=col_mean_aspect_ratio#,
+                                       # clPARP = col_mean_clPARP,
+                                       # FN1 = col_mean_FN1
                                        ), 
-                              show_legend=T)
+                              show_legend=F,
+                             annotation_name_gp= gpar(fontsize = 7),
+                             simple_anno_size = unit(0.15, "cm"))
 
 
-Heatmap(mean_t, 
-        column_title = "Heatmap showing mean per cluster - unscaled",
+h1 <- Heatmap(mean_t, 
+        #column_title = "Heatmap showing mean per cluster - unscaled",
         top_annotation = column_ha, 
         cluster_columns=T,
         clustering_distance_columns="pearson", #use euclidean, kendall or pearson
         clustering_method_columns="single",
         cluster_rows=T,
         row_labels=sapply(strsplit(rownames(mean_t), "_"), "[[", 1),
-        show_column_dend = T,
+        show_column_dend = F,
+        show_row_dend = F,
         show_column_names=T,
         show_row_names=T,
         col=viridis(100),
-        column_dend_height = unit(8, "cm")
+        column_names_gp = grid::gpar(fontsize = 6),
+        row_names_gp = grid::gpar(fontsize = 7),
+        #column_dend_height = unit(4, "cm"),
+        column_names_rot = 45
         )
 
+# tiff(filename = "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/poster/heatmap_mean-per-cluster_flashtalk.tiff",
+#      width = 250, height = 160, units = "mm", 
+#      res=600)
+# h1
+# dev.off()
+
+library(tidyHeatmap)
+save_pdf(
+  h1,
+  "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/poster/heatmap_mean-per-cluster_legend.pdf",
+  width = 208,
+  height = 110,
+  units = c("mm")
+)
 
 ```
 We can see that cluster 38 are the sticky cells, which are positive for everything. We will exclude this cluster and re-generate the heatmap.
@@ -483,6 +507,107 @@ Heatmap(mean_t_wo_sticky,
 
 
 
+```
+```{r dot-plot, message=FALSE, fig.height=12, fig.width=10}
+library(sccore)
+library(parallel)
+library(viridis)
+library(dplyr)
+
+cores <- detectCores()
+rand_cells <- sample(seq_len(ncol(mat)), 200000)
+
+ct <- spe$celltype[rand_cells] %>% factor() %>% setNames(colnames(spe)[rand_cells])
+d <- dotPlot(markers = rownames(mat), count.matrix = t(mat[,rand_cells]), cell.groups = ct, n.cores=cores-2) + scale_color_viridis_c()
+df <- d$data
+```
+The problem above is that the internal scaling can't be turned off. So we will try to plot a dotplot with complex heatmap. 
+
+```{r dot-plot-complex-heatmap, message=FALSE, fig.height=8, fig.width=12}
+library(tidyr)
+library(bruceR)
+
+#Mean expression per cluster
+exp_mat_ <- aggregate(t(mat), list(spe$celltype), mean)
+exp_mat <- exp_mat_[,2:ncol(exp_mat_)]
+exp_mat <- apply(exp_mat, 2, RESCALE, to=0:1)
+rownames(exp_mat) <- exp_mat_[,"Group.1"]
+exp_mat <- t(exp_mat)
+head(exp_mat)
+
+#Percentage of cells per cluster expressing a marker (>0)
+tmp <- mat
+tmp[tmp > 0] <- 1
+tmp <- aggregate(t(tmp), list(spe$celltype), sum)
+tmp2 <- tmp[,2:ncol(tmp)]
+rownames(tmp2) <- tmp[,"Group.1"]
+percent_mat <- tmp2 / unname(table(spe$celltype))
+percent_mat <- t(percent_mat)
+percent_mat[percent_mat < 0.1] <- 0.1 #setting min values higher to make points in heatmap visible
+head(percent_mat)
+
+#Annotation bars
+mean_metaclust <-aggregate(spe$metacluster, list(spe$celltype), max)
+column_ha = HeatmapAnnotation(metacluster=mean_metaclust$x,
+                              celltype = colnames(exp_mat),
+                              ncells=anno_barplot(as.data.frame(table(spe$celltype))[,"Freq"], height = unit(1, "cm")),
+                              col=list(metacluster=metadata(spe)$color_vectors$col_metacluster, 
+                                       celltype=metadata(spe)$color_vectors$col_celltype
+                                       ), 
+                              show_legend=F)
+
+#Function to set dot size based on percentage expressed
+cell_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= percent_mat[i, j]/1.3 * min(unit.c(w, h)),
+                      gp = gpar(fill = col_fun(exp_mat[i, j]), col = NA))}
+
+#Function to set dot color based on mean expression
+col_fun = circlize::colorRamp2(c(0, 0.5, 1), viridis(100)[c(1,50,100)])
+
+#Function to set legend size according to percentage expressed
+layer_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= pindex(percent_mat, i, j)/1.3 * unit(2, "mm"),
+                      gp = gpar(fill = col_fun(pindex(exp_mat, i, j)), col = NA))}
+
+#Generate legend for percentage expressed
+lgd_list = list(
+    Legend( labels = c(0,0.25,0.5,0.75,1), title = "percentage expressed",
+            graphics = list(
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.25 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.5 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.75 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 1 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")))
+            ))
+
+#Heatmap
+hp <- Heatmap(exp_mat,
+        heatmap_legend_param=list(title="expression"),
+        column_title = "Dotplot - normalized mean expression and %expressed", 
+        top_annotation = column_ha, 
+        col=col_fun,
+        rect_gp = gpar(type = "none"),
+        clustering_distance_columns="pearson", #use euclidean, kendal or pearson
+        clustering_method_columns="single",
+        layer_fun = layer_fun,
+        row_labels=sapply(strsplit(rownames(exp_mat), "_"), "[[", 1),
+        cell_fun = cell_fun,
+        show_row_dend = F,
+        column_dend_height = unit(2, "cm"),
+        row_names_gp = gpar(fontsize = 7),
+        column_names_gp = gpar(fontsize = 7),
+        border = "black")
+
+draw( hp, annotation_legend_list = lgd_list)
 ```
 
 Next we will visualize the tissue type in the UMAP space.
@@ -729,6 +854,14 @@ save_tiff <- function(sublist, j){
 
 mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
 ```
+Next, we will plot the number of DTCs detected by IF (diagnostics) and IMC.
+```{r IF-vs-IMC, fig.width=12}
+df <- distinct(data.frame(sample=spe$sample, IF_right=spe$infiltration_right, IF_left=spe$infiltration_left))
+df$IMC_DTC_count <- unlist(lapply(df_test$sample, function(x){length(spe[,spe$sample==x & spe$metacluster=="tumor"]$sample_id)}))
+df$IMC_cell_count <- unlist(lapply(df_test$sample, function(x){length(spe[,spe$sample==x]$sample_id)}))
+df$IMC_percentage <- (df$IMC_DTC_count / df$IMC_cell_count)
+write.csv(df, file.path(path, "results/in_house/metadata/tumor_infiltration_IF_vs_IMC.csv"))
+```
 
 Next, we will visualize the cluster per sample and the sample per cluster as described [here](https://r-graph-gallery.com/48-grouped-barplot-with-ggplot2.html).
 ```{r barplot-cluster-per-sample, fig.width=12}
@@ -736,13 +869,14 @@ Next, we will visualize the cluster per sample and the sample per cluster as des
 library(ggplot2)
 library(tidyverse)
 
+celltype <- spe$celltype
 col_celltype <- metadata(spe)$color_vectors$col_celltype
 col_celltype<- col_celltype[order(as.integer(names(col_celltype)))]
 
 colnames(mat) <- spe$sample
 
 #for more informative sample names
-colnames(mat) <- paste0(spe$tissue, "_", "MYCN:", spe$MYCN_amp, "_time:", spe$timepoint, "_Prog:", spe$progression, "_crtl:", spe$control, "_", spe$fm_id)
+#colnames(mat) <- paste0(spe$tissue, "_", "MYCN:", spe$MYCN_amp, "_time:", spe$timepoint, "_Prog:", spe$progression, "_crtl:", spe$control, "_", spe$fm_id)
 
 data <- data.frame(sample=colnames(mat), celltype)
 data$freq <- 1
@@ -752,14 +886,14 @@ data_wide <- data %>% pivot_wider(names_from = c("celltype"), values_from = "fre
 #write.csv(data_wide, file.path(path, "results/metadata/celltype-per-sample.csv"))
 data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "celltype", values_to = "count") 
 data_long <- data_long[order(data_long$sample),]
-data_long <- data_long[grepl("BM", data_long$sample) & (grepl("MYCN:1", data_long$sample)| grepl("MYCN:3", data_long$sample)),]
+data_long <- data_long[grepl("TU", data_long$sample),] #& (grepl("MYCN:1", data_long$sample)| grepl("MYCN:3", data_long$sample)),]
 
 #data_long$celltype <- factor(data_long$celltype, levels=levels(celltype))
 data_long$celltype <- factor(data_long$celltype)
  
 # Stacked + percent
 ggplot(data_long, aes(fill=celltype, y=count, x=sample)) + 
-  ggtitle("Clusters per BM sample") +
+  ggtitle("Clusters per PT sample") +
   geom_bar(position="fill", stat="identity") + 
   scale_fill_manual(values = col_celltype) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
@@ -773,7 +907,7 @@ col_sample = setNames(sample(col_vector_433, length(unique(data$sample))), uniqu
 
 data_wide <- data %>% pivot_wider(names_from = c("sample"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "results/metadata/samples-per-celltype.csv"))
+#write.csv(data_wide, file.path(path, "results/metadata/samples-per-celltype.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !celltype, names_to = "sample", values_to = "count") 
 
@@ -817,43 +951,48 @@ We will now visualize the clusters in a few samples to see if they make sense.
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(cytomapper)
 
-files <- list.files(file.path(path, "masks_temp/BM"))
+tissue <- "TU"
+
+#files <- list.files(file.path(path, "results/in_house/colored_masks/masks_temp", tissue))
+files <- list.files(file.path(path, "masks_temp", tissue))
 
 for(i in 1: length(files)){
   
-  masks <- loadImages(file.path(path, "masks_temp/BM", files[i]), as.is = TRUE)
+  #masks <- loadImages(file.path(path, "results/in_house/colored_masks/masks_temp", tissue, files[i]), as.is = TRUE)
+  masks <- loadImages(file.path(path, "masks_temp", tissue, files[i]), as.is = TRUE)
   
   # tmp <- sub('.*clust_', '', files[i])
   # names(masks) <- sub("\\.tif.*", "", tmp)
   # c <- sub("\\_clust.*", "", files[i])
   
-  #c <- "Tumor_1"
+  c <- "CD24- CHGA- tumor"
   mcols(masks) <- DataFrame(sample_id = names(masks))
-  
   
   plotCells(masks,
             object = spe,
             cell_id = "ObjectNumber", img_id = "sample_id",
             colour_by = "celltype",
-            colour = list(celltype = metadata(spe)$color_vector$col_celltype),
+            colour = list(celltype = metadata(spe)$color_vectors$col_celltype),
             display = "single",
-            save_plot = list(filename = file.path(path, "results/summary", paste0("all_", files[i], "f"))),
+            #save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0("all_", files[i], "f"))),
+            save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
             legend = NULL)
 
 
-  # col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
-  # spe$binary <- 'no'
-  # spe[,spe$celltype == c]$binary <- 'yes'
-  # 
-  # 
-  # plotCells(masks,
-  #           object = spe,
-  #           cell_id = "ObjectNumber", img_id = "sample_id",
-  #           colour_by = "binary",
-  #           colour = list(binary = col_celltype_bin),
-  #           display="single",
-  #           save_plot = list(filename = file.path(path, "results/colored_masks/max_sample_per_cluster", paste0(files[i], "f"))),
-  #           legend=NULL)
+  col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
+  spe$binary <- 'no'
+  spe[,spe$celltype == c]$binary <- 'yes'
+
+
+  plotCells(masks,
+            object = spe,
+            cell_id = "ObjectNumber", img_id = "sample_id",
+            colour_by = "binary",
+            colour = list(binary = col_celltype_bin),
+            display="single",
+            #save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
+            save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
+            legend=NULL)
 
 }
 
@@ -862,7 +1001,7 @@ for(i in 1: length(files)){
 Next, we will look at cluster abundance per sample and visualize it together with the clinical data in a heatmap. 
 
 ```{r cluster-abundance-per-sample, fig.width=15, fig.height=12}
-#spe <- spe_all[,spe_all$tissue=="PT"]
+spe <- spe_all[,spe_all$tissue=="PT"]
 data <- data.frame(sample=spe$sample, celltype=spe$celltype)
 data$freq <- 1
 data_wide <- as.data.frame(data %>% pivot_wider(names_from = c("celltype"), values_from = "freq", values_fn = sum, values_fill = 0))
@@ -916,7 +1055,7 @@ column_ha = HeatmapAnnotation(imc_score=mean_IMC_score,
 
 Heatmap(scaled_prop,
         column_labels=paste0(coldata$study_id, "_", coldata$sample),
-        column_names_max_height = unit(12, "cm"),
+        column_names_max_height = unit(3, "cm"),
         clustering_method_columns = "complete",
         clustering_distance_columns = "euclidean",
         top_annotation = column_ha,
@@ -949,6 +1088,7 @@ Next, we will calculate the means per cluster.
 
 ```{r mean-per-cluster-with-metadata, message=FALSE, fig.height=20, fig.width=40}
 library(scuttle)
+library(bruceR)
 
 set.seed(20230135)
 
@@ -1011,7 +1151,7 @@ anno_mna_boxplot = function(index) {
 ```
 
 Then we will look at the mean marker expression per cluster and plot metadata in the annotation bars.
-```{r mean-per-cluster-heatmap-with-metadata, message=FALSE, fig.height=20, fig.width=40}
+```{r mean-per-cluster-heatmap-with-metadata, message=FALSE, fig.height=14, fig.width=20}
 
 row_ha = rowAnnotation(metacluster=mean_metacluster,
                               celltype = mean[,"Group.1"], 
@@ -1072,4 +1212,48 @@ draw(h1+h2, heatmap_legend_list = list(lgd1,lgd2))
 
 ```
 
+```{r mean-per-cluster-heatmap-with-metadata, message=FALSE, fig.height=6, fig.width=8}
+clust <- spe$celltype
+clust_pt <- spe[,spe$tissue=="PT"]$celltype
+clust_bm <- spe[,spe$tissue=="BM"]$celltype
 
+
+col_ha = columnAnnotation(#metacluster=mean_metacluster,
+                              celltype = mean[mean[,"Group.1"]%in%unique(spe[,spe$metacluster=="tumor"]$celltype),"Group.1"], 
+                              ncells_overall=anno_barplot(as.data.frame(table(clust))[,"Freq"], add_numbers=TRUE, height = unit(1.8, "cm")),
+                              ncells_PT=anno_barplot(as.data.frame(table(clust_pt))[,"Freq"], add_numbers=TRUE, height = unit(1.8, "cm"), gp = gpar(fill = "brown")),
+                              ncells_bm=anno_barplot(as.data.frame(table(clust_bm))[,"Freq"], add_numbers=TRUE, height = unit(1.8, "cm"), gp = gpar(fill = "aquamarine4")),
+                              tissue = anno_barplot(tissue_proportions[match(mean[mean[,"Group.1"]%in%unique(spe[,spe$metacluster=="tumor"]$celltype),"Group.1"], rownames(tissue_proportions)),], gp = gpar(fill = unname(metadata(spe)$color_vectors$col_tissue[colnames(tissue_proportions)])), beside = TRUE, attach = TRUE),
+                              col=list(metacluster=metadata(spe)$color_vectors$col_metacluster,
+                                       celltype=metadata(spe)$color_vectors$col_celltype
+                                       ), 
+                              show_legend=T)
+
+
+h1 <- Heatmap(mean_t, 
+        #title = "Heatmap showing mean marker expression per cluster-scaled",
+        name = "marker_expression", 
+        row_labels=sapply(strsplit(rownames(mean_t), "_"), "[[", 1),
+        top_annotation = col_ha, 
+        cluster_rows=T,
+        clustering_distance_columns="pearson", #use euclidian, kendal or pearson
+        clustering_method_columns="single",
+        cluster_columns=F,
+        show_row_dend = F,
+        show_column_dend = F,
+        show_row_names=T,
+        show_column_names=T,
+        col=viridis(100),
+        #row_dend_width = unit(5, "cm"),
+        #column_dend_height = unit(2, "cm"),
+        row_names_gp = gpar(fontsize = 8),
+        column_names_rot = 45,
+        column_names_gp = grid::gpar(fontsize = 6)
+        )
+
+lgd = Legend(labels = c("BM", "PT"), title = "tissue",
+    legend_gp = gpar(fill = unname(metadata(spe)$color_vectors$col_tissue[colnames(tissue_proportions)])))
+
+draw(h1, heatmap_legend_list = list(lgd))
+
+```

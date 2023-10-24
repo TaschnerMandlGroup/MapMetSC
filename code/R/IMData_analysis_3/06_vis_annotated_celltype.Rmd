@@ -521,23 +521,23 @@ ct <- spe$celltype[rand_cells] %>% factor() %>% setNames(colnames(spe)[rand_cell
 d <- dotPlot(markers = rownames(mat), count.matrix = t(mat[,rand_cells]), cell.groups = ct, n.cores=cores-2) + scale_color_viridis_c()
 df <- d$data
 ```
-The problem above is that the internal scaling can't be turned off. So we will try to plot a dotplot with complex heatmap. 
+The problem above is that the internal scaling can't be turned off. So we will try to plot a dotplot with complex heatmap according to [this](https://divingintogeneticsandgenomics.com/post/clustered-dotplot-for-single-cell-rnaseq/).
 
-```{r dot-plot-complex-heatmap, message=FALSE, fig.height=8, fig.width=12}
+```{r dot-plot-complex-heatmap, message=FALSE, fig.height=11, fig.width=16}
 library(tidyr)
 library(bruceR)
 
 #Mean expression per cluster
 exp_mat_ <- aggregate(t(mat), list(spe$celltype), mean)
 exp_mat <- exp_mat_[,2:ncol(exp_mat_)]
-exp_mat <- apply(exp_mat, 2, RESCALE, to=0:1)
+#exp_mat <- apply(exp_mat, 2, RESCALE, to=0:1)
 rownames(exp_mat) <- exp_mat_[,"Group.1"]
 exp_mat <- t(exp_mat)
 head(exp_mat)
 
 #Percentage of cells per cluster expressing a marker (>0)
 tmp <- mat
-tmp[tmp > 0] <- 1
+tmp[tmp > unname(quantile(exp_mat[exp_mat>0], c(0.2)))] <- 1
 tmp <- aggregate(t(tmp), list(spe$celltype), sum)
 tmp2 <- tmp[,2:ncol(tmp)]
 rownames(tmp2) <- tmp[,"Group.1"]
@@ -547,14 +547,34 @@ percent_mat[percent_mat < 0.1] <- 0.1 #setting min values higher to make points 
 head(percent_mat)
 
 #Annotation bars
+bm_count <- table(spe[,spe$tissue=="BM"]$celltype)
+bm_count[setdiff(colnames(exp_mat), names(bm_count))] <- 0
+bm_count <- bm_count[colnames(exp_mat)]
+pt_count <- table(spe[,spe$tissue=="PT"]$celltype)
+pt_count[setdiff(colnames(exp_mat), names(pt_count))] <- 0
+pt_count <- pt_count[colnames(exp_mat)]
+
 mean_metaclust <-aggregate(spe$metacluster, list(spe$celltype), max)
+
+mean_morph <- aggregate(t(mat_morph), list(spe$celltype), mean)
+area_mean = mean_morph[,"area"]
+solidity_mean = mean_morph[,"solidity"]
+col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(area_mean))/2, max(area_mean)), c("blue", "white", "red"))
+col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c("blue", "white", "red"))
+
 column_ha = HeatmapAnnotation(metacluster=mean_metaclust$x,
                               celltype = colnames(exp_mat),
-                              ncells=anno_barplot(as.data.frame(table(spe$celltype))[,"Freq"], height = unit(1, "cm")),
-                              col=list(metacluster=metadata(spe)$color_vectors$col_metacluster, 
-                                       celltype=metadata(spe)$color_vectors$col_celltype
+                              solidity = solidity_mean,
+                              area = area_mean,
+                              ncells_overall=anno_barplot(as.data.frame(table(spe$celltype))[,"Freq"], add_numbers=T, height = unit(1.8, "cm")),
+                              ncells_PT=anno_barplot(unname(pt_count), add_numbers=TRUE, height = unit(1.8, "cm"), gp = gpar(fill = "brown")),
+                              ncells_bm=anno_barplot(unname(bm_count), add_numbers=TRUE, height = unit(1.8, "cm"), gp = gpar(fill = "aquamarine4")),
+                             col=list(metacluster=metadata(spe)$color_vectors$col_metacluster, 
+                                       celltype=metadata(spe)$color_vectors$col_celltype,
+                                       solidity = col_mean_solidity,
+                                        area = col_mean_area
                                        ), 
-                              show_legend=F)
+                              show_legend=T)
 
 #Function to set dot size based on percentage expressed
 cell_fun = function(j, i, x, y, w, h, fill){
@@ -564,7 +584,7 @@ cell_fun = function(j, i, x, y, w, h, fill){
                       gp = gpar(fill = col_fun(exp_mat[i, j]), col = NA))}
 
 #Function to set dot color based on mean expression
-col_fun = circlize::colorRamp2(c(0, 0.5, 1), viridis(100)[c(1,50,100)])
+col_fun = circlize::colorRamp2(c(min(exp_mat),(max(exp_mat)-min(exp_mat))/2, max(exp_mat)), viridis(100)[c(1,50,100)])
 
 #Function to set legend size according to percentage expressed
 layer_fun = function(j, i, x, y, w, h, fill){

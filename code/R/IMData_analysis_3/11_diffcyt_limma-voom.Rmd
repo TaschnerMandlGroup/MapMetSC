@@ -37,7 +37,7 @@ BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$timepoin
 paired_patients <- intersect(BM_patients_1, BM_patients_2)
 
 keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster!="tumor" & spe$celltype!="other"  #& spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE2") #& spe$study_id%in%paired_patients & (spe$MYCN_amp==1 | spe$MYCN_amp==3) 
+keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$celltype!="other" & spe$celltype!="ELAVL4+"  #& spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE2") #& spe$study_id%in%paired_patients & (spe$MYCN_amp==1 | spe$MYCN_amp==3) 
 #spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
 # keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$celltype!="other" & spe$metacluster!="tumor" & spe$timepoint=="DE"
 
@@ -45,7 +45,7 @@ sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, k
 
 sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
 #sce$condition <- factor(spe[keep_rows, keep_cols]$control)
-sce$cluster_id <- factor(spe[keep_rows, keep_cols]$metacluster)
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype)
 #sce$cluster_id <- factor(spe[keep_rows, keep_cols]$predicted_clusters)
 sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
@@ -70,7 +70,7 @@ sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, k
 #sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
 
 # Add celltype information to metadata
-metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$metacluster))
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype))
 #metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$predicted_clusters))
 
 # Add metadata
@@ -111,7 +111,7 @@ For each sample, we plot its PBMC cell type composition represented with colored
 tiff(filename = "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/poster/barplot_tumor_anniversary.tiff",
      width = 219, height = 100, units = "mm",
      res=600)
-plotAbundances(sce, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_metacluster)
+plotAbundances(sce, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype)
 dev.off()
 ```
 
@@ -193,7 +193,7 @@ res <- list()
 set.seed(230722)
 for (i in 1:ncol(contrasts)){
 
-    res_DA <- testDA_voom(d_counts,design, contrasts[,i], 
+    res_DA <- testDA_edgeR(d_counts,design, contrasts[,i], 
                        min_cells=1, 
                        min_samples=1
                        )

@@ -98,7 +98,7 @@ library(viridis)
 
 ## UMAP colored by cell type and expression - dittoDimPlot
 p1 <- dittoDimPlot(spe, var = "metacluster", 
-             reduction.use = "UMAP", size = 1,
+             reduction.use = "UMAP", size = 1, labels.size=2,
              do.label = T,
              legend.show=F) +
   scale_color_manual(values = metadata(spe)$color_vectors$col_metacluster) +
@@ -112,10 +112,15 @@ p2 <- dittoDimPlot(spe, var = "ELAVL4_Yb174_mean", assay = "exprs",
     scale_color_viridis()
   
 p1 + p2
-tiff(filename = "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/poster/metacluster_UMAP.tiff",
-     width = 151, height = 123, units = "mm", res=600)
+tiff(filename = file.path(path, "results/in_house/20231030/UMAP_metacluster2.tiff"),
+     width = 115, height = 95, units = "mm", res=600)
 p1
 dev.off()
+
+# setEPS()
+# postscript(file.path(path, "results/in_house/20231030/UMAP_predicted_celltype_fetahu.eps"), height=3.74, width=4.52)
+# p1
+# dev.off()
 ```
 ```{r cell type umap, fig.width=30, fig.height=15, message=FALSE}
 

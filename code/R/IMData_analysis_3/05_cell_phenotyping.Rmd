@@ -1171,7 +1171,7 @@ col_clusters <- c(#"1"=rgb(255,255,162, maxColorValue = 255),
                 "dense T cell region"=rgb(145,2,144, maxColorValue = 255),
                 "marker-lo TC2"=rgb(230,245,201, maxColorValue = 255),
                 "marker-lo TC1"=rgb(204,235,197, maxColorValue = 255),
-                "ELAVL4+ cell"=rgb(179,222,105, maxColorValue = 255),
+                "neural progenitor"=rgb(238,118,0, maxColorValue = 255),
                 "marker-hi TC"=rgb(198,255,72, maxColorValue = 255),
                 "GATA3hi TC"=rgb(65,208,57, maxColorValue = 255),
                 "marker-lo TC3"=rgb(60,119,97, maxColorValue = 255),
@@ -1205,11 +1205,11 @@ metadata(spe)$color_vectors$col_celltype <- col_clusters
 ```{r colors, message=FALSE, fig.height=17}
 col_metacluster <- c("tumor"="palegreen4",
                   #"T-cell"="#FB8072",
-                  "lymphoid"="indianred",
-                  #"myeloid"="#8DD3C7",
-                  "myeloid"="#80B1D3",
+                  "T cell"="indianred",
+                  "granulocyte"="#80B1D3",
+                  "MO/DC/NK"="#8DD3C7",
                   #"dendritic"="paleturquoise2",
-                  #"B-cells"="#BC80BD",
+                  "B cell"="#BC80BD",
                   "other"="goldenrod1",
                   "progenitor"="tan2",
                   "mesenchymal"="tan4"
@@ -1230,5 +1230,5 @@ processing and analysis.
 
 ```{r save-objects-read-data}
 
-saveRDS(spe, file.path(path, "results/in_house/spe_clustered_7.rds"))
+saveRDS(spe, file.path(path, "results/in_house/spe_clustered_8.rds"))
 ```

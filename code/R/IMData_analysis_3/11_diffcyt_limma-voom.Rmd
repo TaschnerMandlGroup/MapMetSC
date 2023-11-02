@@ -25,23 +25,43 @@ library(dplyr)
 library(tidyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_5.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_8.rds"))
+
+clusternames_ordered <- read.csv(file.path(path, "results/in_house/20231030/celltypes_ordered.csv"), sep=";", colClasses = c("order" = "character"))
+codes <- setNames(paste0(clusternames_ordered$order, "_", clusternames_ordered$celltype), clusternames_ordered$celltype)
+spe$celltype_ordered <- recode(spe$celltype, !!!codes)
+
+metadata(spe)$color_vectors$col_celltype_ordered <- metadata(spe)$color_vectors$col_celltype
+names(metadata(spe)$color_vectors$col_celltype_ordered) <- recode(names(metadata(spe)$color_vectors$col_celltype), !!!codes)
+
+spe$celltype_ordered_2 <- spe$celltype_ordered
+spe[,spe$celltype_ordered_2=="30_marker-lo TC2"]$celltype_ordered_2 <- "29_marker-lo TC1"
+spe[,spe$celltype_ordered_2=="31_marker-lo TC3"]$celltype_ordered_2 <- "29_marker-lo TC1"
 ```
 
 We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
 
 ```{r read-data-pheno, message=FALSE}
-BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$timepoint == "DE"]$study_id) #spe$metacluster!="tumor")
-BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$timepoint == "RE2"]$study_id) #spe$metacluster!="tumor")
-#PT_patients <- unique(spe[,spe$tissue=="PT"& spe$metacluster=="tumor"]$study_id)
-paired_patients <- intersect(BM_patients_1, BM_patients_2)
+BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "DE"]$study_id )
+BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "RE1"]$study_id)
+BM_patients_3 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "RE2"]$study_id)
+PT_patients <- unique(spe[,spe$tissue=="PT"& spe$metacluster=="tumor"]$study_id)
+paired_patients <- intersect(BM_patients_1, BM_patients_3)
 
-keep_rows <- rowData(spe)$use_channel
-keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$celltype!="other" & spe$celltype!="ELAVL4+"  #& spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE2") #& spe$study_id%in%paired_patients & (spe$MYCN_amp==1 | spe$MYCN_amp==3) 
+spe$tmp <- "na"
+keep_rows <- rowData(spe)$use_channel 
+keep_cols <- spe$control=="no" & spe$tissue=="BM" & spe$metacluster =="tumor" #& (spe$MYCN_amp==0 | spe$MYCN_amp==1)
+  #spe$control=="no" & spe$MYCN_amp==0
+  #spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$celltype!="other" & spe$celltype!="ELAVL4+"  #& spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE2") #& spe$study_id%in%paired_patients & (spe$MYCN_amp==1 | spe$MYCN_amp==3) 
 #spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
 # keep_cols <- spe$tissue=="BM" & spe$control=="no" & spe$celltype!="other" & spe$metacluster!="tumor" & spe$timepoint=="DE"
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
+
+#for combining RE1 and RE2
+# sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
+# sce[,sce$timepoint=="RE1"]$timepoint <- "RE2"
+# sce$condition <- factor(sce$timepoint)
 
 sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
 #sce$condition <- factor(spe[keep_rows, keep_cols]$control)
@@ -52,7 +72,8 @@ sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 
 sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna <- as.vector(sce$mna)
-mna <- replace(x = mna, list =  mna %in% c(1, 3), values =  'MNA')
+mna <- replace(x = mna, list =  mna %in% c(1), values =  'MNA')
+mna <- replace(x = mna, list =  mna %in% c(3), values =  'het')
 mna <- replace(x = mna, list =  mna %in% c(0), values =  'nMNA')
 mna <- replace(x = mna, list =  mna %in% c(9), values =  'unknown')
 sce$mna <- as.factor(mna)
@@ -63,7 +84,7 @@ progress <- replace(x = progress, list =  progress==0, values =  'NoProg')
 progress <- replace(x = progress, list =  progress==1, values =  'Prog')
 sce$progress <- as.factor(progress)
 
-#sce$condition <- sce$progress
+#sce$condition <- sce$mna
 
 sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 #sce$sample_id <- factor(sample)
@@ -106,14 +127,105 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.height=9, fig.width=12}
-#
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=30}
+
+p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, linkage="ward.D", distance="manhattan")
+
 tiff(filename = "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/poster/barplot_tumor_anniversary.tiff",
      width = 219, height = 100, units = "mm",
      res=600)
-plotAbundances(sce, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype)
+p
+dev.off()
+
+setEPS()
+postscript(file.path(path, "results/in_house/20231030/BM_DEvsRE2_paired_barplot.eps"), height=5, width=10)
+p
 dev.off()
 ```
+
+
+Next, we will plot metadata on top of the clustered barplot. First, we will define the color code for the metadata. Find all built-in R color names [here](https://www.farb-tabelle.de/de/farbtabelle.htm). The [paletteer package](https://r-charts.com/color-palettes/) offers a wide range of color palettes.  
+
+```{r define-color-code, message=FALSE}
+library(ComplexHeatmap)
+library(RColorBrewer)
+library(paletteer)
+library(bruceR)
+library(circlize)
+library(viridis)
+
+meta_path <- file.path(path, '20230823_metadata_complete.csv')
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+
+meta_all = read.csv(meta_path)
+meta_all <- meta_all[order(meta_all$Study_ID),] #order by study-id
+
+exclude <- replace(x = meta_all$exclude, list =  !meta_all$exclude %in% c('no', 'maybe'), values =  'partially')
+
+DE_year <- sub("-.*", "", meta_all$DE_date)
+
+col_sample = setNames(sample(col_vector_433, length(unique(meta_all$Sample))), unique(meta_all$Sample))
+col_puncture_side = setNames(brewer.pal(length(unique(meta_all$Puncture_side)), 'Set3'), unique(meta_all$Puncture_side))
+col_staining_batch = setNames(sample(col_vector_74, length(unique(meta_all$Staining_date))), unique(meta_all$Staining_date))
+col_stainer = setNames(c('#a6611a', '#dfc27d', '#80cdc1', '#018571'), unique(meta_all$Stainer))
+col_imc_batch = setNames(sample(col_vector_74, length(unique(meta_all$IMC_date))), unique(meta_all$IMC_date))
+col_imc_score = colorRamp2(c(min(meta_all$IMC_score, na.rm = TRUE), max(meta_all$IMC_score, na.rm = TRUE)/2, max(meta_all$IMC_score, na.rm = TRUE)), c("red", "white", "blue")) 
+col_study_id = setNames(sample(col_vector_433, length(unique(meta_all$Study_ID))), unique(meta_all$Study_ID))
+col_DE_year = setNames(sample(col_vector_74, length(unique(DE_year))), unique(DE_year))
+col_timepoint = setNames(c('#7fc97f', '#beaed4', '#386cb0', '#ffff99', '#386cb0'), unique(meta_all$Timepoint)) #'#fdc086'
+col_aberrations = setNames(c('#a6611a','#018571','#80cdc1','#f5f5f5'), c(0,1,3,9))
+col_stages = setNames(c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c'), unique(meta_all$stage4))
+col_efs_dur = colorRamp2(c(min(meta_all$efs_dur, na.rm = TRUE), max(meta_all$efs_dur, na.rm = TRUE)/2, max(meta_all$efs_dur, na.rm = TRUE)), paletteer_c("ggthemes::Red-Green Diverging", 3))
+col_tissue = setNames(c('aquamarine4','brown'), unique(meta_all$Tissue))
+col_control = setNames(c('gray77', 'mediumseagreen'), unique(meta_all$control))
+col_exclude = setNames(c('#018571','#a6611a','#80cdc1'), unique(exclude))
+col_progress = setNames(c('gray77', 'palegreen3', 'firebrick1'), c('n.a.', 0, 1))
+```
+
+Now, we will plot an overview of the cohort.
+
+```{r overview-cohort, message=FALSE, fig.height=25}
+clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
+
+rownames(meta_all) <- paste0(meta_all$Sample, "_", meta_all$Tissue)
+meta_all <- meta_all[clustered_samples,]
+
+setEPS()
+postscript(file.path(path, "results/in_house/20231030/cohort_top_annotation_2.eps"), height=30, width=30)
+
+# columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation_legend_param = list(sample = list(grid_height=unit(0.05, "cm"), labels_gp = gpar(fontsize = 5)))) %v%
+  #columnAnnotation(exclusion=exclude, col=list(exclusion=col_exclude)) %v%
+  # columnAnnotation(imc_score=meta_all$IMC_score, col=list(imc_score=col_imc_score))  %v%
+  # columnAnnotation(staining_batch=meta_all$Staining_date, col=list(staining_batch=col_staining_batch)) %v%
+  # columnAnnotation(stainer=meta_all$Stainer, col=list(stainer=col_stainer)) %v%
+  # columnAnnotation(imc_batch=meta_all$IMC_date, col=list(imc_batch=col_imc_batch)) %v%
+  #columnAnnotation(DE_year=meta_all$Staining_date, col=list(staining_batch=col_staining_batch))  %v%
+  columnAnnotation(control=meta_all$control, col=list(control=col_control)) %v%
+  # columnAnnotation(study_id=meta_all$Study_ID, col=list(study_id=col_study_id))  %v%
+  columnAnnotation(timepoint=meta_all$Timepoint, col=list(timepoint=col_timepoint))  %v%
+  columnAnnotation(tissue=meta_all$Tissue, col=list(tissue=col_tissue)) %v%
+  # columnAnnotation(stage=meta_all$stage4, col=list(stage=col_stages)) %v%
+  columnAnnotation(progression=meta_all$efs, col=list(progression=col_progress))  %v%
+  # columnAnnotation(efs_dur=meta_all$efs_dur, col=list(efs_dur=col_efs_dur)) %v%
+  columnAnnotation(MYCN_amp=meta_all$MYCN_amp, col=list(MYCN_amp=col_aberrations), annotation_legend_param = list(MYCN_amp = list(title='aberration', 
+                                                                                                              #labels = c('no'))))  %v%
+                                                                                                              labels = c('no', 'yes', 'het', 'NA'))))  #%v%
+#   columnAnnotation(ALK_amp=meta_all$ALK_amp, col=list(ALK_amp=col_aberrations), show_legend=FALSE) %v%
+#   columnAnnotation(ALK_mut=meta_all$ALK_mut, col=list(ALK_mut=col_aberrations), show_legend=FALSE) %v%
+#   columnAnnotation(ATRX_del=meta_all$ATRX_del, col=list(ATRX_del=col_aberrations), show_legend=FALSE) %v%
+#   columnAnnotation(TERT_rear=meta_all$TERT_rear, col=list(TERT_rear=col_aberrations), show_legend=FALSE) %v%
+#   columnAnnotation(X1ploss=meta_all$X1p_loss, col=list(X1ploss=col_aberrations), show_legend=FALSE) %v%
+#   columnAnnotation(X1qgain=meta_all$X1q_gain, col=list(X1qgain=col_aberrations), show_legend=FALSE) %v%
+#   columnAnnotation(X11qloss=meta_all$X11q_loss, col=list(X11qloss=col_aberrations), show_legend=FALSE
+# )
+
+dev.off()
+```
+
 
 #test-functions Diffcyt
 Since the diffcyt wrapper does not work, we will test the test-functions from the diffcyt package. 
@@ -154,16 +266,16 @@ d_counts <- calcCounts(d_se)
 
 ```{r test-diffcyt, message=FALSE}
 # Create design matrix
-#design <- createDesignMatrix(experiment_info, cols_design = c("condition", "patient")) #paired
-design <- createDesignMatrix(experiment_info, cols_design = "condition")
+design <- createDesignMatrix(experiment_info, cols_design = c("condition", "patient")) #paired
+#design <- createDesignMatrix(experiment_info, cols_design = "condition")
 
 # Create contrast matrix
-contrast <- createContrast(c(0, 1)) # unpaired
-#contrast <- createContrast(c(0, 1, rep(0, length(unique(experiment_info$patient))-1))) #paired
+#contrast <- createContrast(c(0, 1)) # unpaired
+contrast <- createContrast(c(0, 1, rep(0, length(unique(experiment_info$patient))-1))) #paired
 nrow(contrast) == ncol(design)
 
 # Test for differential abundance (DA) of clusters
-res_DA <- testDA_voom(d_counts,design, contrast, 
+res_DA <- testDA_edgeR(d_counts,design, contrast, 
                        min_cells=1, 
                        min_samples=1
                        )
@@ -217,7 +329,7 @@ p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_i
 
 comparisons <-colnames(contrasts)
 #only for one comparison
-#comparisons <- c("NoProgvsProg")
+#comparisons <- c("DEvsRE2")
 
 plot_list_values <- list()
 plot_list_stars <- list()
@@ -232,36 +344,170 @@ for(i in 1:length(unique(p$data$cluster_id))){
   logFC <- c()
   
   for(j in 1:ncol(contrasts)){
-  #for(j in 1:1){
-    stats <- res[[j]]
-    #stats <- res
-    p_adj <- c(p_adj, round(stats[rownames(stats)==droplevels(cluster_name), "p_adj"],3))
-    logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
-    #logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
-    group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
-    group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
+  # for(j in 1:1){
+  stats <- res[[j]]
+  #stats <- res
+  p_adj <- c(p_adj, round(stats[rownames(stats)==droplevels(cluster_name), "p_adj"],3))
+  #logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+  logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+  group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
+  group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
   }
-  
+
   stats_df <- data.frame(p_adj=p_adj, group1=group1, group2=group2, logFC=logFC)
   stats_df$p_adj_signif <- stars.pval(stats_df$p_adj)
   stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
   stats_df$p_fc <- paste0(stats_df$logFC, " (", stats_df$p_adj, ")", " (", stats_df$p_adj_signif, ")")
   
-  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",
+  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", #order=c("RE1", "RE2"),
               color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
               add = "jitter", title=cluster_name, show.legend = F) +
       stat_pvalue_manual(
-        stats_df, 
-        y.position = max(proportions$Freq), 
+        stats_df,
+        y.position = max(proportions$Freq),
         step.increase = 0.4,
         label = "p_fc"
-        )  + 
-      theme(aspect.ratio = 0.8, legend.position="none") +
+        )  +
+      theme(aspect.ratio = 2, legend.position="none") +
       scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+  
+  # plot_list_fc[[i]] <- ggpaired(proportions, x = "condition", y = "Freq",
+  #             fill = "condition", palette =c("jco"),
+  #             add = "jitter", title=cluster_name, show.legend = F) +
+  #     # stat_pvalue_manual(
+  #     #   stats_df,
+  #     #   y.position = max(proportions$Freq),
+  #     #   step.increase = 0.4,
+  #     #   label = "p_fc"
+  #     #   )  +
+  #     theme(aspect.ratio = 2, legend.position="none") +
+  #     scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
 }
 pdf(file = "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/poster/DA_paired.pdf",   
     width = 15, # The width of the plot in inches
     height = 10)
-grid.arrange(grobs = plot_list_fc, ncol = 4)
+grid.arrange(grobs = plot_list_fc, ncol = 6)
+dev.off()
+
+setEPS()
+postscript(file.path(path, "results/in_house/20231030/PT_MNAvsnMNA_boxplot.eps"), height=6, width=20)
+grid.arrange(grobs = plot_list_fc, ncol = 6)
+   dev.off()
+```
+Here we plot boxplots connecting paired samples and coloring the dynamics associated with progression in black. 
+
+```{r, fig.width=14, fig.height=16}
+p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
+plot_list <- list()
+
+#for(i in 1:length(unique(p$data$cluster_id))){
+  #cluster_name <- unique(p$data$cluster_id)[i]
+  cluster_name <- "30_marker-lo TC2"
+  proportions <- data.frame(p$data[p$data$cluster_id == cluster_name, c("sample_id", "condition", "Freq")])
+  
+  proportions$progress <- sapply(strsplit(as.vector(proportions$sample_id), "_"), function(x) x[2])
+  proportions$sample_id <- sapply(strsplit(as.vector(proportions$sample_id), "_"), function(x) x[3])
+  
+  
+  # Reshape data from long to wide format
+  data_wide <- proportions %>%
+    pivot_wider(
+      names_from = condition,
+      values_from = Freq,
+      #values_fill = list(Freq = 120)  # This fills missing values with 120
+    )
+  
+  data <- as.data.frame(data_wide)
+  
+  data_long <- data_wide %>%
+    pivot_longer(
+      cols = -c(sample_id, progress),  # Exclude the sample_id column from pivoting
+      names_to = "condition",
+      values_to = "Freq"
+    )
+  
+  
+  # ggpaired(data, cond1 = "DE", cond2 = "RE2",
+  #     fill = "condition", palette = "jco")
+  
+  # setEPS()
+  # postscript(file.path(path, "results/in_house/20231030/ggpaired-test.eps"), height=6, width=20)
+  # 
+  # ggpaired(data_long, x = "condition", y = "Freq",
+  #               line.color = "gray", color="condition",
+  #               add = "jitter", line.size=0.4,
+  #               title=cluster_name, show.legend = F) +
+  #               theme(aspect.ratio = 2, legend.position="none") +
+  #               scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
+  #   geom_line(data_long = ~subset(., ID %in% c("A", "B")), aes(group = id), color = "red") +
+  #   theme(plot.title = element_text(colour = "Black", size = 14, face = "bold.italic"))
+  # 
+  # dev.off()
+  
+
+    plot_list[[i]] <- ggplot(data_long, aes(x = condition, y = Freq)) +
+      ggtitle(cluster_name) +
+      geom_boxplot(aes(fill = condition), alpha = 0.2, col = "grey") +
+      geom_point(aes(col = condition)) +
+      geom_line(aes(group = sample_id), color="gray") +
+      geom_line(data = ~subset(., progress %in% c("Prog")),aes(group = sample_id), color="black") +
+    theme(aspect.ratio=1.5, plot.title = element_text(colour = "Black", size = 14, face = "bold.italic"))
+#}
+
+setEPS()
+postscript(file.path(path, "results/in_house/20231030/BM_timepoint_ggpaired.eps"), height=14, width=9)
+grid.arrange(grobs = plot_list, ncol = 3)
 dev.off()
 ```
+
+Here we plot the abundances of celltypes however, we divide by the number of samples per group so that the result is not driven by outliers. 
+
+```{r}
+p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
+
+df_normalized <- p$data %>%
+  group_by(cluster_id, condition) %>%
+  summarise(normalized_count = mean(Freq, na.rm = TRUE)) %>%
+  ungroup()
+
+
+df_normalized$cluster_id <- factor(df_normalized$cluster_id)
+df_normalized$cluster_id <- factor(df_normalized$cluster_id, levels=c("GD2lo TC", "CHGAhi TC", "GATA3hi TC", "marker-hi TC", "marker-lo TC2", "marker-lo TC3", "Ki67hi TC", "CXCR4hi TC", "marker-lo TC1", "CD44+ marker-hi TC"))
+# Stacked + percent
+setEPS()
+postscript(file.path(path, "results/in_house/20231030/PT_MNAvsnMNA_dodge.eps"), height=4, width=8)
+
+
+ggplot(df_normalized, aes(fill=cluster_id, y=normalized_count, x=condition)) + 
+  ggtitle(paste0("celltype per ", groupname)) +
+  geom_bar(
+    #position="fill", 
+    #position="stack",
+    stat="identity",
+    position="dodge",
+    show.legend = T) + 
+  scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+dev.off()
+
+#Piechart
+setEPS()
+postscript(file.path(path, "results/in_house/20231030/BM_timepoint_piechart.eps"), height=2, width=6.5)
+
+ggplot(df_normalized, aes(x="", y=normalized_count, fill=cluster_id, group=cluster_id)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype) +
+  coord_polar("y", start=0)  +  
+  facet_grid(.~ condition) +
+  theme_void()
+dev.off()
+
+#one pie chart inside the other
+# ggplot(df_normalized, aes(x=condition, y=normalized_count, fill=cluster_id)) +
+#   geom_bar(stat="identity", width=1, color="white") +
+#   scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype) +
+#   coord_polar("y", start=0) 
+#   theme_void()
+```
+

@@ -995,18 +995,18 @@ for(i in 1: length(files)){
   # names(masks) <- sub("\\.tif.*", "", tmp)
   # c <- sub("\\_clust.*", "", files[i])
   
-  c <- "ELAVL4+ cell"
+  c <- "neural progenitor"
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
-  # plotCells(masks,
-  #           object = spe,
-  #           cell_id = "ObjectNumber", img_id = "sample_id",
-  #           colour_by = "celltype",
-  #           colour = list(celltype = metadata(spe)$color_vectors$col_celltype),
-  #           display = "single",
-  #           #save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0("all_", files[i], "f"))),
-  #           save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
-  #           legend = NULL)
+  plotCells(masks,
+            object = spe,
+            cell_id = "ObjectNumber", img_id = "sample_id",
+            colour_by = "celltype",
+            colour = list(celltype = metadata(spe)$color_vectors$col_celltype),
+            display = "single",
+            save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
+            save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
+            legend = NULL)
 
 
   col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
@@ -1020,8 +1020,8 @@ for(i in 1: length(files)){
             colour_by = "binary",
             colour = list(binary = col_celltype_bin),
             display="single",
-            #save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
             save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
+            #save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
             legend=NULL)
 
 }

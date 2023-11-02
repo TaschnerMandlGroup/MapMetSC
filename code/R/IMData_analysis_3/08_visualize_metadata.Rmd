@@ -173,7 +173,7 @@ draw(lgd, test = "add labels and title")
 ```
 
 Next, we will visualize the cluster per metadata group as described [here](https://r-graph-gallery.com/48-grouped-barplot-with-ggplot2.html).
-```{r barplot-cluster-per-sample, fig.height=15, fig.width=15}
+```{r barplot-cluster-per-sample}
  # library
 library(ggplot2)
 library(tidyverse)
@@ -185,8 +185,15 @@ library(tidyverse)
 #spe_reduced <- spe[,spe$tissue=="BM"&spe$metacluster=="tumor"]
 #groupname <- "control"
 
-spe_reduced <- spe[,spe$timepoint=="DE"  & spe$metacluster=="tumor"]
-groupname <- "tissue"
+spe_reduced <- spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor"]
+groupname <- "timepoint"
+
+spe_reduced$mna <- factor(spe_reduced$MYCN_amp)
+mna <- as.vector(spe_reduced$mna)
+mna <- replace(x = mna, list =  mna %in% c(1, 3), values =  'MNA')
+mna <- replace(x = mna, list =  mna %in% c(0), values =  'nMNA')
+mna <- replace(x = mna, list =  mna %in% c(9), values =  'unknown')
+spe_reduced$mna <- as.factor(mna)
 
 group <- colData(spe_reduced)[,groupname]
 
@@ -205,17 +212,33 @@ data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "celltype", v
 
 #data_long$celltype <- factor(data_long$celltype, levels=levels(celltype))
 
-write.csv(data_wide, file.path(path, paste0("results/metadata/celltype-per-", groupname, "_tumor.csv")))
+#write.csv(data_wide, file.path(path, paste0("results/metadata/celltype-per-", groupname, "_tumor.csv")))
  
+#change to percentage for dodge barplot
+df_normalized <- data_long %>%
+  group_by(sample) %>%
+  mutate(normalized_count = count / sum(count)) %>%
+  ungroup()
+
+df_normalized$celltype <- factor(df_normalized$celltype)
+df_normalized$celltype <- factor(df_normalized$celltype, levels=c("GD2lo TC", "CHGAhi TC", "GATA3hi TC", "marker-hi TC", "marker-lo TC2", "marker-lo TC3", "Ki67hi TC", "CXCR4hi TC", "marker-lo TC1", "CD44+ marker-hi TC"))
 # Stacked + percent
-ggplot(data_long, aes(fill=celltype, y=count, x=sample)) + 
+setEPS()
+postscript(file.path(path, "results/in_house/20231030/BM_MNAvsnMNA_barplot-dodge.eps"), height=4, width=8)
+
+
+ggplot(df_normalized, aes(fill=celltype, y=normalized_count, x=sample)) + 
   ggtitle(paste0("celltype per ", groupname)) +
-  geom_bar(position="fill", 
+  geom_bar(
+    #position="fill", 
     #position="stack",
     stat="identity",
+    position="dodge",
     show.legend = T) + 
   scale_fill_manual(values = col_celltype) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+dev.off()
 ```
 
 ## Session Info

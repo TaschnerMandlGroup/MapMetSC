@@ -48,9 +48,11 @@ BM_patients_3 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metaclus
 PT_patients <- unique(spe[,spe$tissue=="PT"& spe$metacluster=="tumor"]$study_id)
 paired_patients <- intersect(BM_patients_1, BM_patients_3)
 
+samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster=="tumor"]$sample) #be careful here- use sample_id when looking for samples with and sample when looking for samples without tumor cells
+
 spe$tmp <- "na"
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$control=="no" & spe$tissue=="BM" & spe$metacluster =="tumor" #& (spe$MYCN_amp==0 | spe$MYCN_amp==1)
+keep_cols <- spe$tissue=="BM" & spe$metacluster !="tumor" #& spe$control=="yes"#& !spe$sample%in%samples_with_tumor_cells & spe$control=="yes"
   #spe$control=="no" & spe$MYCN_amp==0
   #spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$celltype!="other" & spe$celltype!="ELAVL4+"  #& spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE2") #& spe$study_id%in%paired_patients & (spe$MYCN_amp==1 | spe$MYCN_amp==3) 
 #spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
@@ -63,9 +65,10 @@ sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, k
 # sce[,sce$timepoint=="RE1"]$timepoint <- "RE2"
 # sce$condition <- factor(sce$timepoint)
 
-sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
-#sce$condition <- factor(spe[keep_rows, keep_cols]$control)
-sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype)
+
+#sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
+sce$control <- factor(spe[keep_rows, keep_cols]$control)
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
 #sce$cluster_id <- factor(spe[keep_rows, keep_cols]$predicted_clusters)
 sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
@@ -84,15 +87,23 @@ progress <- replace(x = progress, list =  progress==0, values =  'NoProg')
 progress <- replace(x = progress, list =  progress==1, values =  'Prog')
 sce$progress <- as.factor(progress)
 
-#sce$condition <- sce$mna
+sce$timepoint <- spe[keep_rows, keep_cols]$timepoint
+sce[,sce$control=="yes"]$timepoint <- "crtl"
+sce$timepoint <- factor(sce$timepoint)
+sce$condition <- sce$timepoint
 
 sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
-#sce$sample_id <- factor(sample)
-#sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id))
+
+#Sorting samples in specific order
+# vec1 <- clustered_samples
+# vec2<- paste0(unique(spe[keep_rows, keep_cols]$fm_id),"_BM")
+# index_in_vec1 <- match(vec2, vec1)
+# fm_id <- vec2[order(index_in_vec1)]
+#sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_BM"), levels=fm_id)
+#sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_BM"), levels=clustered_samples)
 
 # Add celltype information to metadata
-metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype))
-#metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$predicted_clusters))
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
 
 # Add metadata
 metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,patient, mna, condition, progress) %>% 
@@ -127,9 +138,11 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=30}
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=15}
+set.seed(20231103)
+p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=T, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, linkage="ward.D", distance="manhattan")
 
-p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, linkage="ward.D", distance="manhattan")
+clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
 
 tiff(filename = "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/poster/barplot_tumor_anniversary.tiff",
      width = 219, height = 100, units = "mm",
@@ -138,7 +151,7 @@ p
 dev.off()
 
 setEPS()
-postscript(file.path(path, "results/in_house/20231030/BM_DEvsRE2_paired_barplot.eps"), height=5, width=10)
+postscript(file.path(path, "results/in_house/20231030/BM_bar_crtl.eps"), height=12, width=20)
 p
 dev.off()
 ```
@@ -166,16 +179,16 @@ meta_all <- meta_all[order(meta_all$Study_ID),] #order by study-id
 
 exclude <- replace(x = meta_all$exclude, list =  !meta_all$exclude %in% c('no', 'maybe'), values =  'partially')
 
-DE_year <- sub("-.*", "", meta_all$DE_date)
+#DE_year <- sub("-.*", "", meta_all$DE_date)
 
 col_sample = setNames(sample(col_vector_433, length(unique(meta_all$Sample))), unique(meta_all$Sample))
 col_puncture_side = setNames(brewer.pal(length(unique(meta_all$Puncture_side)), 'Set3'), unique(meta_all$Puncture_side))
-col_staining_batch = setNames(sample(col_vector_74, length(unique(meta_all$Staining_date))), unique(meta_all$Staining_date))
+col_staining_batch = setNames(viridis(length(unique(meta_all$Staining_date))), sort(unique(meta_all$Staining_date)))
 col_stainer = setNames(c('#a6611a', '#dfc27d', '#80cdc1', '#018571'), unique(meta_all$Stainer))
-col_imc_batch = setNames(sample(col_vector_74, length(unique(meta_all$IMC_date))), unique(meta_all$IMC_date))
+col_imc_batch = setNames(viridis(length(unique(meta_all$IMC_date))), sort(unique(meta_all$IMC_date)))
 col_imc_score = colorRamp2(c(min(meta_all$IMC_score, na.rm = TRUE), max(meta_all$IMC_score, na.rm = TRUE)/2, max(meta_all$IMC_score, na.rm = TRUE)), c("red", "white", "blue")) 
 col_study_id = setNames(sample(col_vector_433, length(unique(meta_all$Study_ID))), unique(meta_all$Study_ID))
-col_DE_year = setNames(sample(col_vector_74, length(unique(DE_year))), unique(DE_year))
+col_DE_year = setNames(viridis(length(unique(meta_all$DE_date))), sort(unique(meta_all$DE_date)))
 col_timepoint = setNames(c('#7fc97f', '#beaed4', '#386cb0', '#ffff99', '#386cb0'), unique(meta_all$Timepoint)) #'#fdc086'
 col_aberrations = setNames(c('#a6611a','#018571','#80cdc1','#f5f5f5'), c(0,1,3,9))
 col_stages = setNames(c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c'), unique(meta_all$stage4))
@@ -190,30 +203,33 @@ Now, we will plot an overview of the cohort.
 
 ```{r overview-cohort, message=FALSE, fig.height=25}
 clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
+# condition <- "RE2"
+# clustered_samples <- sapply(strsplit(levels(droplevels(p$data[p$data$condition==condition,]$sample_id)), "_"), function(x) paste(x[4], x[5], sep = "_"))
+#clustered_samples <- levels(p$data$sample_id)
 
 rownames(meta_all) <- paste0(meta_all$Sample, "_", meta_all$Tissue)
 meta_all <- meta_all[clustered_samples,]
 
 setEPS()
-postscript(file.path(path, "results/in_house/20231030/cohort_top_annotation_2.eps"), height=30, width=30)
+postscript(file.path(path, "results/in_house/20231030/anno_crtl.eps"), height=30, width=30)
 
 # columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation_legend_param = list(sample = list(grid_height=unit(0.05, "cm"), labels_gp = gpar(fontsize = 5)))) %v%
   #columnAnnotation(exclusion=exclude, col=list(exclusion=col_exclude)) %v%
-  # columnAnnotation(imc_score=meta_all$IMC_score, col=list(imc_score=col_imc_score))  %v%
-  # columnAnnotation(staining_batch=meta_all$Staining_date, col=list(staining_batch=col_staining_batch)) %v%
-  # columnAnnotation(stainer=meta_all$Stainer, col=list(stainer=col_stainer)) %v%
-  # columnAnnotation(imc_batch=meta_all$IMC_date, col=list(imc_batch=col_imc_batch)) %v%
-  #columnAnnotation(DE_year=meta_all$Staining_date, col=list(staining_batch=col_staining_batch))  %v%
+  columnAnnotation(imc_score=meta_all$IMC_score, col=list(imc_score=col_imc_score))  %v%
+  columnAnnotation(staining_batch=meta_all$Staining_date, col=list(staining_batch=col_staining_batch)) %v%
+  #columnAnnotation(stainer=meta_all$Stainer, col=list(stainer=col_stainer)) %v%
+  columnAnnotation(imc_batch=meta_all$IMC_date, col=list(imc_batch=col_imc_batch)) %v%
+  #columnAnnotation(D_year=meta_all$DE_date, col=list(D_year=col_DE_year))  %v%
   columnAnnotation(control=meta_all$control, col=list(control=col_control)) %v%
   # columnAnnotation(study_id=meta_all$Study_ID, col=list(study_id=col_study_id))  %v%
-  columnAnnotation(timepoint=meta_all$Timepoint, col=list(timepoint=col_timepoint))  %v%
-  columnAnnotation(tissue=meta_all$Tissue, col=list(tissue=col_tissue)) %v%
+  #columnAnnotation(timepoint=meta_all$Timepoint, col=list(timepoint=col_timepoint))  %v%
+  columnAnnotation(tissue=meta_all$Tissue, col=list(tissue=col_tissue)) 
   # columnAnnotation(stage=meta_all$stage4, col=list(stage=col_stages)) %v%
-  columnAnnotation(progression=meta_all$efs, col=list(progression=col_progress))  %v%
+  #columnAnnotation(progression=meta_all$efs, col=list(progression=col_progress))  %v%
   # columnAnnotation(efs_dur=meta_all$efs_dur, col=list(efs_dur=col_efs_dur)) %v%
-  columnAnnotation(MYCN_amp=meta_all$MYCN_amp, col=list(MYCN_amp=col_aberrations), annotation_legend_param = list(MYCN_amp = list(title='aberration', 
-                                                                                                              #labels = c('no'))))  %v%
-                                                                                                              labels = c('no', 'yes', 'het', 'NA'))))  #%v%
+  #columnAnnotation(MYCN_amp=meta_all$MYCN_amp, col=list(MYCN_amp=col_aberrations), annotation_legend_param = list(MYCN_amp = list(title='aberration', 
+                                                                                                              #labels = c('no','het','yes'))))  #%v%
+                                                                                                              #labels = c('no', 'yes', 'het', 'NA'))))  #%v%
 #   columnAnnotation(ALK_amp=meta_all$ALK_amp, col=list(ALK_amp=col_aberrations), show_legend=FALSE) %v%
 #   columnAnnotation(ALK_mut=meta_all$ALK_mut, col=list(ALK_mut=col_aberrations), show_legend=FALSE) %v%
 #   columnAnnotation(ATRX_del=meta_all$ATRX_del, col=list(ATRX_del=col_aberrations), show_legend=FALSE) %v%
@@ -224,6 +240,12 @@ postscript(file.path(path, "results/in_house/20231030/cohort_top_annotation_2.ep
 # )
 
 dev.off()
+
+setEPS()
+postscript(file.path(path, paste0("results/in_house/20231030/bytumor_n_tumorcells_annotation_REL.eps")), height=30, width=30)
+draw(anno_barplot(as.vector(unname(table(sce$sample_id))), add_numbers=T, height = unit(1, "cm")))
+dev.off()
+
 ```
 
 
@@ -275,7 +297,7 @@ contrast <- createContrast(c(0, 1, rep(0, length(unique(experiment_info$patient)
 nrow(contrast) == ncol(design)
 
 # Test for differential abundance (DA) of clusters
-res_DA <- testDA_edgeR(d_counts,design, contrast, 
+res_DA <- testDA_voom(d_counts,design, contrast, 
                        min_cells=1, 
                        min_samples=1
                        )
@@ -292,8 +314,9 @@ library(edgeR)
 #Create design matrix
 design <- model.matrix(~0+condition, experiment_info) 
 
-colnames(design) <- c("DE", "RE1", "RE2", "REL")
-contrasts <- makeContrasts(DEvsRE1 = DE-RE1,
+colnames(design) <- c("crtl", "DE", "RE1", "RE2", "REL")
+contrasts <- makeContrasts(crtlvsDE = crtl-DE,
+                           DEvsRE1 = DE-RE1,
                            DEvsRE2 = DE-RE2,
                            DEvsREL = DE-REL,
                            RE1vsREL = RE1-REL,
@@ -317,7 +340,7 @@ for (i in 1:ncol(contrasts)){
 ```
 
 Next, we will plot these significance values onto a boxplot according to [this](https://www.datanovia.com/en/blog/ggpubr-how-to-add-p-values-generated-elsewhere-to-a-ggplot/).
-```{r, fig.width=14, fig.height=9}
+```{r, fig.width=14, fig.height=18}
 library(tidyr)
 library(ggpubr)
 library(rstatix)
@@ -348,8 +371,8 @@ for(i in 1:length(unique(p$data$cluster_id))){
   stats <- res[[j]]
   #stats <- res
   p_adj <- c(p_adj, round(stats[rownames(stats)==droplevels(cluster_name), "p_adj"],3))
-  #logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
-  logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+  logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+  #logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
   group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
   group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
   }
@@ -360,14 +383,14 @@ for(i in 1:length(unique(p$data$cluster_id))){
   stats_df$p_fc <- paste0(stats_df$logFC, " (", stats_df$p_adj, ")", " (", stats_df$p_adj_signif, ")")
   
   plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", #order=c("RE1", "RE2"),
-              color = "condition", palette =c("#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
+              color = "condition", palette =c("gray","#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
               add = "jitter", title=cluster_name, show.legend = F) +
-      stat_pvalue_manual(
-        stats_df,
-        y.position = max(proportions$Freq),
-        step.increase = 0.4,
-        label = "p_fc"
-        )  +
+      # stat_pvalue_manual(
+      #   stats_df,
+      #   y.position = max(proportions$Freq),
+      #   step.increase = 0.4,
+      #   label = "p_fc"
+      #   )  +
       theme(aspect.ratio = 2, legend.position="none") +
       scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
   
@@ -390,7 +413,7 @@ grid.arrange(grobs = plot_list_fc, ncol = 6)
 dev.off()
 
 setEPS()
-postscript(file.path(path, "results/in_house/20231030/PT_MNAvsnMNA_boxplot.eps"), height=6, width=20)
+postscript(file.path(path, "results/in_house/20231030/BM_timepoint_unpaired_celltype_boxplot_voom.eps"), height=26, width=20)
 grid.arrange(grobs = plot_list_fc, ncol = 6)
    dev.off()
 ```

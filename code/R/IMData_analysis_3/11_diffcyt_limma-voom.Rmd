@@ -48,11 +48,11 @@ BM_patients_3 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metaclus
 PT_patients <- unique(spe[,spe$tissue=="PT"& spe$metacluster=="tumor"]$study_id)
 paired_patients <- intersect(BM_patients_1, BM_patients_3)
 
-samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster=="tumor"]$sample) #be careful here- use sample_id when looking for samples with and sample when looking for samples without tumor cells
+samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster=="tumor"]$sample_id) #be careful here- use sample_id when looking for samples with and sample when looking for samples without tumor cells
 
 spe$tmp <- "na"
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$tissue=="BM" & spe$metacluster !="tumor" #& spe$control=="yes"#& !spe$sample%in%samples_with_tumor_cells & spe$control=="yes"
+keep_cols <- spe$tissue=="BM" & spe$metacluster != "tumor" & spe$sample_id%in%samples_with_tumor_cells #& spe$control=="yes"
   #spe$control=="no" & spe$MYCN_amp==0
   #spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$celltype!="other" & spe$celltype!="ELAVL4+"  #& spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE2") #& spe$study_id%in%paired_patients & (spe$MYCN_amp==1 | spe$MYCN_amp==3) 
 #spe$metacluster!="LIN- prol." & spe$metacluster!="other" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1") 
@@ -72,6 +72,7 @@ sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
 #sce$cluster_id <- factor(spe[keep_rows, keep_cols]$predicted_clusters)
 sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
+sce$tmp <- factor(spe[keep_rows, keep_cols]$tmp)
 
 sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna <- as.vector(sce$mna)
@@ -90,7 +91,7 @@ sce$progress <- as.factor(progress)
 sce$timepoint <- spe[keep_rows, keep_cols]$timepoint
 sce[,sce$control=="yes"]$timepoint <- "crtl"
 sce$timepoint <- factor(sce$timepoint)
-sce$condition <- sce$timepoint
+sce$condition <- sce$timepoint 
 
 sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 
@@ -138,16 +139,29 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=15}
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=25}
 set.seed(20231103)
 p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=T, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, linkage="ward.D", distance="manhattan")
 
 clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
 
-tiff(filename = "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/poster/barplot_tumor_anniversary.tiff",
-     width = 219, height = 100, units = "mm",
-     res=600)
-p
+#Dendogram
+set.seed(20231103)
+wide_df <- p$data %>%
+  select(-condition) %>%
+  pivot_wider(names_from = cluster_id, values_from = Freq)
+
+wide_df <- data.frame(wide_df)
+rownames(wide_df) <- wide_df$sample_id
+wide_df <- wide_df %>% select(-sample_id)
+
+dist_matrix <- dist(wide_df, method = "manhattan")
+hc <- hclust(dist_matrix, method = "ward.D")
+
+
+setEPS()
+postscript(file.path(path, "results/in_house/20231030/dendogram_allBMsamples.eps"), height=12, width=30)
+plot(hc)
 dev.off()
 
 setEPS()

@@ -98,7 +98,7 @@ library(viridis)
 
 ## UMAP colored by cell type and expression - dittoDimPlot
 p1 <- dittoDimPlot(spe, var = "metacluster", 
-             reduction.use = "UMAP", size = 1, labels.size=2,
+             reduction.use = "UMAP", size = 1, labels.size=4,
              do.label = T,
              legend.show=F) +
   scale_color_manual(values = metadata(spe)$color_vectors$col_metacluster) +
@@ -112,7 +112,7 @@ p2 <- dittoDimPlot(spe, var = "ELAVL4_Yb174_mean", assay = "exprs",
     scale_color_viridis()
   
 p1 + p2
-tiff(filename = file.path(path, "results/in_house/20231030/UMAP_metacluster2.tiff"),
+tiff(filename = file.path(path, "results/in_house/20231030/UMAP_metacluster3.tiff"),
      width = 115, height = 95, units = "mm", res=600)
 p1
 dev.off()

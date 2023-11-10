@@ -634,10 +634,10 @@ hp <- Heatmap(exp_mat,
 
 d1 <- draw( hp, annotation_legend_list = lgd_list)
 
-setEPS()
-postscript(file.path(path, "results/in_house/20231030/bubbleplot_scaled3.eps"), height=7.2, width=14)
+#setEPS()
+#postscript(file.path(path, "results/in_house/20231030/bubbleplot_scaled3.eps"), height=7.2, width=14)
 d1
-dev.off()
+#dev.off()
 ```
 
 Next we will visualize the tissue type in the UMAP space.

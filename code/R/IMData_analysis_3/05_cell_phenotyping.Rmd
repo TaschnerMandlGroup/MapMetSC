@@ -1065,7 +1065,7 @@ We will then examine the cell types in the images and annotate the clusters base
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(dplyr)
-annotation <- read.csv(file.path(path, "results", "in_house", "annotation_v7.csv"), sep=";")
+annotation <- read.csv(file.path(path, "results", "in_house", "annotation_v8.csv"), sep=";")
 
 #non-merged clusters
 # BM_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$BM.annotation.2), annotation$cluster)
@@ -1169,19 +1169,19 @@ col_clusters <- c(#"1"=rgb(255,255,162, maxColorValue = 255),
                 "CD8+ PDL1lo T cell"=rgb(240,0,240, maxColorValue = 255),
                 "CD4+ S100B+ T cell"=rgb(227,26,28, maxColorValue = 255),
                 "dense T cell region"=rgb(145,2,144, maxColorValue = 255),
-                "marker-lo TC2"=rgb(230,245,201, maxColorValue = 255),
-                "marker-lo TC1"=rgb(204,235,197, maxColorValue = 255),
+                "CD24+ marker-lo TC"=rgb(230,245,201, maxColorValue = 255),
+                "CD24- SYM-like TC"=rgb(204,235,197, maxColorValue = 255),
                 "neural progenitor"=rgb(238,118,0, maxColorValue = 255),
-                "marker-hi TC"=rgb(198,255,72, maxColorValue = 255),
+                "bridge-like TC"=rgb(198,255,72, maxColorValue = 255),
                 "GATA3hi TC"=rgb(65,208,57, maxColorValue = 255),
-                "marker-lo TC3"=rgb(60,119,97, maxColorValue = 255),
+                "CD24- marker-lo TC"=rgb(60,119,97, maxColorValue = 255),
                 "CD14+ PDL1- MO"=rgb(104,180,238, maxColorValue = 255),
                 "monoblast-like"=rgb(128,177,211, maxColorValue = 255),
                 "CD14+ PDL1+ MO"=rgb(51,180,180, maxColorValue = 255),
                 "CHGAhi TC"=rgb(102,166,30, maxColorValue = 255),
                 "Ki67hi TC"=rgb(149,144,89, maxColorValue = 255),
                 "CXCR4hi TC"=rgb(210,205,126, maxColorValue = 255),
-                "CD44+ marker-hi TC"=rgb(27,158,119, maxColorValue = 255),
+                "CD44+ mes-like TC"=rgb(27,158,119, maxColorValue = 255),
                 "GD2lo TC"=rgb(102,194,165, maxColorValue = 255),
                 "CD14- PDL1- MO/DC"=rgb(39,130,187, maxColorValue = 255),
                 "CD14- PDL1+ MO/DC"=rgb(166,206,227, maxColorValue = 255),
@@ -1230,5 +1230,5 @@ processing and analysis.
 
 ```{r save-objects-read-data}
 
-saveRDS(spe, file.path(path, "results/in_house/spe_clustered_8.rds"))
+saveRDS(spe, file.path(path, "results/in_house/spe_clustered_9.rds"))
 ```

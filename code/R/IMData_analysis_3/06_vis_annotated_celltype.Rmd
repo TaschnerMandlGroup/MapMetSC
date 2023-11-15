@@ -15,7 +15,7 @@ In this RMD file, we will plot UMAPs and histograms on the annotated SPE.
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_8.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_9.rds"))
 ```
 
 

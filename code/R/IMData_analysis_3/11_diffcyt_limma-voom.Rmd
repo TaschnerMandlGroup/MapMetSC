@@ -56,7 +56,7 @@ samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster!="tumo
 
 spe$tmp <- "na"
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$tissue=="BM" & spe$control=="no" & (spe$metacluster=="granulocyte" | spe$metacluster=="MO/DC/NK")
+keep_cols <- colnames(spe)#spe$metacluster !="tumor" & spe$metacluster !="mesenchymal"
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
@@ -72,6 +72,7 @@ sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
 #sce$cluster_id <- factor(spe[keep_rows, keep_cols]$predicted_clusters)
 sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
+sce$metacluster <- factor(spe[keep_rows, keep_cols]$metacluster)
 sce$tmp <- factor(spe[keep_rows, keep_cols]$tmp)
 
 sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
@@ -91,7 +92,7 @@ sce$progress <- as.factor(progress)
 sce$timepoint <- spe[keep_rows, keep_cols]$timepoint
 #sce[,sce$control=="yes"]$timepoint <- "crtl"
 sce$timepoint <- factor(sce$timepoint)
-sce$condition <- sce$timepoint 
+sce$condition <- sce$tmp 
 
 sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 
@@ -101,7 +102,7 @@ sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, k
 # index_in_vec1 <- match(vec2, vec1)
 # fm_id <- vec2[order(index_in_vec1)]
 #sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_BM"), levels=fm_id)
-#sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_BM"), levels=clustered_samples)
+#sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_", spe[keep_rows, keep_cols]$tissue), levels=clustered_samples)
 
 # Add celltype information to metadata
 metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
@@ -139,9 +140,11 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=18}
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=28, fig.height=12}
+sce_ME <- sce[,sce$metacluster!="tumor" & sce$metacluster!="mesenchymal"]
+
 set.seed(20231103)
-p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=T, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, 
+p <- plotAbundances(sce_ME, k = "celltype", by = "sample", col_clust=T, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, 
                     linkage="ward.D", distance="manhattan")
 
 clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
@@ -161,14 +164,78 @@ hc <- hclust(dist_matrix, method = "ward.D")
 
 
 setEPS()
-postscript(file.path(path, "results/in_house/20231030/dendogram_allBMsamples.eps"), height=12, width=30)
+postscript(file.path(path, "results/in_house/20231115/dendogram_allsamples.eps"), height=12, width=30)
 plot(hc)
 dev.off()
 
 setEPS()
-postscript(file.path(path, "results/in_house/20231030/BM_bar_crtl.eps"), height=12, width=20)
+postscript(file.path(path, "results/in_house/20231115/barplot_allsamples.eps"), height=12, width=20)
 p
 dev.off()
+```
+
+We now want to plot the tumor cells of the clustered microenvironments. 
+
+```{r plot-tumor-compositions, message=FALSE, fig.width=28, fig.height=12}
+sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_", spe[keep_rows, keep_cols]$tissue), levels=clustered_samples)
+sce_tumor <- sce[,sce$metacluster=="tumor"]
+tumor_free_samples <- setdiff(levels(sce_tumor$sample_id), unique(sce_tumor$sample_id))
+
+select_random <- function(sce_object, sample){
+  cells_of_sample <- grepl(sample, colnames(sce_object))
+  random_cell <- sample(colnames(sce_object[,cells_of_sample]),1)
+  #cell <- filterSCE(sce_object, colnames(sce_object)%in%c(random_cell))
+  cell <- sce_object[,colnames(sce_object)==random_cell]
+  cell$cluster_id <- "non-tumor"
+  return(cell)
+}
+
+random_cells <- sapply(tumor_free_samples, function(x) select_random(sce_ME, x))
+sce_tumor_free <- do.call(cbind, random_cells)
+
+#Re-define metadata
+metadata(sce_tumor_free) <- list(cluster_codes="")
+metadata(sce_tumor_free)$cluster_codes <- data.frame(celltype = factor(sce_tumor_free$cluster_id))
+
+# Add metadata
+metadata(sce_tumor_free)$experiment_info <- as.data.frame(colData(sce_tumor_free)) %>% group_by(sample_id,patient, mna, condition, progress) %>% 
+    summarise(n_cells=n(),.groups = 'drop') %>%
+    as.data.frame()
+
+sce_tumor <- cbind(sce_tumor, sce_tumor_free)
+sce_tumor$sample_id <- factor(sapply(strsplit(as.vector(sce_tumor$sample_id), "_"), function(x) paste(x[length(x) - 1], x[length(x)], sep = "_")), levels=clustered_samples)
+
+p_tu <- plotAbundances(sce_tumor, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype_ordered)
+
+setEPS()
+postscript(file.path(path, "results/in_house/20231115/barplot_allsamples_tumor.eps"), height=12, width=20)
+p_tu
+dev.off()
+```
+
+As a next step, we will compute the heterogeneity of samples based on the ME and tumor cell composition.
+```{r heterogeneity, message=FALSE, fig.height=25}
+library(BioQC)
+
+proportions <- plotAbundances(sce, k = "celltype", by = "sample")
+prop <- proportions$data %>%
+  select(-condition) %>%
+  pivot_wider(names_from = cluster_id, values_from = Freq)
+
+prop <- data.frame(prop)
+rownames(prop) <- prop$sample_id
+prop <- prop %>% select(-sample_id)
+
+prop <- t(prop)
+rownames(prop) <- levels(sce$cluster_id)
+me_clusters <- unique(sce[,sce$metacluster!="tumor" & sce$metacluster!="mesenchymal"]$cluster_id)
+me_prop <- prop[rownames(prop)%in%me_clusters,]
+me_het <- apply(me_prop,2, entropy)
+  
+tumor_prop <- prop[rownames(prop)%in%tumor_clusters,]
+tumor_clusters <- unique(sce[,sce$metacluster=="tumor"]$cluster_id)
+tumor_prop <- prop[rownames(prop)%in%tumor_clusters,]
+tumor_het <- apply(tumor_prop,2, entropy)
 ```
 
 
@@ -201,22 +268,26 @@ col_puncture_side = setNames(brewer.pal(length(unique(meta_all$Puncture_side)), 
 col_staining_batch = setNames(viridis(length(unique(meta_all$Staining_date))), sort(unique(meta_all$Staining_date)))
 col_stainer = setNames(c('#a6611a', '#dfc27d', '#80cdc1', '#018571'), unique(meta_all$Stainer))
 col_imc_batch = setNames(viridis(length(unique(meta_all$IMC_date))), sort(unique(meta_all$IMC_date)))
-col_imc_score = colorRamp2(c(min(meta_all$IMC_score, na.rm = TRUE), max(meta_all$IMC_score, na.rm = TRUE)/2, max(meta_all$IMC_score, na.rm = TRUE)), c("red", "white", "blue")) 
+col_imc_score = colorRamp2(c(min(meta_all$IMC_score, na.rm = TRUE), max(meta_all$IMC_score, na.rm = TRUE)/2, max(meta_all$IMC_score, na.rm = TRUE)), viridis(3)) 
 col_study_id = setNames(sample(col_vector_433, length(unique(meta_all$Study_ID))), unique(meta_all$Study_ID))
 col_DE_year = setNames(viridis(length(unique(meta_all$DE_date))), sort(unique(meta_all$DE_date)))
 col_timepoint = setNames(c('#7fc97f', '#beaed4', '#386cb0', '#ffff99', '#386cb0'), unique(meta_all$Timepoint)) #'#fdc086'
 col_aberrations = setNames(c('#a6611a','#018571','#80cdc1','#f5f5f5'), c(0,1,3,9))
 col_stages = setNames(c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c'), unique(meta_all$stage4))
-col_efs_dur = colorRamp2(c(min(meta_all$efs_dur, na.rm = TRUE), max(meta_all$efs_dur, na.rm = TRUE)/2, max(meta_all$efs_dur, na.rm = TRUE)), paletteer_c("ggthemes::Red-Green Diverging", 3))
+col_efs_dur = colorRamp2(c(min(meta_all$efs_dur, na.rm = TRUE), max(meta_all$efs_dur, na.rm = TRUE)/2, max(meta_all$efs_dur, na.rm = TRUE)), viridis(3))
 col_tissue = setNames(c('aquamarine4','brown'), unique(meta_all$Tissue))
 col_control = setNames(c('gray77', 'mediumseagreen'), unique(meta_all$control))
 col_exclude = setNames(c('#018571','#a6611a','#80cdc1'), unique(exclude))
 col_progress = setNames(c('gray77', 'palegreen3', 'firebrick1'), c('n.a.', 0, 1))
+
+col_me_het = colorRamp2(c(min(me_het, na.rm = TRUE), (max(me_het, na.rm = TRUE)-min(me_het, na.rm = TRUE))/2, max(me_het, na.rm = TRUE)), viridis(3))
+col_tumor_het = colorRamp2(c(sort(unique(tumor_het))[2], (max(tumor_het, na.rm = TRUE)-sort(unique(tumor_het))[2])/2, max(tumor_het, na.rm = TRUE)), viridis(3))
 ```
 
 Now, we will plot an overview of the cohort.
 
 ```{r overview-cohort, message=FALSE, fig.height=25}
+
 clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
 # condition <- "RE2"
 # clustered_samples <- sapply(strsplit(levels(droplevels(p$data[p$data$condition==condition,]$sample_id)), "_"), function(x) paste(x[4], x[5], sep = "_"))
@@ -226,41 +297,61 @@ rownames(meta_all) <- paste0(meta_all$Sample, "_", meta_all$Tissue)
 meta_all <- meta_all[clustered_samples,]
 
 setEPS()
-postscript(file.path(path, "results/in_house/20231030/anno_crtl.eps"), height=30, width=30)
+postscript(file.path(path, "results/in_house/20231115/annotationbar_allsamples.eps"), height=30, width=30)
 
-# columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation_legend_param = list(sample = list(grid_height=unit(0.05, "cm"), labels_gp = gpar(fontsize = 5)))) %v%
-  #columnAnnotation(exclusion=exclude, col=list(exclusion=col_exclude)) %v%
-  #columnAnnotation(imc_score=meta_all$IMC_score, col=list(imc_score=col_imc_score))  %v%
-  #columnAnnotation(staining_batch=meta_all$Staining_date, col=list(staining_batch=col_staining_batch)) %v%
-  #columnAnnotation(stainer=meta_all$Stainer, col=list(stainer=col_stainer)) %v%
-  #columnAnnotation(imc_batch=meta_all$IMC_date, col=list(imc_batch=col_imc_batch)) %v%
-  #columnAnnotation(D_year=meta_all$DE_date, col=list(D_year=col_DE_year))  %v%
-  #columnAnnotation(control=meta_all$control, col=list(control=col_control)) %v%
-  # columnAnnotation(study_id=meta_all$Study_ID, col=list(study_id=col_study_id))  %v%
-  #columnAnnotation(timepoint=meta_all$Timepoint, col=list(timepoint=col_timepoint))  %v%
-  #columnAnnotation(tissue=meta_all$Tissue, col=list(tissue=col_tissue)) 
-  # columnAnnotation(stage=meta_all$stage4, col=list(stage=col_stages)) %v%
-  columnAnnotation(progression=meta_all$efs, col=list(progression=col_progress))  %v%
-  # columnAnnotation(efs_dur=meta_all$efs_dur, col=list(efs_dur=col_efs_dur)) %v%
-  columnAnnotation(MYCN_amp=meta_all$MYCN_amp, col=list(MYCN_amp=col_aberrations), annotation_legend_param = list(MYCN_amp = list(title='aberration', 
+columnAnnotation(control=meta_all$control, col=list(control=col_control)) %v%
+columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation_legend_param = list(sample = list(grid_height=unit(0.05, "cm"), labels_gp = gpar(fontsize = 5)))) %v%
+columnAnnotation(exclusion=exclude, col=list(exclusion=col_exclude)) %v%
+columnAnnotation(imc_score=meta_all$IMC_score, col=list(imc_score=col_imc_score))  %v%
+columnAnnotation(staining_batch=meta_all$Staining_date, col=list(staining_batch=col_staining_batch)) %v%
+columnAnnotation(stainer=meta_all$Stainer, col=list(stainer=col_stainer)) %v%
+columnAnnotation(imc_batch=meta_all$IMC_date, col=list(imc_batch=col_imc_batch)) %v%
+columnAnnotation(D_year=meta_all$DE_date, col=list(D_year=col_DE_year))  %v%
+columnAnnotation(study_id=meta_all$Study_ID, col=list(study_id=col_study_id))  %v%
+columnAnnotation(timepoint=meta_all$Timepoint, col=list(timepoint=col_timepoint))  %v%
+columnAnnotation(tissue=meta_all$Tissue, col=list(tissue=col_tissue)) %v%
+columnAnnotation(stage=meta_all$stage4, col=list(stage=col_stages)) %v%
+columnAnnotation(progression=meta_all$efs, col=list(progression=col_progress))  %v%
+columnAnnotation(efs_dur=meta_all$efs_dur, col=list(efs_dur=col_efs_dur)) %v%
+columnAnnotation(MYCN_amp=meta_all$MYCN_amp, col=list(MYCN_amp=col_aberrations), annotation_legend_param = list(MYCN_amp = list(title='aberration', 
                                                                                                               #labels = c('no','het','yes'))))  #%v%
-                                                                                                              labels = c('no', 'yes', 'het', 'NA'))))  #%v%
-#   columnAnnotation(ALK_amp=meta_all$ALK_amp, col=list(ALK_amp=col_aberrations), show_legend=FALSE) %v%
-#   columnAnnotation(ALK_mut=meta_all$ALK_mut, col=list(ALK_mut=col_aberrations), show_legend=FALSE) %v%
-#   columnAnnotation(ATRX_del=meta_all$ATRX_del, col=list(ATRX_del=col_aberrations), show_legend=FALSE) %v%
-#   columnAnnotation(TERT_rear=meta_all$TERT_rear, col=list(TERT_rear=col_aberrations), show_legend=FALSE) %v%
-#   columnAnnotation(X1ploss=meta_all$X1p_loss, col=list(X1ploss=col_aberrations), show_legend=FALSE) %v%
-#   columnAnnotation(X1qgain=meta_all$X1q_gain, col=list(X1qgain=col_aberrations), show_legend=FALSE) %v%
-#   columnAnnotation(X11qloss=meta_all$X11q_loss, col=list(X11qloss=col_aberrations), show_legend=FALSE
-# )
+                                                                                                              labels = c('no', 'yes', 'het', 'NA'))))  %v%
+columnAnnotation(ALK_amp=meta_all$ALK_amp, col=list(ALK_amp=col_aberrations), show_legend=FALSE) %v%
+columnAnnotation(ALK_mut=meta_all$ALK_mut, col=list(ALK_mut=col_aberrations), show_legend=FALSE) %v%
+columnAnnotation(ATRX_del=meta_all$ATRX_del, col=list(ATRX_del=col_aberrations), show_legend=FALSE) %v%
+columnAnnotation(TERT_rear=meta_all$TERT_rear, col=list(TERT_rear=col_aberrations), show_legend=FALSE) %v%
+columnAnnotation(X1ploss=meta_all$X1p_loss, col=list(X1ploss=col_aberrations), show_legend=FALSE) %v%
+columnAnnotation(X1qgain=meta_all$X1q_gain, col=list(X1qgain=col_aberrations), show_legend=FALSE) %v%
+columnAnnotation(X11qloss=meta_all$X11q_loss, col=list(X11qloss=col_aberrations), show_legend=FALSE) %v%
+columnAnnotation(ME_het=me_het, col=list(ME_het=col_me_het)) %v%
+columnAnnotation(TUM_het=tumor_het, col=list(TUM_het=col_tumor_het))
+
 
 dev.off()
 
+#absolute cellcount
 setEPS()
-postscript(file.path(path, paste0("results/in_house/20231030/bytumor_n_tumorcells_annotation_REL.eps")), height=30, width=30)
-draw(anno_barplot(as.vector(unname(table(sce$sample_id))), add_numbers=T, height = unit(1, "cm")))
-dev.off()
+postscript(file.path(path, paste0("results/in_house/20231115/annotationbar_MEcells.eps")), height=30, width=30)
+draw(anno_barplot(as.vector(unname(table(sce_ME$sample_id))), add_numbers=T, height = unit(1, "cm")))
+dev.off() 
 
+#tumor cell proportion
+norm_minmax <- function(x){(x- min(x)) /(max(x)-min(x))}
+
+robust_scalar<- function(x){(x- median(x)) /(quantile(x,probs = .75)-quantile(x,probs = .25))}
+
+clipper <- function(data, lower, upper) {
+  data[data > quantile(data, probs = c(upper))] <- quantile(data, probs = c(upper))
+  data[data < quantile(data, probs = c(lower))] <- quantile(data, probs = c(lower))
+  clipped_data <- norm_minmax(data)
+  return(clipped_data)}
+
+tumor_infiltration <- round((unname(table(sce_tumor$sample_id))/unname(table(sce$sample_id)))*100,3)
+tumor_inf_norm <- round(clipper(tumor_infiltration, 0, 0.65),3)
+setEPS()
+postscript(file.path(path, paste0("results/in_house/20231115/annotationbar_tumor_inf_norm.eps")), height=30, width=30)
+draw(anno_barplot(as.vector(tumor_inf_norm), add_numbers=T, height = unit(1, "cm")))
+dev.off() 
 ```
 
 

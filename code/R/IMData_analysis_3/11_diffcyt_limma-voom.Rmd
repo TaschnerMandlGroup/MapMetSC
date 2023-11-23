@@ -43,6 +43,8 @@ spe[,spe$metacluster_2%in%c("B cell", "granulocyte", "MO/DC/NK", "T cell")]$meta
 spe[,spe$metacluster_2!="immune"]$metacluster_2 <- "other"
 ```
 
+## Subset dataset
+
 We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
 
 ```{r read-data-pheno, message=FALSE}
@@ -134,7 +136,7 @@ reducedDim(sce, "UMAP") <- reducedDim(spe, "UMAP")[keep_cols,]
 # sce <- filterSCE(spe_cat, sample_id %in% keep) 
 ```
 
-## Differential cell population abundance
+## Plot overview of cohort
 
 Differential analysis of cell population abundance compares the proportions of cell types across experimental conditions and aims to highlight populations that are present at different ratios. First, we calculate two tables: one that contains cell counts for each sample and population and one with the corresponding  proportions of cell types by sample.  The proportions are used only for plotting, since the statistical modeling takes the cell counts by cluster and sample as input.
 
@@ -162,6 +164,11 @@ wide_df <- wide_df %>% select(-sample_id)
 dist_matrix <- dist(wide_df, method = "manhattan")
 hc <- hclust(dist_matrix, method = "ward.D")
 
+#Extract clusters of cellular communities
+cellular_communities <- as.data.frame(cutree(hc, k = 4)[levels(p$data$sample_id)])
+colnames(cellular_communities) <- c("community_cluster")
+cluster_names <- setNames(c(3,1,4,2), c(1:4))
+cellular_communities$community_cluster <- recode(cellular_communities$community_cluster, !!!cluster_names)
 
 setEPS()
 postscript(file.path(path, "results/in_house/20231115/dendogram_allsamples.eps"), height=12, width=30)
@@ -232,7 +239,6 @@ me_clusters <- unique(sce[,sce$metacluster!="tumor" & sce$metacluster!="mesenchy
 me_prop <- prop[rownames(prop)%in%me_clusters,]
 me_het <- apply(me_prop,2, entropy)
   
-tumor_prop <- prop[rownames(prop)%in%tumor_clusters,]
 tumor_clusters <- unique(sce[,sce$metacluster=="tumor"]$cluster_id)
 tumor_prop <- prop[rownames(prop)%in%tumor_clusters,]
 tumor_het <- apply(tumor_prop,2, entropy)
@@ -354,8 +360,72 @@ draw(anno_barplot(as.vector(tumor_inf_norm), add_numbers=T, height = unit(1, "cm
 dev.off() 
 ```
 
+As a last step, we will plot summary plots (boxplots, piecharts) of continuous and discrete metavariables per derived community cluster.
+```{r summary_plots-dis, message=FALSE, fig.height=20}
+library(gridExtra)
 
-#test-functions Diffcyt
+#Add derived community clusters to metadata
+rownames(cellular_communities) <- sapply(strsplit(as.vector(rownames(cellular_communities)), "_"), function(x) paste(x[length(x) - 1], x[length(x)], sep = "_"))
+meta_all[rownames(cellular_communities),"community_clusters"] <- cellular_communities$community_cluster
+
+discrete_metadata <- c("control", "Tissue", "Timepoint", "MYCN_amp", "ALK_amp", "ALK_mut", "ATRX_del", "TERT_rear", "X1p_loss", "X1q_gain", "X11q_loss", "X17q_gain", "efs")
+
+col_timepoint = setNames(c('#beaed4', '#386cb0', '#386cb0', '#ffff99'), c("DE", "RE1", "RE2", "REL")) 
+#col_aberrations = setNames(c('#a6611a','#018571','#80cdc1','#f5f5f5'), c(0,1,3,9))
+
+discrete_metadata_colors <- list(col_control, col_tissue, col_timepoint, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_progress)
+
+plot_list <- list()
+for (d in seq_along(discrete_metadata)) {
+  #meta <- na.omit(meta_all[,c(discrete_metadata[d], "community_clusters")]) #filter out rows with NA values
+  #meta <- meta[rowSums(meta == "") == 0, ] # filter out rows with "", e.g. for timepoint in controls
+  meta <- meta_all[,c(discrete_metadata[d], "community_clusters")] %>% replace(is.na(.), "na")
+  colnames(meta) <- c("dis_var", "condition")
+  
+  result <- meta %>%
+    group_by(condition, dis_var) %>%
+    summarise(Freq = n(), .groups = 'drop')
+  
+  result[,"dis_var"]<- as.factor(unlist(result[,"dis_var"]))
+  
+plot_list[[d]] <- ggplot(result, aes(x="", y=Freq, fill=dis_var, group=dis_var)) +
+    geom_col(position = "fill") +
+    scale_fill_manual(values = discrete_metadata_colors[[d]], name=discrete_metadata[d]) +
+    coord_polar("y", start=0)  +  
+    facet_grid(.~ condition) +
+    theme_void()
+}
+
+do.call("grid.arrange", c(plot_list, ncol=1))
+```
+We will then plot continuous variables in boxplots. 
+
+```{r summary_plots-con, message=FALSE, fig.height=15, fig.width=5}
+library("ggpubr")
+
+n_overall <- as.vector(unname(table(sce$sample_id)[clustered_samples]))
+n_tumor <- as.vector(unname(table(sce_tumor$sample_id)[clustered_samples]))
+perc_tumor <- round((as.vector(unname(table(sce_tumor$sample_id)[clustered_samples]))/as.vector(unname(table(sce$sample_id)[clustered_samples])))*100,3)
+perc_tumor_norm <- round(clipper(perc_tumor, 0, 0.65),3)
+het_m <- as.vector(unname(me_het[clustered_samples]))
+het_t <- as.vector(unname(tumor_het[clustered_samples]))
+
+cont_df <- data.frame(cbind(n_overall, n_tumor, perc_tumor, perc_tumor_norm, het_m, het_t, cellular_communities),row.names=clustered_samples)
+
+plot_list <- list()
+for (d in colnames(cont_df)[1:ncol(cont_df)-1]) {
+  df <- cont_df[,c(d, "community_cluster")] 
+  
+plot_list[[d]] <- ggboxplot(df, x = "community_cluster", y = d,
+                color = "community_cluster", palette =c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3"),
+                add = "jitter")
+}
+
+do.call("grid.arrange", c(plot_list, ncol=1))
+```
+
+
+## Differential cell population abundance
 Since the diffcyt wrapper does not work, we will test the test-functions from the diffcyt package. 
 
 ```{r test-diffcyt, message=FALSE}

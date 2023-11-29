@@ -25,7 +25,7 @@ library(dplyr)
 library(tidyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_11.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_10.rds"))
 
 clusternames_ordered <- read.csv(file.path(path, "results/in_house/20231030/celltypes_ordered_2.csv"), sep=";", colClasses = c("order" = "character"))
 codes <- setNames(paste0(clusternames_ordered$order, "_", clusternames_ordered$celltype), clusternames_ordered$celltype)
@@ -58,7 +58,7 @@ samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster!="tumo
 
 spe$tmp <- "na"
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$celltype != "other" & spe$tissue=="PT" #spe$metacluster !="tumor" & spe$metacluster !="mesenchymal"
+keep_cols <- spe$celltype != "other" & spe$tissue=="BM" #& spe$timepoint=="REL" #spe$metacluster !="tumor" & spe$metacluster !="mesenchymal"
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
@@ -99,11 +99,11 @@ sce$condition <- sce$tmp
 sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 
 #Sorting subset of samples based on specific order from other vector (e.g. clustering performed on entire cohort)
-vec1 <- clustered_samples
-vec2<- paste0(unique(spe[keep_rows, keep_cols]$fm_id),"_PT")
+vec1 <- clustered_samples_all
+vec2<- paste0(unique(spe[keep_rows, keep_cols]$fm_id),"_BM")
 index_in_vec1 <- match(vec2, vec1)
 fm_id <- vec2[order(index_in_vec1)]
-sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_PT"), levels=fm_id)
+sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_BM"), levels=fm_id)
 #sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_", spe[keep_rows, keep_cols]$tissue), levels=clustered_samples)
 
 # Add celltype information to metadata
@@ -151,8 +151,8 @@ p <- plotAbundances(sce_ME, k = "celltype", by = "sample", col_clust=F, k_pal=me
 #Best linkage: ward.D
 #Best distance: manhattan
 
-clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
-#clustered_samples <- levels(p$data$sample_id)
+#clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
+clustered_samples <- levels(p$data$sample_id) #when subsetting the dataset
 
 #Dendogram
 set.seed(20231103)
@@ -179,7 +179,7 @@ plot(hc)
 dev.off()
 
 setEPS()
-postscript(file.path(path, "results/in_house/20231115/barplot_all_samples.eps"), height=12, width=20)
+postscript(file.path(path, "results/in_house/20231115/REL_ME_barplot.eps"), height=12, width=20)
 p
 dev.off()
 ```
@@ -187,7 +187,6 @@ dev.off()
 We now want to plot the tumor cells of the clustered microenvironments. 
 
 ```{r plot-tumor-compositions, message=FALSE, fig.width=28, fig.height=12}
-clustered_samples <- as.vector(unique(sce$sample_id)) # when subsetting the dataset
 
 sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_", spe[keep_rows, keep_cols]$tissue), levels=clustered_samples)
 sce_tumor <- sce[,sce$metacluster=="tumor"]
@@ -224,14 +223,15 @@ if (length(random_cells)){
 p_tu <- plotAbundances(sce_tumor, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype_ordered)
 
 setEPS()
-postscript(file.path(path, "results/in_house/20231115/barplot_all_samples_tumor.eps"), height=12, width=20)
+postscript(file.path(path, "results/in_house/20231115/REL_TU_barplot.eps"), height=12, width=20)
 p_tu
 dev.off()
 ```
 
 As a next step, we will compute the heterogeneity of samples based on the ME and tumor cell composition.
-```{r heterogeneity, message=FALSE, fig.height=25}
+```{r heterogeneity, message=FALSE}
 library(BioQC)
+library(hrbrthemes)
 
 proportions <- plotAbundances(sce, k = "celltype", by = "sample")
 prop <- proportions$data %>%
@@ -251,6 +251,17 @@ me_het <- apply(me_prop,2, entropy)
 tumor_clusters <- unique(sce[,sce$metacluster=="tumor"]$cluster_id)
 tumor_prop <- prop[rownames(prop)%in%tumor_clusters,]
 tumor_het <- apply(tumor_prop,2, entropy)
+
+data <- data.frame(cbind(me_het, tumor_het))
+ggplot(data, aes(x=me_het, y=tumor_het)) +
+  geom_point() +
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) #+
+  #theme_ipsum()
+
+data <- data.frame(cbind(data.frame(table(sce_tumor$sample_id)), tumor_het))
+ggplot(data, aes(x=Freq, y=tumor_het)) +
+  geom_point() +
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE)
 ```
 
 
@@ -264,7 +275,7 @@ library(bruceR)
 library(circlize)
 library(viridis)
 
-meta_path <- file.path(path, '20231127_metadata_complete.csv')
+meta_path <- file.path(path, '20231128_metadata_complete.csv')
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -299,7 +310,8 @@ col_age_diag = colorRamp2(c(min(meta_all$age_at_diag, na.rm = TRUE), (quantile(m
 col_therapy = setNames(c('#a6611a', '#018571'), c('RAPID COJEC', 'MOD. N7'))
 
 col_me_het = colorRamp2(c(min(me_het, na.rm = TRUE), (max(me_het, na.rm = TRUE)-min(me_het, na.rm = TRUE))/2, max(me_het, na.rm = TRUE)), viridis(3))
-col_tumor_het = colorRamp2(c(sort(unique(tumor_het))[2], (max(tumor_het, na.rm = TRUE)-sort(unique(tumor_het))[2])/2, max(tumor_het, na.rm = TRUE)), viridis(3))
+#col_tumor_het = colorRamp2(c(sort(unique(tumor_het))[2], (max(tumor_het, na.rm = TRUE)-sort(unique(tumor_het))[2])/2, max(tumor_het, na.rm = TRUE)), viridis(3))
+col_tumor_het = colorRamp2(c(min(tumor_het, na.rm = TRUE), (max(tumor_het, na.rm = TRUE)-min(tumor_het, na.rm = TRUE))/2, max(tumor_het, na.rm = TRUE)), viridis(3))
 ```
 
 Now, we will plot an overview of the cohort.
@@ -315,7 +327,7 @@ rownames(meta_all) <- paste0(meta_all$Sample, "_", meta_all$Tissue)
 meta_all <- meta_all[clustered_samples,]
 
 setEPS()
-postscript(file.path(path, "results/in_house/20231115/annotationbar_all_samples.eps"), height=30, width=30)
+postscript(file.path(path, "results/in_house/20231115/REL_annotation_bar.eps"), height=30, width=30)
 
 columnAnnotation(control=meta_all$control, col=list(control=col_control)) %v%
 columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation_legend_param = list(sample = list(grid_height=unit(0.05, "cm"), labels_gp = gpar(fontsize = 5)))) %v%
@@ -355,13 +367,13 @@ columnAnnotation(CDKN2AB_del=meta_all$CDKN2AB_del, col=list(CDKN2AB_del=col_aber
 columnAnnotation(X11q_loss=meta_all$X11q_loss, col=list(X11q_loss=col_aberrations), show_legend=FALSE) %v%
 columnAnnotation(X12q_gain=meta_all$X12q_gain, col=list(X12q_gain=col_aberrations), show_legend=FALSE) %v%
 columnAnnotation(X14q_loss=meta_all$X14q_loss, col=list(X14q_loss=col_aberrations), show_legend=FALSE) %v%
-columnAnnotation(MYCN_amp=meta_all$MYCN_amp, col=list(MYCN_amp=col_aberrations), annotation_legend_param = list(MYCN_amp = list(title='aberration', 
-                                                                                                              #labels = c('no','het','yes'))))  #%v%
-                                                                                                              labels = c('no', 'yes', 'het', 'NA'))))  %v%
+columnAnnotation(MYCN_amp=meta_all$MYCN_amp, col=list(MYCN_amp=col_aberrations)) %v% #annotation_legend_param = list(MYCN_amp = list(title='aberration', 
+                                                                                                              #labels = c('no','yes','het'))))  %v%
+                                                                                                              #labels = c('no', 'yes', 'het', 'NA'))))  %v%
 columnAnnotation(TERT_rear=meta_all$TERT_rear, col=list(TERT_rear=col_aberrations), show_legend=FALSE) %v%
 columnAnnotation(ATRX_del=meta_all$ATRX_del, col=list(ATRX_del=col_aberrations), show_legend=FALSE) %v%
 columnAnnotation(ALK_amp=meta_all$ALK_amp, col=list(ALK_amp=col_aberrations), show_legend=FALSE) %v%
-columnAnnotation(ALK_mut=meta_all$ALK_mut, col=list(ALK_mut=col_aberrations), show_legend=FALSE)
+columnAnnotation(ALK_mut=meta_all$ALK_mut, col=list(ALK_mut=col_aberrations), show_legend=FALSE) %v%
 
 columnAnnotation(age=meta_all$age_at_diag, col=list(age=col_age_diag)) %v%
 columnAnnotation(therapy=meta_all$therapy, col=list(therapy=col_therapy)) %v%
@@ -373,12 +385,12 @@ dev.off()
 
 #absolute cellcount
 setEPS()
-postscript(file.path(path, paste0("results/in_house/20231115/annotationbar_all_samples_cells.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/in_house/20231115/REL_annotationbar_ncells.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
 setEPS()
-postscript(file.path(path, paste0("results/in_house/20231115/annotationbar_all_samples_tumorcells.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/in_house/20231115/REL_annotationbar_ntumorcells.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce_tumor$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
@@ -396,18 +408,18 @@ clipper <- function(data, lower, upper) {
 tumor_infiltration <- round((unname(table(sce_tumor$sample_id))/unname(table(sce$sample_id)))*100,3)
 tumor_inf_norm <- round(clipper(tumor_infiltration, 0, 0.65),3)
 setEPS()
-postscript(file.path(path, paste0("results/in_house/20231115/annotationbar_all_samples_tumor_inf.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/in_house/20231115/REL_annotationbar_tumor_inf.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(tumor_infiltration), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
 setEPS()
-postscript(file.path(path, paste0("results/in_house/20231115/annotationbar_all_samples_tumor_inf_norm.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/in_house/20231115/REL_annotationbar_tumor_inf_norm.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(tumor_inf_norm), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 ```
 
 As a last step, we will plot summary plots (boxplots, piecharts) of continuous and discrete metavariables per derived community cluster.
-```{r summary_plots-dis, message=FALSE, fig.height=20}
+```{r summary_plots-dis, message=FALSE, fig.height=40}
 library(gridExtra)
 
 #Add derived community clusters to metadata
@@ -424,14 +436,14 @@ discrete_metadata <- c("control", "Tissue", "Timepoint", "X1p_loss", "X1q_gain",
 col_timepoint = setNames(c('#beaed4', '#386cb0', '#386cb0', '#ffff99'), c("DE", "RE1", "RE2", "REL")) 
 #col_aberrations = setNames(c('#a6611a','#018571','#80cdc1','#f5f5f5'), c(0,1,3,9))
 
-discrete_metadata_colors <- list(col_control, col_tissue, col_timepoint, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_progress, col_therapy)
+discrete_metadata_colors <- list(col_control, col_tissue, col_timepoint, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_aberrations, col_progress, col_therapy)
 
 plot_list <- list()
 for (d in seq_along(discrete_metadata)) {
   meta <- na.omit(meta_all[,c(discrete_metadata[d], "community_clusters")]) #filter out rows with NA values
   meta <- meta[rowSums(meta == "") == 0, ] # filter out rows with "", e.g. for timepoint in controls
   meta <- meta[rowSums(meta == 9) == 0, ] # filter out rows with "", e.g. for timepoint in controls
-  #meta <- meta_all[,c(discrete_metadata[d], "community_clusters")] %>% replace(is.na(.), "na")
+  #meta <- meta_all[,c(discrete_metadata[d], "community_clusters")] #%>% replace(is.na(.), "na")
   colnames(meta) <- c("dis_var", "condition")
   
   result <- meta %>%

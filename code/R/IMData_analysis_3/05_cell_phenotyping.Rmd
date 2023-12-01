@@ -936,7 +936,7 @@ data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "fre
 
 #write.csv(data_wide, file.path(path, "results/metadata/clusters-per-sample.csv"))
 
-data_long <- data_wide[c(146:170),] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
+data_long <- data_wide[c(1:145),] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
 data_long$cluster <- factor(data_long$cluster, levels=levels(clusters))
 
@@ -1065,7 +1065,7 @@ We will then examine the cell types in the images and annotate the clusters base
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(dplyr)
-annotation <- read.csv(file.path(path, "results", "in_house", "annotation_v8.csv"), sep=";")
+annotation <- read.csv(file.path(path, "results", "in_house", "annotation_v9.csv"), sep=";")
 
 #non-merged clusters
 # BM_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$BM.annotation.2), annotation$cluster)
@@ -1094,6 +1094,101 @@ spe$metacluster <- "na"
 spe[,spe$tissue=="BM"]$metacluster<- as.vector(BM_metacelltypes)
 spe[,spe$tissue=="PT"]$metacluster<- as.vector(PT_metacelltypes)
 
+```
+
+Now, we have one cluster GD2+MPO+, which is double positive and a mixture of DTCs and granulocytes. We will try to seperate them with gaussian mixture models. 
+```{r GD2+MPO+ subclustering, fig.width=10, fig.height=8}
+
+library(mclust)
+
+markers <- grepl("GD2|CD45|MPO|CD15|CD11b", rownames(spe)) & !grepl("mean-80|IF", rownames(spe))
+
+tmp <- t(assay(spe[,spe$celltype=="GD2+MPO+"], "exprs")[markers,])
+
+#roundness <- spe[,spe$celltype=="GD2+MPO+"]$solidity_clipped
+#tmp <- cbind(tmp, roundness)
+set.seed(20231201)
+gmm <- Mclust(tmp, G = 2)
+clusters <- gmm$classification
+
+column_ha = HeatmapAnnotation(cluster = clusters, 
+                              show_legend=T)
+
+tmp2 <- t(assay(spe[,spe$celltype=="GD2+MPO+"], "exprs")[rowData(spe)$use_channel,])
+ht<- Heatmap(t(tmp2), 
+        column_title = "Single-cell heatmap",
+        cluster_columns=F,
+        top_annotation=column_ha,
+        column_order= order(unname(clusters), decreasing=F),
+        show_column_dend = T,
+        show_column_names=F,
+        col=viridis(100)
+        )
+draw(ht)
+
+#dtc <- rownames(tmp2[clusters==2,])
+#no_dtc <- rownames(tmp2[clusters==1,])
+
+# spe[,colnames(spe)%in%dtc]$celltype <- "CD24- marker-lo TC"
+#spe[,colnames(spe)%in%no_dtc]$celltype <- "other"
+#spe[,colnames(spe)%in%dtc]$metacluster <- "other"
+```
+
+The cells in cluster 2 are most probably clustering together based on MPO and GD2 coexpression. We can see that some DTCs co-express CD56, some CD24 and some GATA3. To correctly assign these cells to the correct tumor celltype, we will use singleR. 
+```{r singleR-tumor-cell-assignment, fig.width=10, fig.height=8}
+library(BiocParallel)
+library(SingleR)
+markers <- rowData(spe)$use_channel
+tumor_markers <- grepl("CD44|CD24|GD2|CD56|PRPH|Ki-67|CXCR4|GATA3|ELAVL4|LUM|CHGA", rownames(spe)) & !grepl("mean-80|IF", rownames(spe))
+query <- t(tmp2[clusters==2,colnames(tmp2)%in%rownames(spe)[markers]])
+ref <- assay(spe[markers,spe$metacluster=="tumor"], "exprs")
+ref_clusters <- spe[markers,spe$metacluster=="tumor"]$celltype
+
+predicted_labels <- SingleR(test = query, ref = ref, labels = ref_clusters, BPPARAM = MulticoreParam(workers=10, RNGseed=20231030))
+
+plotScoreHeatmap(predicted_labels)
+
+labels <- predicted_labels$labels
+
+#visualization of predicted clusters in single-cell and mean-per-cluster heatmap
+column_ha = HeatmapAnnotation(predicted = labels,
+                              show_legend=T)
+
+ht<- Heatmap(t(tmp2[clusters==2,]), 
+        column_title = "Single-cell heatmap",
+        cluster_columns=F,
+        top_annotation=column_ha,
+        column_order= order(unname(labels), decreasing=F),
+        show_column_dend = T,
+        show_column_names=F,
+        col=viridis(100)
+        )
+draw(ht)
+
+mean <- aggregate(tmp2[clusters==2,], list(predicted_labels$labels), mean)
+mean_t <- t(mean[,2:ncol(mean)])
+colnames(mean_t) <- mean[,"Group.1"]
+mean_scaled <- t(apply(mean_t, 1, RESCALE, to=0:1))
+
+column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(predicted_labels$labels))[,"Freq"], height = unit(1, "cm")), 
+                              show_legend=F)
+
+Heatmap(mean_scaled[rownames(mean_scaled)%in%rownames(spe)[tumor_markers],], 
+        column_title = "Mean per cluster (protein data)",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+
+#Assign predicted labels
+dtc <- rownames(tmp2[clusters==2,])
+no_dtc <- rownames(tmp2[clusters==1,])
+spe[,colnames(spe)%in%dtc]$celltype <- labels
+spe[,colnames(spe)%in%no_dtc]$celltype <- "other"
+spe[,colnames(spe)%in%dtc]$metacluster <- "tumor"
 ```
 
 Since, the granulocytes are wrongly classified with immature and mature clusters being a mixture of both round and segmented nuclei, we will try to cluster this metacluster based on the morphological feature roundness only.
@@ -1147,9 +1242,9 @@ spe[,spe$tissue=="PT" & spe$celltype=="granulocyte"]$celltype <- "neutrophil"
 We will manually select distinct colors.
 
 ```{r colors, message=FALSE, fig.height=17}
-col_clusters <- c(#"1"=rgb(255,255,162, maxColorValue = 255),
-                #"2"=rgb(255,221,57, maxColorValue = 255),
-                #"3"=rgb(246,246,0, maxColorValue = 255),
+col_clusters <- c(#"GD2+MPO+"=rgb(255,255,162, maxColorValue = 255),
+                #"DTC"=rgb(255,221,57, maxColorValue = 255),
+                #"DTC"=rgb(246,246,0, maxColorValue = 255),
                 "other"=rgb(255,255,209, maxColorValue = 255),
                 "LIN- Ki67+"=rgb(254,217,166, maxColorValue = 255),
                 "HSPC"=rgb(253,180,98, maxColorValue = 255),
@@ -1230,5 +1325,5 @@ processing and analysis.
 
 ```{r save-objects-read-data}
 
-saveRDS(spe, file.path(path, "results/in_house/spe_clustered_9.rds"))
+saveRDS(spe, file.path(path, "results/in_house/spe_clustered_13.rds"))
 ```

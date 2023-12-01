@@ -97,11 +97,11 @@ library(viridis)
 
 
 ## UMAP colored by cell type and expression - dittoDimPlot
-p1 <- dittoDimPlot(spe, var = "metacluster", 
+p1 <- dittoDimPlot(spe, var = "celltype", 
              reduction.use = "UMAP", size = 1, labels.size=4,
              do.label = T,
              legend.show=F) +
-  scale_color_manual(values = metadata(spe)$color_vectors$col_metacluster) +
+  scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) +
   #scale_color_manual(values = col_clusters) + 
   theme(legend.title = element_blank()) +
   ggtitle("Celltype on UMAP")

@@ -15,7 +15,7 @@ In this RMD file, we will plot UMAPs and histograms on the annotated SPE.
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_9.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_10.rds"))
 ```
 
 
@@ -529,6 +529,7 @@ library(tidyHeatmap)
 library(bruceR)
 
 #Mean expression per cluster
+
 exp_mat_ <- aggregate(t(mat), list(spe$celltype), mean)
 exp_mat <- exp_mat_[,2:ncol(exp_mat_)]
 exp_mat <- apply(exp_mat, 2, RESCALE, to=0:1)
@@ -584,7 +585,7 @@ column_ha = HeatmapAnnotation(metacluster=mean_metaclust$x,
 cell_fun = function(j, i, x, y, w, h, fill){
           grid.rect(x = x, y = y, width = w, height = h, 
                     gp = gpar(col = NA, fill = NA))
-          grid.circle(x=x,y=y,r= percent_mat[i, j]/1.5 * min(unit.c(w, h)),
+          grid.circle(x=x,y=y,r= percent_mat[i, j]/2 * min(unit.c(w, h)),
                       gp = gpar(fill = col_fun(exp_mat[i, j]), col = NA))}
 
 #Function to set dot color based on mean expression
@@ -594,7 +595,7 @@ col_fun = circlize::colorRamp2(c(min(exp_mat),(max(exp_mat)-min(exp_mat))/2, max
 layer_fun = function(j, i, x, y, w, h, fill){
           grid.rect(x = x, y = y, width = w, height = h, 
                     gp = gpar(col = NA, fill = NA))
-          grid.circle(x=x,y=y,r= pindex(percent_mat, i, j)/1.3 * unit(2, "mm"),
+          grid.circle(x=x,y=y,r= pindex(percent_mat, i, j)/1.3 * unit(1.5, "mm"),
                       gp = gpar(fill = col_fun(pindex(exp_mat, i, j)), col = NA))}
 
 #Generate legend for percentage expressed
@@ -995,30 +996,30 @@ for(i in 1: length(files)){
   # names(masks) <- sub("\\.tif.*", "", tmp)
   # c <- sub("\\_clust.*", "", files[i])
   
-  c <- "tumor"
+  c <- "DTC"
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
   plotCells(masks,
             object = spe,
             cell_id = "ObjectNumber", img_id = "sample_id",
-            colour_by = "metacluster",
-            colour = list(metacluster = metadata(spe)$color_vectors$col_metacluster),
+            colour_by = "celltype",
+            colour = list(celltype = metadata(spe)$color_vectors$col_celltype),
             display = "single",
             save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
             save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
             legend = NULL)
 
 
-  col_metacluster_bin <- setNames(c("red", "white"), c('yes', 'no'))
+  col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
   spe$binary <- 'no'
-  spe[,spe$metacluster == c]$binary <- 'yes'
+  spe[,spe$celltype == c]$binary <- 'yes'
 
 
   plotCells(masks,
             object = spe,
             cell_id = "ObjectNumber", img_id = "sample_id",
             colour_by = "binary",
-            colour = list(binary = col_metacluster_bin),
+            colour = list(binary = col_celltype_bin),
             display="single",
             save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
             #save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),

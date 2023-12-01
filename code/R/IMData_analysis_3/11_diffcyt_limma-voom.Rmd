@@ -25,7 +25,7 @@ library(dplyr)
 library(tidyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_10.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_12.rds"))
 
 clusternames_ordered <- read.csv(file.path(path, "results/in_house/20231030/celltypes_ordered_2.csv"), sep=";", colClasses = c("order" = "character"))
 codes <- setNames(paste0(clusternames_ordered$order, "_", clusternames_ordered$celltype), clusternames_ordered$celltype)
@@ -48,17 +48,17 @@ spe[,spe$metacluster_2!="immune"]$metacluster_2 <- "other"
 We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
 
 ```{r read-data-pheno, message=FALSE}
-BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster!="tumor" & spe$timepoint == "DE"]$study_id )
-BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster!="tumor" & spe$timepoint == "RE1"]$study_id)
-BM_patients_3 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster!="tumor" & spe$timepoint == "REL"]$study_id)
+BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "DE"]$study_id )
+BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "RE1"]$study_id)
+BM_patients_3 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "RE2"]$study_id)
 PT_patients <- unique(spe[,spe$tissue=="PT"& spe$metacluster=="tumor"]$study_id)
-paired_patients <- intersect(BM_patients_1, BM_patients_3)
+paired_patients <- intersect(BM_patients_1, PT_patients)
 
 samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster!="tumor"]$sample_id) #be careful here- use sample_id when looking for samples with and sample when looking for samples without tumor cells
 
 spe$tmp <- "na"
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$celltype != "other" & spe$tissue=="BM" #& spe$timepoint=="REL" #spe$metacluster !="tumor" & spe$metacluster !="mesenchymal"
+keep_cols <- spe$celltype != "other" & spe$metacluster=="tumor" & spe$study_id%in%paired_patients & spe$timepoint=="DE"#spe$metacluster !="tumor" & spe$metacluster !="mesenchymal"
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
@@ -94,16 +94,16 @@ sce$progress <- as.factor(progress)
 sce$timepoint <- spe[keep_rows, keep_cols]$timepoint
 #sce[,sce$control=="yes"]$timepoint <- "crtl"
 sce$timepoint <- factor(sce$timepoint)
-sce$condition <- sce$tmp 
+sce$condition <- sce$tissue 
 
-sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
+sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 
 #Sorting subset of samples based on specific order from other vector (e.g. clustering performed on entire cohort)
-vec1 <- clustered_samples_all
-vec2<- paste0(unique(spe[keep_rows, keep_cols]$fm_id),"_BM")
-index_in_vec1 <- match(vec2, vec1)
-fm_id <- vec2[order(index_in_vec1)]
-sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_BM"), levels=fm_id)
+# vec1 <- clustered_samples_all
+# vec2<- paste0(unique(spe[keep_rows, keep_cols]$fm_id),"_BM")
+# index_in_vec1 <- match(vec2, vec1)
+# fm_id <- vec2[order(index_in_vec1)]
+# sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_BM"), levels=fm_id)
 #sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_", spe[keep_rows, keep_cols]$tissue), levels=clustered_samples)
 
 # Add celltype information to metadata
@@ -142,8 +142,9 @@ Differential analysis of cell population abundance compares the proportions of c
 
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
-```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=28, fig.height=12}
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=20, fig.height=10}
 sce_ME <- sce[,sce$metacluster!="tumor" & sce$metacluster!="mesenchymal"]
+#sce_ME <- sce[,sce$metacluster=="tumor"]
 
 set.seed(20231103)
 p <- plotAbundances(sce_ME, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, 
@@ -151,8 +152,8 @@ p <- plotAbundances(sce_ME, k = "celltype", by = "sample", col_clust=F, k_pal=me
 #Best linkage: ward.D
 #Best distance: manhattan
 
-#clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
-clustered_samples <- levels(p$data$sample_id) #when subsetting the dataset
+clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
+#clustered_samples <- levels(p$data$sample_id) #when subsetting the dataset
 
 #Dendogram
 set.seed(20231103)
@@ -186,7 +187,7 @@ dev.off()
 
 We now want to plot the tumor cells of the clustered microenvironments. 
 
-```{r plot-tumor-compositions, message=FALSE, fig.width=28, fig.height=12}
+```{r plot-tumor-compositions, message=FALSE, fig.width=20, fig.height=10}
 
 sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_", spe[keep_rows, keep_cols]$tissue), levels=clustered_samples)
 sce_tumor <- sce[,sce$metacluster=="tumor"]
@@ -229,7 +230,7 @@ dev.off()
 ```
 
 As a next step, we will compute the heterogeneity of samples based on the ME and tumor cell composition.
-```{r heterogeneity, message=FALSE}
+```{r heterogeneity, message=FALSE, fig.width=7, fig.height=7}
 library(BioQC)
 library(hrbrthemes)
 
@@ -262,6 +263,14 @@ data <- data.frame(cbind(data.frame(table(sce_tumor$sample_id)), tumor_het))
 ggplot(data, aes(x=Freq, y=tumor_het)) +
   geom_point() +
   geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE)
+
+test <- spe[,spe$celltype=="GD2+MPO+"]
+MPO <- unname(assay(test["MPO_Y89_mean",],"counts")[1,])
+GD2 <-unname(assay(test["GD2_Gd155_mean",],"counts")[1,])
+data <- data.frame(MPO, GD2)
+ggplot(data, aes(x=MPO, y=GD2)) +
+  geom_point(alpha = 0.3, size=0.5) +
+  geom_smooth(method=lm , color="red", fill="#69b3a2", se=TRUE) 
 ```
 
 
@@ -424,7 +433,7 @@ library(gridExtra)
 
 #Add derived community clusters to metadata
 
-cellular_communities <- cellular_communities[clustered_samples,,drop=F] #when subsetting the dataset
+#cellular_communities <- cellular_communities[clustered_samples,,drop=F] #when subsetting the dataset
 
 rownames(cellular_communities) <- sapply(strsplit(as.vector(rownames(cellular_communities)), "_"), function(x) paste(x[length(x) - 1], x[length(x)], sep = "_"))
 meta_all[rownames(cellular_communities),"community_clusters"] <- cellular_communities$community_cluster
@@ -532,16 +541,16 @@ d_counts <- calcCounts(d_se)
 
 ```{r test-diffcyt, message=FALSE}
 # Create design matrix
-#design <- createDesignMatrix(experiment_info, cols_design = c("condition", "patient")) #paired
-design <- createDesignMatrix(experiment_info, cols_design = "condition")
+design <- createDesignMatrix(experiment_info, cols_design = c("condition", "patient")) #paired
+#design <- createDesignMatrix(experiment_info, cols_design = "condition")
 
 # Create contrast matrix
-contrast <- createContrast(c(0, 1)) # unpaired
-#contrast <- createContrast(c(0, 1, rep(0, length(unique(experiment_info$patient))-1))) #paired
+#contrast <- createContrast(c(0, 1)) # unpaired
+contrast <- createContrast(c(0, 1, rep(0, length(unique(experiment_info$patient))-1))) #paired
 nrow(contrast) == ncol(design)
 
 # Test for differential abundance (DA) of clusters
-res_DA <- testDA_voom(d_counts,design, contrast, 
+res_DA <- testDA_edgeR(d_counts,design, contrast, 
                        min_cells=1, 
                        min_samples=1
                        )
@@ -593,9 +602,9 @@ library(gtools)
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
 
 
-comparisons <-colnames(contrasts)
+#comparisons <-colnames(contrasts)
 #only for one comparison
-#comparisons <- c("nMNAvsMNA")
+comparisons <- c("DEvsRE2")
 
 plot_list_values <- list()
 plot_list_stars <- list()
@@ -609,13 +618,13 @@ for(i in 1:length(unique(p$data$cluster_id))){
   group2 <- c()
   logFC <- c()
   
-  for(j in 1:ncol(contrasts)){
-  #for(j in 1:1){
-  stats <- res[[j]]
-  #stats <- res
+  #for(j in 1:ncol(contrasts)){
+  for(j in 1:1){
+  #stats <- res[[j]]
+  stats <- res
   p_adj <- c(p_adj, round(stats[rownames(stats)==droplevels(cluster_name), "p_adj"],3))
-  logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
-  #logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+  #logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+  logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
   group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
   group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
   }

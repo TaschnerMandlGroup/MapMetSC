@@ -15,7 +15,7 @@ In this RMD file, we will plot UMAPs and histograms on the annotated SPE.
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_10.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_13.rds"))
 ```
 
 
@@ -982,7 +982,7 @@ We will now visualize the clusters in a few samples to see if they make sense.
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(cytomapper)
 
-tissue <- "BM"
+tissue <- "TU"
 
 #files <- list.files(file.path(path, "results/in_house/colored_masks/masks_temp", tissue))
 files <- list.files(file.path(path, "masks_temp", tissue))
@@ -996,7 +996,7 @@ for(i in 1: length(files)){
   # names(masks) <- sub("\\.tif.*", "", tmp)
   # c <- sub("\\_clust.*", "", files[i])
   
-  c <- "DTC"
+  c <- "CD24+ marker-lo TC"
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
   plotCells(masks,
@@ -1010,20 +1010,20 @@ for(i in 1: length(files)){
             legend = NULL)
 
 
-  col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
-  spe$binary <- 'no'
-  spe[,spe$celltype == c]$binary <- 'yes'
-
-
-  plotCells(masks,
-            object = spe,
-            cell_id = "ObjectNumber", img_id = "sample_id",
-            colour_by = "binary",
-            colour = list(binary = col_celltype_bin),
-            display="single",
-            save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
-            #save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
-            legend=NULL)
+  # col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
+  # spe$binary <- 'no'
+  # spe[,spe$celltype == c]$binary <- 'yes'
+  # 
+  # 
+  # plotCells(masks,
+  #           object = spe,
+  #           cell_id = "ObjectNumber", img_id = "sample_id",
+  #           colour_by = "binary",
+  #           colour = list(binary = col_celltype_bin),
+  #           display="single",
+  #           save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
+  #           #save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
+  #           legend=NULL)
 
 }
 

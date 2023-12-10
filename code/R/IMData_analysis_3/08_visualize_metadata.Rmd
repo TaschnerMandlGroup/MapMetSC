@@ -221,7 +221,7 @@ df_normalized <- data_long %>%
   ungroup()
 
 df_normalized$celltype <- factor(df_normalized$celltype)
-df_normalized$celltype <- factor(df_normalized$celltype, levels=c("GD2lo TC", "CHGAhi TC", "GATA3hi TC", "marker-hi TC", "marker-lo TC2", "marker-lo TC3", "Ki67hi TC", "CXCR4hi TC", "marker-lo TC1", "CD44+ marker-hi TC"))
+#df_normalized$celltype <- factor(df_normalized$celltype, levels=c("GD2lo TC", "CHGAhi TC", "GATA3hi TC", "marker-hi TC", "marker-lo TC2", "marker-lo TC3", "Ki67hi TC", "CXCR4hi TC", "marker-lo TC1", "CD44+ marker-hi TC"))
 # Stacked + percent
 setEPS()
 postscript(file.path(path, "results/in_house/20231030/BM_MNAvsnMNA_barplot-dodge.eps"), height=4, width=8)

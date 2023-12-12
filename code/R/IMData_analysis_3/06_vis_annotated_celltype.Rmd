@@ -982,12 +982,13 @@ We will now visualize the clusters in a few samples to see if they make sense.
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(cytomapper)
 
-tissue <- "TU"
+tissue <- "BM"
 
 #files <- list.files(file.path(path, "results/in_house/colored_masks/masks_temp", tissue))
 files <- list.files(file.path(path, "masks_temp", tissue))
 
 for(i in 1: length(files)){
+#for(i in 1: 1){
   
   #masks <- loadImages(file.path(path, "results/in_house/colored_masks/masks_temp", tissue, files[i]), as.is = TRUE)
   masks <- loadImages(file.path(path, "masks_temp", tissue, files[i]), as.is = TRUE)
@@ -1006,7 +1007,7 @@ for(i in 1: length(files)){
             colour = list(celltype = metadata(spe)$color_vectors$col_celltype),
             display = "single",
             save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
-            save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
+            #save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
             legend = NULL)
 
 

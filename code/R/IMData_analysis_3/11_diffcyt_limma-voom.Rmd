@@ -54,11 +54,11 @@ BM_patients_3 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metaclus
 PT_patients <- unique(spe[,spe$tissue=="PT"& spe$metacluster=="tumor"]$study_id)
 paired_patients <- intersect(BM_patients_1, BM_patients_3)
 
-samples_with_tumor_cells <- unique(spe[,spe$tissue=="PT"& spe$metacluster=="tumor"]$sample_id) #be careful here- use sample_id when looking for samples with and sample when looking for samples without tumor cells
+samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster=="tumor"]$sample_id) #be careful here- use sample_id when looking for samples with and sample when looking for samples without tumor cells
 
 spe$tmp <- "na"
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$celltype != "other" & spe$tissue=="PT" & spe$control=="no" & spe$timepoint=="DE" & spe$sample_id%in%samples_with_tumor_cells # (spe$timepoint=="DE" | spe$timepoint=="RE2") & spe$study_id%in%paired_patients 
+keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$timepoint=="DE" & spe$sample_id%in%samples_with_tumor_cells & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal" #& (spe$MYCN_amp==0 | spe$MYCN_amp==1) # # (spe$timepoint=="DE" | spe$timepoint=="RE2") & spe$study_id%in%paired_patients & spe$sample_id%in%samples_with_tumor_cells 
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
@@ -70,7 +70,7 @@ sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, k
 
 #sce$condition <- factor(spe[keep_rows, keep_cols]$timepoint)
 sce$control <- factor(spe[keep_rows, keep_cols]$control)
-sce$cluster_id <- factor(spe[keep_rows, keep_cols]$metacluster)
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
 #sce$cluster_id <- factor(spe[keep_rows, keep_cols]$predicted_clusters)
 sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
@@ -94,7 +94,7 @@ sce$progress <- as.factor(progress)
 sce$timepoint <- spe[keep_rows, keep_cols]$timepoint
 #sce[,sce$control=="yes"]$timepoint <- "crtl"
 sce$timepoint <- factor(sce$timepoint)
-sce$condition <- sce$progress 
+sce$condition <- sce$tmp 
 
 sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 
@@ -107,7 +107,7 @@ sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, k
 #sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_", spe[keep_rows, keep_cols]$tissue), levels=clustered_samples)
 
 # Add celltype information to metadata
-metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$metacluster))
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
 
 # Add metadata
 metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,patient, mna, condition, progress) %>% 
@@ -147,7 +147,7 @@ For each sample, we plot its PBMC cell type composition represented with colored
 sce_ME <- sce[,sce$metacluster=="tumor"]
 
 set.seed(20231103)
-p <- plotAbundances(sce_ME, k = "celltype", by = "sample", col_clust=T, k_pal=metadata(spe)$color_vectors$col_metacluster, 
+p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=T, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, 
                     linkage="ward.D", distance="manhattan") 
 #Best linkage: ward.D
 #Best distance: manhattan
@@ -155,8 +155,9 @@ p <- plotAbundances(sce_ME, k = "celltype", by = "sample", col_clust=T, k_pal=me
 #PCA
 #pbMDS(sce, color_by = "condition", label_by = NULL)
 
-clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
-#clustered_samples <- levels(p$data$sample_id) #when subsetting the dataset
+#clustered_samples <- sapply(strsplit(levels(p$data$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_"))
+
+clustered_samples <- levels(p$data$sample_id) #when subsetting the dataset
 
 #Dendogram
 set.seed(20231103)
@@ -177,13 +178,22 @@ colnames(cellular_communities) <- c("community_cluster")
 cluster_names <- setNames(order(unique(cellular_communities$community_cluster)), c(1:max(cellular_communities$community_cluster)))
 cellular_communities$community_cluster <- recode(cellular_communities$community_cluster, !!!cluster_names)
 
+#for DA between cellular communities
+# sce$sample_id <- factor(sce$sample_id, levels=clustered_samples)
+# sce$condition <- sce$sample_id
+# sample_clusters <- setNames(paste0("c_", cellular_communities$community_cluster), rownames(cellular_communities))
+# sce$condition <- as.factor(recode(sce$condition, !!!sample_clusters))
+# metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,patient, mna, condition, progress) %>% 
+#     summarise(n_cells=n(),.groups = 'drop') %>%
+#     as.data.frame()
+
 setEPS()
 postscript(file.path(path, "results/in_house/20231206/dendogram_PT_DE_samples.eps"), height=12, width=30)
 plot(hc)
 dev.off()
 
 setEPS()
-postscript(file.path(path, "results/in_house/20231206/barplot_PT_DE_samples.eps"), height=12, width=20)
+postscript(file.path(path, "results/in_house/20231206/barplot_BM_DE_samples_metacluster.eps"), height=12, width=20)
 p
 dev.off()
 ```
@@ -195,6 +205,7 @@ We now want to plot the tumor cells of the clustered microenvironments.
 sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_", spe[keep_rows, keep_cols]$tissue), levels=clustered_samples)
 #sce_tumor <- sce[,sce$metacluster=="tumor"]
 sce_tumor <- sce[,sce$metacluster!="tumor" & sce$metacluster!="mesenchymal"]
+sce_ME <- sce[,sce$metacluster=="tumor"]
 tumor_free_samples <- setdiff(levels(sce_tumor$sample_id), unique(sce_tumor$sample_id))
 
 select_random <- function(sce_object, sample){
@@ -384,7 +395,7 @@ columnAnnotation(MYCN_amp=meta_all$MYCN_amp, col=list(MYCN_amp=col_aberrations))
                                                                                                               #labels = c('no','yes','het'))))  %v%
                                                                                                               #labels = c('no', 'yes', 'het', 'NA'))))  %v%
 columnAnnotation(TERT_rear=meta_all$TERT_rear, col=list(TERT_rear=col_aberrations), show_legend=FALSE) %v%
-columnAnnotation(ATRX_del=meta_all$ATRX_del, col=list(ATRX_del=col_aberrations), show_legend=FALSE) %v%
+columnAnnotation(ATRX_del=meta_all$ATRX_del, col=list(ATRX_del=col_aberrations), show_legend=FALSE) %v% 
 columnAnnotation(ALK_amp=meta_all$ALK_amp, col=list(ALK_amp=col_aberrations), show_legend=FALSE) %v%
 columnAnnotation(ALK_mut=meta_all$ALK_mut, col=list(ALK_mut=col_aberrations), show_legend=FALSE) %v%
 
@@ -398,12 +409,12 @@ dev.off()
 
 #absolute cellcount
 setEPS()
-postscript(file.path(path, paste0("results/in_house/20231206/PT_DE_annotationbar_ncells.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/in_house/20231206/BM_DE_annotationbar_ncells.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
 setEPS()
-postscript(file.path(path, paste0("results/in_house/20231206/PT_DE_annotationbar_ntumorcells.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/in_house/20231206/BM_DE_annotationbar_ntumorcells.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce_ME$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
@@ -421,12 +432,12 @@ clipper <- function(data, lower, upper) {
 tumor_infiltration <- round((unname(table(sce_ME$sample_id))/unname(table(sce$sample_id)))*100,3)
 tumor_inf_norm <- round(clipper(tumor_infiltration, 0, 0.65),3)
 setEPS()
-postscript(file.path(path, paste0("results/in_house/20231206/PT_DE_annotationbar_tumor_inf.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/in_house/20231206/BM_DE_annotationbar_tumor_inf.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(tumor_infiltration), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
 setEPS()
-postscript(file.path(path, paste0("results/in_house/20231206/PT_DE_annotationbar_tumor_inf_norm.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/in_house/20231206/BM_DE_annotationbar_tumor_inf_norm.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(tumor_inf_norm), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 ```
@@ -438,6 +449,11 @@ library(gridExtra)
 #Add derived community clusters to metadata
 
 #cellular_communities <- cellular_communities[clustered_samples,,drop=F] #when subsetting the dataset
+
+#when testing between other groups than cellular communities
+# tmp <- meta_all$Timepoint
+# tmp[tmp=="RE1"] <- "RE2"
+# cellular_communities$community_cluster <- tmp
 
 rownames(cellular_communities) <- sapply(strsplit(as.vector(rownames(cellular_communities)), "_"), function(x) paste(x[length(x) - 1], x[length(x)], sep = "_"))
 meta_all[rownames(cellular_communities),"community_clusters"] <- cellular_communities$community_cluster
@@ -477,12 +493,12 @@ do.call("grid.arrange", c(plot_list, ncol=1))
 ```
 We will then plot continuous variables in boxplots. 
 
-```{r summary_plots-con, message=FALSE, fig.height=20, fig.width=5}
+```{r summary_plots-con, message=FALSE, fig.height=25, fig.width=5}
 library("ggpubr")
 
 n_overall <- as.vector(unname(table(sce$sample_id)[clustered_samples]))
-n_tumor <- as.vector(unname(table(sce_tumor$sample_id)[clustered_samples]))
-perc_tumor <- round((as.vector(unname(table(sce_tumor$sample_id)[clustered_samples]))/as.vector(unname(table(sce$sample_id)[clustered_samples])))*100,3)
+n_tumor <- as.vector(unname(table(sce_ME$sample_id)[clustered_samples]))
+perc_tumor <- round((as.vector(unname(table(sce_ME$sample_id)[clustered_samples]))/as.vector(unname(table(sce$sample_id)[clustered_samples])))*100,3)
 perc_tumor_norm <- round(clipper(perc_tumor, 0, 0.65),3)
 het_m <- as.vector(unname(me_het[clustered_samples]))
 het_t <- as.vector(unname(tumor_het[clustered_samples]))
@@ -494,12 +510,18 @@ age_clipped[age_clipped > quantile(age_clipped, 0.95, na.rm=T) & !is.na(age_clip
 cont_df <- data.frame(cbind(n_overall, n_tumor, perc_tumor, perc_tumor_norm, het_m, het_t, age, age_clipped, cellular_communities),row.names=clustered_samples)
 
 plot_list <- list()
+comp <- list( c("1", "2"), c("1", "3"), c("2", "3") )
+
 for (d in colnames(cont_df)[1:ncol(cont_df)-1]) {
+
   df <- cont_df[,c(d, "community_cluster")] 
-  
+
 plot_list[[d]] <- ggboxplot(df, x = "community_cluster", y = d,
                 color = "community_cluster", #palette =c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3"),
-                add = "jitter")
+                add = "jitter")+ 
+                #stat_compare_means() +
+                stat_compare_means(comparisons = comp) +
+                theme(aspect.ratio = 1.5, legend.position="none") 
 }
 
 do.call("grid.arrange", c(plot_list, ncol=1))
@@ -571,22 +593,29 @@ library(edgeR)
 #Create design matrix
 design <- model.matrix(~0+condition, experiment_info) 
 
-colnames(design) <- c("DE", "RE2", "REL")
-contrasts <- makeContrasts(#DEvsRE1 = DE-RE1,
-                           DEvsRE2 = DE-RE2,
-                           DEvsREL = DE-REL,
-                           #RE1vsREL = RE1-REL,
-                           RE2vsREL = RE2-REL,
-                           levels = design)
+# colnames(design) <- c("DE", "RE2", "REL")
+# contrasts <- makeContrasts(#DEvsRE1 = DE-RE1,
+#                            DEvsRE2 = DE-RE2,
+#                            DEvsREL = DE-REL,
+#                            #RE1vsREL = RE1-REL,
+#                            RE2vsREL = RE2-REL,
+#                            levels = design)
+
+#when comparng between cellular communities
+# colnames(design) <- c("c_1", "c_2", "c_3")
+# contrasts <- makeContrasts(c_1vsc_2 = c_1-c_2,
+#                            c_1vsc_3 = c_1-c_3,
+#                            c_2vsc_3 = c_2-c_3,
+#                            levels = design)
 
 res <- list()
 
 set.seed(230722)
 for (i in 1:ncol(contrasts)){
 
-    res_DA <- testDA_edgeR(d_counts,design, contrasts[,i], 
-                       min_cells=1, 
-                       min_samples=1
+    res_DA <- testDA_voom(d_counts,design, contrasts[,i], 
+                       #min_cells=1, 
+                       #min_samples=1
                        )
     
     res <- append(res, list(data.frame(rowData(res_DA))))
@@ -606,9 +635,9 @@ library(gtools)
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
 
 
-#comparisons <-colnames(contrasts)
+comparisons <-colnames(contrasts)
 #only for one comparison
-comparisons <- c("NoProgvsProg")
+#comparisons <- c("novsyes")
 
 plot_list_values <- list()
 plot_list_stars <- list()
@@ -622,13 +651,13 @@ for(i in 1:length(unique(p$data$cluster_id))){
   group2 <- c()
   logFC <- c()
   
-  #for(j in 1:ncol(contrasts)){
-  for(j in 1:1){
-  #stats <- res[[j]]
-  stats <- res
+  for(j in 1:ncol(contrasts)){
+  #for(j in 1:1){
+  stats <- res[[j]]
+  #stats <- res
   p_adj <- c(p_adj, round(stats[rownames(stats)==droplevels(cluster_name), "p_adj"],3))
-  #logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
-  logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+  logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+  #logFC <- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
   group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
   group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
   }
@@ -638,7 +667,7 @@ for(i in 1:length(unique(p$data$cluster_id))){
   stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
   stats_df$p_fc <- paste0(stats_df$logFC, " (", stats_df$p_adj, ")", " (", stats_df$p_adj_signif, ")")
   
-  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq",# order=c("nMNA", "MNA"),
+  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", #order=c("c_1", "c_2", "c_3"),
               color = "condition", palette =c("gray","#e41a1c", "#377eb8", "#4daf4a", "#984ea3"),
               add = "jitter", title=cluster_name, show.legend = F) +
       stat_pvalue_manual(
@@ -758,7 +787,7 @@ postscript(file.path(path, "results/in_house/20231030/PT_MNAvsnMNA_dodge.eps"), 
 
 
 ggplot(df_normalized, aes(fill=cluster_id, y=normalized_count, x=condition)) + 
-  ggtitle(paste0("celltype per ", groupname)) +
+  #ggtitle(paste0("celltype per ", groupname)) +
   geom_bar(
     #position="fill", 
     #position="stack",

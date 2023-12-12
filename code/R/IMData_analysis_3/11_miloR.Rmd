@@ -28,7 +28,7 @@ library(patchwork)
 library(SpatialExperiment)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_fine.rds"))
+spe <- readRDS(file.path(path,"results/in_house/spe_clustered_13.rds"))
 
 # tumor_markers <- c("CD44_In115_mean", "PRPH_Nd144_mean", "HLA-ABC_Sm147_mean", "LUM_Sm149_mean", "CD24_Eu151_mean", "GD2_Gd155_mean", "CXCR4_Tb159_mean", "CD274_Gd160_mean", "S100B_Dy161_mean", "SOX10_Dy162_mean", "CHGA_Dy164_mean", "GATA3_Er168_mean", "Ki-67_Tm169_mean", "CD56_Er170_mean", "ELAVL4_Yb174_mean", "Vimentin_Pt196_mean")
 # 
@@ -36,7 +36,7 @@ spe <- readRDS(file.path(path,"results/in_house/spe_clustered_fine.rds"))
 
 # granulocyte_markers <- c("MPO_Y89_mean", "CD44_In115_mean", "CD11b_Nd142_mean", "HLA-DR_Nd143_mean", "HLA-ABC_Sm147_mean", "CD24_Eu151_mean", "CD45_Eu153_mean", "CD34_Gd156_mean", "CD10_Gd158_mean", "CXCR4_Tb159_mean", "CD274_Gd160_mean", "Ki-67_Tm169_mean",  "Vimentin_Pt196_mean", "CD15_Bi209_mean")
 
-sce <- spe[rownames(spe)%in%tumor_markers, spe$metacluster=="tumor" & spe$tissue=="BM" & spe$timepoint=="DE"]
+sce <- spe[rowData(spe)$use_channel, spe$metacluster=="tumor" & spe$tissue=="BM" & spe$timepoint=="DE"]
 
 logcounts(sce) <- log(counts(sce) + 1)
 ```
@@ -48,7 +48,7 @@ We recompute the UMAP embedding for this subset of cells to visualize the data.
 ```{r, dev="jpeg"}
 library(BiocParallel)
 sce <- runPCA(sce, ncomponents=10, exprs_values="logcounts", BPPARAM = MulticoreParam(RNGseed = 221228))
-sce <- runUMAP(sce, dimred = "PCA", name = 'umap', BPPARAM = MulticoreParam(RNGseed = 221228))
+sce <- sce <- runUMAP(sce, dimred = "PCA", name = 'umap', BPPARAM = MulticoreParam(RNGseed = 221228))
 
 plotReducedDim(sce, colour_by="celltype", dimred = "umap") 
 ```
@@ -137,15 +137,15 @@ Now we are all set to test for differential abundance in neighbourhoods. We impl
 We first need to think about our experimental design. The design matrix should match each sample to the experimental condition of interest for DA testing. In this case, we want to detect DA between embryonic stages, stored in the `stage` column of the dataset `colData`. We also include the `sequencing.batch` column in the design matrix. This represents a known technical covariate that we want to account for in DA testing. 
 
 ```{r}
-design <- data.frame(colData(milo))[,c("sample", "study_id", "progression", "tissue", "timepoint")]
-design <- replace(design, is.na(design), "c") # replace NA values with "c" for control samples
-design[design==""] <- "c"
+design <- data.frame(colData(milo))[,c("sample", "progression")]
+#design <- replace(design, is.na(design), "c") # replace NA values with "c" for control samples
+#design[design==""] <- "c"
 ## Convert batch info from integer to factor
 design$sample <- as.factor(design$sample)
-design$study_id <- as.factor(design$study_id)
+#design$study_id <- as.factor(design$study_id)
 design$progression <- as.factor(design$progression)
-design$tissue <- as.factor(design$tissue) 
-design$timepoint <- as.factor(design$timepoint) 
+#design$tissue <- as.factor(design$tissue) 
+#design$timepoint <- as.factor(design$timepoint) 
 design <- distinct(design)
 rownames(design) <- design$sample
 
@@ -214,15 +214,16 @@ milo <- buildNhoodGraph(milo)
 # qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 # col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
 # col_clusters = setNames(sample(col_vector_74, length(unique(sce$celltype_fine))), unique(sce$celltype_fine))
-umap_pl <- plotReducedDim(milo, dimred = "umap", colour_by="celltype_fine", text_by = "celltype_fine", 
-                          text_size = 3, point_size=0.5) +
-  guides(fill="none")
 
-## Plot neighbourhood graph
-nh_graph_pl <- plotNhoodGraphDA(milo, da_results, layout="umap",alpha=0.05) 
-  
-umap_pl + nh_graph_pl +
-  plot_layout(guides="collect")
+# umap_pl <- plotReducedDim(milo, dimred = "umap", colour_by="celltype_fine", text_by = "celltype_fine", 
+#                           text_size = 3, point_size=0.5) +
+#   guides(fill="none")
+# 
+# ## Plot neighbourhood graph
+# nh_graph_pl <- plotNhoodGraphDA(milo, da_results, layout="umap",alpha=0.05) 
+#   
+# umap_pl + nh_graph_pl +
+#   plot_layout(guides="collect")
 
 umap_pl <- plotReducedDim(milo, dimred = "umap", colour_by="celltype", text_by = "celltype", 
                           text_size = 3, point_size=0.5) +
@@ -234,17 +235,17 @@ nh_graph_pl <- plotNhoodGraphDA(milo, da_results, layout="umap",alpha=0.1)
 umap_pl + nh_graph_pl +
   plot_layout(guides="collect")
 
-dittoDimPlot(sce, var = "celltype_fine", 
-             reduction.use = "umap", size = 1,
-             do.label = TRUE) +
-    ggtitle("Fine clusters on umap")
+# dittoDimPlot(sce, var = "celltype_fine", 
+#              reduction.use = "umap", size = 1,
+#              do.label = TRUE) +
+#     ggtitle("Fine clusters on umap")
 ```
 
 We might also be interested in visualizing whether DA is particularly evident in certain cell types. To do this, we assign a cell type label to each neighbourhood by finding the most abundant cell type within cells in each neighbourhood. We can label neighbourhoods in the results `data.frame` using the function `annotateNhoods`. This also saves the fraction of cells harbouring the label.
 
 ```{r}
 
-da_results <- annotateNhoods(milo, da_results, coldata_col = "celltype_fine")
+da_results <- annotateNhoods(milo, da_results, coldata_col = "celltype")
 head(da_results)
 ```
 
@@ -255,13 +256,13 @@ ggplot(da_results, aes(celltype_fraction)) + geom_histogram(bins=50)
 ```
 
 ```{r}
-da_results$celltype <- ifelse(da_results$celltype_fraction < 0.7, "Mixed", da_results$celltype_fine)
+da_results$celltype <- ifelse(da_results$celltype_fraction < 0.7, "Mixed", da_results$celltype)
 ```
 
 Now we can visualize the distribution of DA Fold Changes in different cell types
 
 ```{r, fig.height=7, fig.width=7, dev="jpeg"}
-plotDAbeeswarm(da_results, group.by = "celltype_fine")
+plotDAbeeswarm(da_results, group.by = "celltype")
 ```
 
 This is already quite informative: we can see that certain early development cell types, such as epiblast and primitive streak, are enriched in the earliest time stage, while others are enriched later in development, such as ectoderm cells. Interestingly, we also see plenty of DA neighbourhood with a mixed label. This could indicate that transitional states show changes in abundance in time. 

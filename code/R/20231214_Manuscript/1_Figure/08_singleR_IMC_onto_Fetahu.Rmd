@@ -26,13 +26,13 @@ path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 monocle_cell_dataset <- readRDS(file.path(path,"results/Manuscript/1_Figure/public_datasets/Fetahu/rna_integrated_monocle.rds"))
 rna <- as.Seurat(monocle_cell_dataset, data=NULL)
 rna <- RenameAssays(object = rna, originalexp = 'RNA')
-celltype_details <- readRDS(file.path(path,"results/Manuscript/1_Figure/public_datasets/Fetahu/metadata.rds"))
+celltype_details <- readRDS(file.path(path,"results//Manuscript/1_Figure/public_datasets/Fetahu/metadata.rds"))
 rna@active.ident <- setNames(pull(celltype_details[match(celltype_details$cell,colnames(rna)),"cellont_cluster"], "cellont_cluster"),
                              pull(celltype_details[match(celltype_details$cell,colnames(rna)), "cell"], "cell"))
 
 DefaultAssay(rna) <- "RNA"
 
-protein <- readRDS(file.path(path,"results/Manuscript/1_Figure/spe_clustered_8.rds"))
+protein <- readRDS(file.path(path,"results/Manuscript/spe_clustered.rds"))
 protein <- protein[rowData(protein)$use_channel,]
 col_celltype <- metadata(protein)$color_vectors$col_celltype
 ```
@@ -44,20 +44,23 @@ genes.
 
 ```{r set common features, message=FALSE}
 
-protein2gene <- read.csv(file.path(path,"results/public_datasets/protein2gene.csv"), sep=";")
+protein2gene <- read.csv(file.path(path,"results/Manuscript/1_Figure/public_datasets/protein2gene.csv"), sep=";")
 
 code <- setNames(protein2gene$genes, protein2gene$protein)
 rownames(protein) <- recode(rownames(protein), !!!code)
 rowData(protein)$name <- rownames(protein)
 rowData(protein)$channel <- rownames(protein)
 
+metadata <- c("sample_id", "ObjectNumber", "sample", "tissue", "celltype", "metacluster")
+colData(protein)[, metadata]
+colData(protein) <- colData(protein)[, metadata]
+
 protein <- as.Seurat(protein, counts = "counts", data = "exprs")
 Idents(protein) <- "celltype"
 
 common_features <- intersect(row.names(rna), row.names(protein))
 
-# tumor_markers <- c("ELAVL4", "CXCR4", "HLA-A", "CD24", "CD44", "NCAM1", "GATA3", "VIM", "MKI67", "ST8SIA1", "PRPH", "LUM", "CHGA", "SOX10", "S100B")
-# common_features <- common_features[common_features%in%tumor_markers]
+saveRDS(protein, file.path(path, "results/Manuscript/1_Figure/public_datasets/imc_seurat.rds"))
 ```
 
 # Quality control on public dataset
@@ -128,7 +131,6 @@ col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 col_rna_clusters = setNames(sample(col_vector_433, length(unique(rna@active.ident))), unique(rna@active.ident))
 
 DimPlot(rna, reduction="UMAP", cols=col_rna_clusters)
-#DimPlot(rna, reduction="umap", cols=col_rna_clusters)
 
 ```
 
@@ -136,12 +138,6 @@ DimPlot(rna, reduction="UMAP", cols=col_rna_clusters)
 set.seed(230713)
 rand_cells <- sample(seq_len(ncol(protein)), 10000)
 DimPlot(protein[,rand_cells], reduction="UMAP", cols=col_celltype)
-```
-
-For further analysis we will exclude CD8A and the sticky cells.
-```{r data-curation, message=FALSE}
-#protein <- protein[,protein@meta.data$metacluster=="tumor"]
-#rna <- subset(x = rna, subset=fate%in%c("sympathoblasts", "chromaffin", "SCP"))
 ```
 
 We will next plot the two together to look at similarity.
@@ -202,7 +198,7 @@ fviz_pca_ind(data.pca, repel=T, habillage=data$modality)
 
 Finally, we will test singleR to transfer labels from the RNA to the protein dataset. 
 
-```{r single-r, fig.height=3, fig.width= 10, message=FALSE}
+```{r single-r, message=FALSE}
 library(BiocParallel)
 library(SingleR)
 
@@ -212,7 +208,11 @@ protein_mat <- GetAssayData(protein, assay = "originalexp", slot = "counts")[com
 
 predicted_labels <- SingleR(test = protein_mat, ref = rna_mat, labels = rna_clusters, BPPARAM = MulticoreParam(workers=10, RNGseed=20231030))
 
+setEPS()
+postscript(file.path(path, "results/Manuscript/1_Figure/public_datasets/Fetahu/score_heatmap.eps"), height=4, width=6)
 plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 16000),])
+dev.off()
+
 #plotScoreHeatmap(predicted_labels)
 ```
 
@@ -236,7 +236,8 @@ col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual
 col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 
 col_predicted_labels = setNames(sample(col_vector_433, length(unique(predicted_label))), unique(predicted_label))
-col_true_labels = setNames(brewer.pal(11, "Paired"), unique(true_label))
+#col_true_labels = setNames(brewer.pal(11, "Paired"), unique(true_label))
+col_true_labels=col_celltype
 
 count <- min(table(predicted_label))
 count <- 500
@@ -339,7 +340,7 @@ assignments
 Next, we will save predicted clusters in a separate slot in the spe object and define colors.
 
 ```{r save-predicted, message=FALSE, fig.height=17}
-spe <- readRDS(file.path(path,"results/in_house/spe_clustered_8.rds"))
+spe <- readRDS(file.path(path,"results/Manuscript/spe_clustered.rds"))
 spe$predicted_celltype <- predicted_label
 
 col_clusters <- c("B (3)" = rgb(145,2,144, maxColorValue = 255),
@@ -369,7 +370,7 @@ pie(rep(1, length(col_clusters)), col=col_clusters, labels=names(col_clusters))
 
 metadata(spe)$color_vectors$col_predicted_label <- col_clusters
 
-saveRDS(spe, file.path(path, "results/public_datasets/Fetahu/20231030_spe_predicted.rds"))
+#saveRDS(spe, file.path(path, "results/Manuscript/1_Figure/public_datasets/Fetahu/spe_predicted.rds"))
 ```
 
 We will plot the predicted labels in a UMAP.
@@ -391,7 +392,7 @@ p1 <- dittoDimPlot(spe, var = "predicted_celltype",
   theme(legend.title = element_blank()) +
   ggtitle("Celltype on UMAP")
 
-tiff(filename = file.path(path, "results/in_house/20231030/UMAP_predicted_celltype_fetahu.tiff"),
+tiff(filename = file.path(path, "results/Manuscript/1_Figure/public_datasets/Fetahu/UMAP_predicted_celltype.tiff"),
      width = 115, height = 95, units = "mm", res=600)
 p1
 dev.off()
@@ -446,7 +447,7 @@ pie(rep(1, length(col_metacluster)), col=col_metacluster, labels=names(col_metac
 
 metadata(spe)$color_vectors$col_predicted_meta <- col_metacluster
 
-saveRDS(spe, file.path(path, "results/public_datasets/Fetahu/20231030_spe_predicted.rds"))
+saveRDS(spe, file.path(path, "results/Manuscript/1_Figure/public_datasets/Fetahu/spe_predicted.rds"))
 ```
 
 We will plot the predicted metalabels in a UMAP.
@@ -462,7 +463,7 @@ p1 <- dittoDimPlot(spe, var = "predicted_metacluster",
   theme(legend.title = element_blank()) +
   ggtitle("Celltype on UMAP")
 
-tiff(filename = file.path(path, "results/in_house/20231030/UMAP_predicted_metacluster_fetahu.tiff"),
+tiff(filename = file.path(path, "results/Manuscript/1_Figure/public_datasets/Fetahu/UMAP_predicted_metacluster.tiff"),
      width = 115, height = 95, units = "mm", res=600)
 p1
 dev.off()

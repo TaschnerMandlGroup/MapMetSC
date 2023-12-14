@@ -13,8 +13,8 @@ In this RMD file, we will perform clustering on the curated data (after excludin
 
 ```{r read-data}
 
-path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/1_Figure"
-spe <- readRDS(file.path(path,"spe_1px-curated.rds"))
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+spe <- readRDS(file.path(path,"results/Manuscript/1_Figure/spe_1px-curated.rds"))
 
 ```
 
@@ -129,9 +129,9 @@ library(BiocParallel)
 #mat_red_clustering <- calculateUMAP(mat, ncomponents=5, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam(RNGseed = 221228))
 rownames(mat_red_clustering) <- colnames(spe)
 
-#saveRDS(mat_red_clustering, file.path(path, "results/in_house/mat_red_clustering.rds"))
+#saveRDS(mat_red_clustering, file.path(path, "results/Manuscript/1_Figure/mat_red_clustering.rds"))
 
-mat_red_clustering <- readRDS(file.path(path,"mat_red_clustering.rds"))
+mat_red_clustering <- readRDS(file.path(path,"results/Manuscript/1_Figure/mat_red_clustering.rds"))
 
 #Apply changes to SPE object
 reducedDim(spe, "UMAP_clustering") <- mat_red_clustering
@@ -151,9 +151,9 @@ set.seed(221228)
 #Rphenograph_out <- Rphenoannoy(mat_red_clustering, k = 45)
 
 #clusters <- factor(membership(Rphenograph_out[[2]]))
-#saveRDS(clusters, file.path(path, "results/in_house/pg_clusters.rds"))
+#saveRDS(clusters, file.path(path, "results/Manuscript/1_Figure/pg_clusters.rds"))
 
-clusters <- readRDS(file.path(path, "pg_clusters.rds"))
+clusters <- readRDS(file.path(path, "results/Manuscript/1_Figure/pg_clusters.rds"))
 spe$pg_clusters <- clusters
 ```
 
@@ -282,7 +282,7 @@ for(i in 1: length(unique(clusters))){
                                          ), 
                                 show_legend=T)
   
-  png(file=file.path(path, paste0("results/separate/PT_separately/heatmaps_per_cluster/", c , ".tiff")),width=18,height=8,units="in", res=1200)
+  png(file=file.path(path, paste0("results/Manuscript/1_Figure/", c , ".tiff")),width=18,height=8,units="in", res=1200)
   
   ht<- Heatmap(mat_c[,rand_cells], 
           column_title = "Single-cell heatmap with 8000 randomly selected cells",
@@ -352,7 +352,7 @@ for(i in 1: length(unique(clusters))){
                                          ), 
                                 show_legend=T)
   
-  png(file=file.path(path, paste0("results/heatmaps/clusters-tissue-sep/", t, "/", t, "_" , c , ".tiff")),width=18,height=8,units="in", res=1200)
+  png(file=file.path(path, paste0("results/Manuscript/1_Figure/", t, "/", t, "_" , c , ".tiff")),width=18,height=8,units="in", res=1200)
   
   ht<- Heatmap(mat_c[,rand_cells], 
           column_title = "Single-cell heatmap with 8000 randomly selected cells",
@@ -674,9 +674,9 @@ Then, we will perform dimensionality reduction by UMAP for visualization.
 
 rownames(mat_red) <- colnames(spe)
 
-#saveRDS(mat_red, file.path(path, "results/in_house/mat_red.rds"))
+#saveRDS(mat_red, file.path(path, "results/Manuscript/1_Figure/mat_red.rds"))
 
-mat_red <- readRDS(file.path(path,"mat_red.rds"))
+mat_red <- readRDS(file.path(path,"results/Manuscript/1_Figure/mat_red.rds"))
 
 #Apply changes to SPE object
 reducedDim(spe, "UMAP") <- mat_red
@@ -802,7 +802,7 @@ for (i in 1: nrow(mat_tmp)){
             axis.line = element_line(colour = "black"),
             legend.text = element_text(size=5))
   
-  ggsave(filename=file.path(path, paste0("results/UMAP/markers_random/", marker , ".tiff")), width = 10, height = 5) #units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste0("results/Manuscript/1_Figure/", marker , ".tiff")), width = 10, height = 5) #units = "in", device='tiff', dpi=500)
 } 
 ```
 
@@ -871,7 +871,7 @@ for(i in 1: length(samples)){
           panel.background = element_blank(), 
           axis.line = element_line(colour = "black"))
   
-  ggsave(filename=file.path(path, paste0("results/UMAP/clusters/", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste0("results/Manuscript/1_Figure/", samples[i] , ".tiff")), width = 10, height = 5, units = "in", device='tiff', dpi=500)
 }
 
 ```
@@ -914,7 +914,7 @@ plot_sublists <- split(plot_list, ceiling(seq_along(plot_list) / 33))
 
 save_tiff <- function(sublist, j){
   plot <- plot_grid(plotlist = sublist, nrow=11, ncol=3) 
-  ggsave(filename=file.path(path, paste("/results/UMAP/samples/sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
+  ggsave(filename=file.path(path, paste("/results/Manuscript/1_Figure/sample_", j, ".tiff", sep="")), width = 7, height = 20, units = "in", device='tiff', dpi=500)
 }
 
 mapply(save_tiff, plot_sublists, 1:length(plot_sublists))
@@ -934,7 +934,7 @@ data$freq <- 1
 
 data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-#write.csv(data_wide, file.path(path, "results/metadata/clusters-per-sample.csv"))
+#write.csv(data_wide, file.path(path, "results/Manuscript/1_Figure/clusters-per-sample.csv"))
 
 data_long <- data_wide[c(1:145),] %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
@@ -957,7 +957,7 @@ col_sample = setNames(sample(col_vector_433, length(unique(data$sample))), uniqu
 
 data_wide <- data %>% pivot_wider(names_from = c("sample"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "results/metadata/samples-per-cluster.csv"))
+write.csv(data_wide, file.path(path, "results/Manuscript/1_Figure/samples-per-cluster.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "sample", values_to = "count") 
 
@@ -977,7 +977,7 @@ data$freq <- 1
 
 data_wide <- data %>% pivot_wider(names_from = c("sample"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-write.csv(data_wide, file.path(path, "results/metadata/image-per-cluster.csv"))
+write.csv(data_wide, file.path(path, "results/Manuscript/1_Figure/image-per-cluster.csv"))
 
 ```
 
@@ -996,7 +996,7 @@ data[data$tissue%in%"TU",]$tissue <- "PT"
 data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("tissue"), values_from = "freq", values_fn = sum, values_fill = 0)
 
-#write.csv(data_wide, file.path(path, "/results/metadata/tissues-per-cluster.csv"))
+#write.csv(data_wide, file.path(path, "/results/Manuscript/1_Figure/tissues-per-cluster.csv"))
 
 data_long <- data_wide %>% pivot_longer(cols = !clusters, names_to = "tissue", values_to = "count") 
 
@@ -1037,7 +1037,7 @@ for(i in 1: length(files)){
   #           colour_by = "pg_clusters",
   #           colour = list(pg_clusters = col_clusters),
   #           display = "single",
-  #           save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0("all_", files[i], "f"))),
+  #           save_plot = list(filename = file.path(path, "results/Manuscript/1_Figure/", tissue, paste0("all_", files[i], "f"))),
   #           legend = NULL)
 
 
@@ -1052,7 +1052,7 @@ for(i in 1: length(files)){
             colour_by = "binary",
             colour = list(binary = col_celltype),
             display="single",
-            save_plot = list(filename = file.path(path, "results/in_house/colored_masks/max_sample_per_cluster", tissue, paste0(files[i], "f"))),
+            save_plot = list(filename = file.path(path, "results/Manuscript/1_Figure/", tissue, paste0(files[i], "f"))),
             legend=NULL
             )
 
@@ -1065,13 +1065,13 @@ We will then examine the cell types in the images and annotate the clusters base
 
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(dplyr)
-annotation <- read.csv(file.path(path, "annotation_v9.csv"), sep=";")
+annotation <- read.csv(file.path(path, "results/Manuscript/1_Figure", "annotation_v9.csv"), sep=";")
 
 #non-merged clusters
 # BM_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$BM.annotation.2), annotation$cluster)
 # PT_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$PT.annotation.2), annotation$cluster)
-BM_cluster_names <- setNames(annotation$BM.annotation, annotation$cluster)
-PT_cluster_names <- setNames(annotation$PT.annotation, annotation$cluster)
+BM_cluster_names <- setNames(annotation$BM.annotation.3, annotation$cluster)
+PT_cluster_names <- setNames(annotation$PT.annotation.3, annotation$cluster)
 
 BM_celltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_cluster_names)
 PT_celltypes <- recode(spe[,spe$tissue=="PT"]$pg_clusters, !!!PT_cluster_names)
@@ -1215,7 +1215,7 @@ for(i in 1: 1){
             colour_by = "gran_type",
             colour = list(gran_type = col_celltype_gran),
             display="single",
-            #save_plot = list(filename = file.path(path, "results/summary", paste0("2", files[i], "f"))),
+            #save_plot = list(filename = file.path(path, "results/Manuscript/1_Figure", paste0("2", files[i], "f"))),
             #legend=NULL
             )
   
@@ -1225,7 +1225,7 @@ for(i in 1: 1){
     #         colour_by = "celltype",
     #         colour = list(celltype = metadata(spe)$color_vector$col_celltype),
     #         display="single",
-    #         save_plot = list(filename = file.path(path, "results/summary", paste0("2", files[i], "f"))),
+    #         save_plot = list(filename = file.path(path, "results/Manuscript/1_Figure", paste0("2", files[i], "f"))),
     #         legend=NULL
     #         )
 }
@@ -1265,7 +1265,7 @@ col_clusters <- c(#"GD2+MPO+"=rgb(255,255,162, maxColorValue = 255),
                 "CD4+ S100B+ T cell"=rgb(227,26,28, maxColorValue = 255),
                 "dense T cell region"=rgb(145,2,144, maxColorValue = 255),
                 "CD24+ marker-lo TC"=rgb(230,245,201, maxColorValue = 255),
-                "early SYM-like TC"=rgb(204,235,197, maxColorValue = 255),
+                "CD24- SYM-like TC"=rgb(204,235,197, maxColorValue = 255),
                 "neural progenitor"=rgb(238,118,0, maxColorValue = 255),
                 "bridge-like TC"=rgb(198,255,72, maxColorValue = 255),
                 "GATA3hi TC"=rgb(65,208,57, maxColorValue = 255),
@@ -1325,5 +1325,5 @@ processing and analysis.
 
 ```{r save-objects-read-data}
 
-saveRDS(spe, file.path(path, "spe_clustered.rds"))
+saveRDS(spe, file.path(path, "results/Manuscript/spe_clustered.rds"))
 ```

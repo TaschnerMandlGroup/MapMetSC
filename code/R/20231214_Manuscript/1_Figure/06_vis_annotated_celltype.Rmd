@@ -540,6 +540,7 @@ head(exp_mat)
 #Percentage of cells per cluster expressing a marker (>0)
 tmp <- mat
 tmp[tmp > unname(quantile(exp_mat[exp_mat>0], c(0.2)))] <- 1
+tmp[tmp <= unname(quantile(exp_mat[exp_mat>0], c(0.2)))] <- 0
 tmp <- aggregate(t(tmp), list(spe$celltype), sum)
 tmp2 <- tmp[,2:ncol(tmp)]
 rownames(tmp2) <- tmp[,"Group.1"]
@@ -595,7 +596,7 @@ col_fun = circlize::colorRamp2(c(min(exp_mat),(max(exp_mat)-min(exp_mat))/2, max
 layer_fun = function(j, i, x, y, w, h, fill){
           grid.rect(x = x, y = y, width = w, height = h, 
                     gp = gpar(col = NA, fill = NA))
-          grid.circle(x=x,y=y,r= pindex(percent_mat, i, j)/1.3 * unit(1.5, "mm"),
+          grid.circle(x=x,y=y,r= pindex(percent_mat, i, j)/1 * unit(1.5, "mm"),
                       gp = gpar(fill = col_fun(pindex(exp_mat, i, j)), col = NA))}
 
 #Generate legend for percentage expressed
@@ -635,10 +636,10 @@ hp <- Heatmap(exp_mat,
 
 d1 <- draw( hp, annotation_legend_list = lgd_list)
 
-#setEPS()
-#postscript(file.path(path, "results/Manuscript/1_Figure/bubbleplot_scaled3.eps"), height=7.2, width=14)
+setEPS()
+postscript(file.path(path, "results/Manuscript/1_Figure/R/bubbleplot_scaled.eps"), height=7.2, width=14)
 d1
-#dev.off()
+dev.off()
 ```
 
 Next we will visualize the tissue type in the UMAP space.
@@ -1003,10 +1004,10 @@ for(i in 1: length(files)){
   plotCells(masks,
             object = spe,
             cell_id = "ObjectNumber", img_id = "sample_id",
-            colour_by = "celltype",
-            colour = list(celltype = metadata(spe)$color_vectors$col_celltype),
+            colour_by = "metacluster",
+            colour = list(metacluster = metadata(spe)$color_vectors$col_metacluster),
             display = "single",
-            save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
+            save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_m_", files[i], "f"))),
             #save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
             legend = NULL)
 

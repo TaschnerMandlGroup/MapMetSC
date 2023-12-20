@@ -998,7 +998,7 @@ for(i in 1: length(files)){
   # names(masks) <- sub("\\.tif.*", "", tmp)
   # c <- sub("\\_clust.*", "", files[i])
   
-  c <- "CD24+ marker-lo TC"
+  c <- "early SYM-like TC"
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
   plotCells(masks,
@@ -1012,20 +1012,20 @@ for(i in 1: length(files)){
             legend = NULL)
 
 
-  # col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
-  # spe$binary <- 'no'
-  # spe[,spe$celltype == c]$binary <- 'yes'
-  # 
-  # 
-  # plotCells(masks,
-  #           object = spe,
-  #           cell_id = "ObjectNumber", img_id = "sample_id",
-  #           colour_by = "binary",
-  #           colour = list(binary = col_celltype_bin),
-  #           display="single",
-  #           save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
-  #           #save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
-  #           legend=NULL)
+  col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
+  spe$binary <- 'no'
+  spe[,spe$celltype == c]$binary <- 'yes'
+
+
+  plotCells(masks,
+            object = spe,
+            cell_id = "ObjectNumber", img_id = "sample_id",
+            colour_by = "binary",
+            colour = list(binary = col_celltype_bin),
+            display="single",
+            save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
+            #save_plot = list(filename = file.path(path, "tmp", tissue, paste0(files[i], "f"))),
+            legend=NULL)
 
 }
 

@@ -1,0 +1,183 @@
+---
+title: "Bubble plots showing 78 clusters"
+output: html_document
+date: '2024-01-09'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+```
+
+In this RMD file, we will plot UMAPs and histograms on the annotated SPE.
+
+```{r read-data}
+
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+
+spe <- readRDS(file.path(path,"results/Manuscript/spe_clustered.rds"))
+```
+
+Then we will generate a matrix of the expression data to be able to run the plots below. 
+
+```{r generate-dataframes, message=FALSE, fig.height=7}
+library(SpatialExperiment)
+
+mat_lq <- assay(spe, "exprs")[!rowData(spe)$use_channel,]
+mat_hq <- assay(spe, "exprs")[rowData(spe)$use_channel,]
+mat_morph <- rbind(mat_hq, "area"=spe$area_clipped, "solidity"=spe$solidity_clipped, "aspect_ratio"=spe$aspect_ratio_clipped)
+```
+
+The problem above is that the internal scaling can't be turned off. So we will try to plot a dotplot with complex heatmap according to [this](https://divingintogeneticsandgenomics.com/post/clustered-dotplot-for-single-cell-rnaseq/).
+
+```{r dot-plot-complex-heatmap, message=FALSE, fig.height=14, fig.width=16}
+library(tidyr)
+library(tidyHeatmap)
+library(bruceR)
+library(circlize)
+library(ComplexHeatmap)
+library(viridis)
+
+#Mean expression per cluster
+mat <- mat_hq
+exp_mat_ <- aggregate(t(mat), list(spe$pg_clusters), mean)
+exp_mat <- exp_mat_[,2:ncol(exp_mat_)]
+exp_mat <- apply(exp_mat, 2, RESCALE, to=0:1)
+rownames(exp_mat) <- exp_mat_[,"Group.1"]
+exp_mat <- t(exp_mat)
+head(exp_mat)
+
+#Percentage of cells per cluster expressing a marker (>0)
+tmp <- mat
+tmp[tmp > unname(quantile(exp_mat[exp_mat>0], c(0.2)))] <- 1
+tmp[tmp <= unname(quantile(exp_mat[exp_mat>0], c(0.2)))] <- 0
+tmp <- aggregate(t(tmp), list(spe$pg_clusters), sum)
+tmp2 <- tmp[,2:ncol(tmp)]
+rownames(tmp2) <- tmp[,"Group.1"]
+percent_mat <- tmp2 / unname(table(droplevels(spe$pg_clusters)))
+percent_mat <- t(percent_mat)
+percent_mat[percent_mat < 0.1] <- 0.1 #setting min values higher to make points in heatmap visible
+head(percent_mat)
+
+#Annotation bars
+bm_count <- table(spe[,spe$tissue=="BM"]$pg_clusters)
+bm_count[setdiff(colnames(exp_mat), names(bm_count))] <- 0
+bm_count <- bm_count[colnames(exp_mat)]
+pt_count <- table(spe[,spe$tissue=="PT"]$pg_clusters)
+pt_count[setdiff(colnames(exp_mat), names(pt_count))] <- 0
+pt_count <- pt_count[colnames(exp_mat)]
+
+mean_metaclust <-aggregate(spe$metacluster, list(spe$pg_clusters), max)
+mean_celltype <-aggregate(spe$celltype, list(spe$pg_clusters), max)
+
+mean_morph <- aggregate(t(mat_morph), list(spe$pg_clusters), mean)
+area_mean = mean_morph[,"area"]
+solidity_mean = mean_morph[,"solidity"]
+col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(area_mean))/2, max(area_mean)), c("blue", "white", "red"))
+col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c("blue", "white", "red"))
+
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+col_clusters = setNames(sample(col_vector_433, length(unique(spe$pg_clusters))), unique(spe$pg_clusters))
+
+column_ha = HeatmapAnnotation(metacluster=mean_metaclust$x,
+                              celltype=mean_celltype$x,
+                              roundness = solidity_mean,
+                              #area = area_mean,
+                              #ncells_overall=anno_barplot(as.data.frame(table(spe$celltype))[,"Freq"], add_numbers=T, height = unit(2.2, "cm")),
+                              #ncells_PT=anno_barplot(unname(pt_count), add_numbers=F, height = unit(0.7, "cm"), gp = gpar(fill = "brown")),
+                              ncells_bm=anno_barplot(unname(bm_count), add_numbers=F, height = unit(0.7, "cm"), gp = gpar(fill = "aquamarine4")),
+                              #ncells = anno_barplot(matrix(nc=2, c(unname(pt_count), unname(bm_count))), beside=T, attach=T, height = unit(2.2, "cm")),
+                              col=list(metacluster=metadata(spe)$color_vectors$col_metacluster, 
+                                       celltype=metadata(spe)$color_vectors$col_celltype,
+                                       roundness = col_mean_solidity
+                                       #area = col_mean_area
+                                       ), 
+                              #annotation_legend_param = list(celltype = list(
+                       	      #at = colnames(exp_mat)[order(mean_metaclust$x)])),
+                              show_legend=T)
+
+#Function to set dot size based on percentage expressed
+cell_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= percent_mat[i, j]/2 * min(unit.c(w, h)),
+                      gp = gpar(fill = col_fun(exp_mat[i, j]), col = NA))}
+
+#Function to set dot color based on mean expression
+col_fun = circlize::colorRamp2(c(min(exp_mat),(max(exp_mat)-min(exp_mat))/2, max(exp_mat)), viridis(100)[c(1,50,100)])
+
+#Function to set legend size according to percentage expressed
+layer_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= pindex(percent_mat, i, j)/1 * unit(1.5, "mm"),
+                      gp = gpar(fill = col_fun(pindex(exp_mat, i, j)), col = NA))}
+
+#Generate legend for percentage expressed
+lgd_list = list(
+    Legend( labels = c(0,0.25,0.5,0.75,1), title = "percentage expressed",
+            graphics = list(
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.25 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.5 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.75 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 1 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")))
+            ))
+
+#Heatmap
+hp <- Heatmap(exp_mat,
+        heatmap_legend_param=list(title="expression"),
+        column_title = "Dotplot - normalized mean expression and %expressed", 
+        top_annotation = column_ha, 
+        col=col_fun,
+        rect_gp = gpar(type = "none"),
+        clustering_distance_columns="pearson", #use euclidean, kendall or pearson
+        clustering_method_columns="average", #use centroid, average or single
+        layer_fun = layer_fun,
+        row_labels=sapply(strsplit(rownames(exp_mat), "_"), "[[", 1),
+        cell_fun = cell_fun,
+        show_row_dend = F,
+        column_dend_height = unit(1.5, "cm"),
+        row_names_gp = gpar(fontsize = 10),
+        column_names_gp = gpar(fontsize = 10),
+        column_names_rot = 45,
+        border = "black")
+
+d1 <- draw( hp, annotation_legend_list = lgd_list)
+
+setEPS()
+postscript(file.path(path, "results/Manuscript/2_Ext_Figure/R/bubbleplot_scaled_BM.eps"), height=7.2, width=18)
+d1
+dev.off()
+```
+
+Next, we will plot an overview of celltype proportions per sample.
+```{r barplot_overview, message=FALSE, , fig.width=20, fig.height=10}
+library(CATALYST)
+library(diffcyt)
+
+clusternames_ordered <- read.csv(file.path(path, "results/Manuscript/celltypes_ordered_2.csv"), sep=";", colClasses = c("order" = "character"))
+codes <- setNames(paste0(clusternames_ordered$order, "_", clusternames_ordered$celltype), clusternames_ordered$celltype)
+spe$celltype_ordered <- recode(spe$celltype, !!!codes)
+
+metadata(spe)$color_vectors$col_celltype_ordered <- metadata(spe)$color_vectors$col_celltype
+names(metadata(spe)$color_vectors$col_celltype_ordered) <- recode(names(metadata(spe)$color_vectors$col_celltype), !!!codes)
+
+sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts"), exprs=assay(spe, "counts")))
+sce$cluster_id <- factor(spe$celltype_ordered)
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe$celltype_ordered))
+sce$sample_id <- factor(paste0(spe$sample, "_", spe$tissue))
+sce$condition <- "na"
+
+setEPS()
+postscript(file.path(path, "results/Manuscript/2_Ext_Figure/R/overview_barplot.eps"), height=12, width=25)
+plotAbundances(sce, k = "celltype", by = "sample", col_clust=T, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, 
+                    linkage="ward.D", distance="manhattan") 
+dev.off()
+
+```

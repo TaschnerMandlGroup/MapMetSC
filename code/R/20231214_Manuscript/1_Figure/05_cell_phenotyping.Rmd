@@ -555,7 +555,7 @@ set.seed(20230135)
 matrix_hq <- intensity_mat_hq_wo_zeros
 matrix_lq <- intensity_mat_lq_wo_zeros
 morph_matrix <- morph_mat_clipped
-clust <- clusters
+clust <- droplevels(spe$pg_clusters)
 
 #calculate heatmap over tissue-derived cells
 # tissue <- "BM"
@@ -664,6 +664,122 @@ Heatmap(mean_t_wo_sticky,
         )
 
 
+```
+
+Next we will visualize the clusters in a bubble plot. 
+```{r dot-plot-complex-heatmap, message=FALSE, fig.height=14, fig.width=16}
+library(tidyr)
+library(tidyHeatmap)
+library(bruceR)
+
+#Mean expression per cluster
+
+exp_mat_ <- aggregate(t(mat), list(spe$pg_clusters), mean)
+exp_mat <- exp_mat_[,2:ncol(exp_mat_)]
+exp_mat <- apply(exp_mat, 2, RESCALE, to=0:1)
+rownames(exp_mat) <- exp_mat_[,"Group.1"]
+exp_mat <- t(exp_mat)
+head(exp_mat)
+
+#Percentage of cells per cluster expressing a marker (>0)
+tmp <- mat
+tmp[tmp > unname(quantile(exp_mat[exp_mat>0], c(0.2)))] <- 1
+tmp[tmp <= unname(quantile(exp_mat[exp_mat>0], c(0.2)))] <- 0
+tmp <- aggregate(t(tmp), list(spe$pg_clusters), sum)
+tmp2 <- tmp[,2:ncol(tmp)]
+rownames(tmp2) <- tmp[,"Group.1"]
+percent_mat <- tmp2 / unname(table(droplevels(spe$pg_clusters)))
+percent_mat <- t(percent_mat)
+percent_mat[percent_mat < 0.1] <- 0.1 #setting min values higher to make points in heatmap visible
+head(percent_mat)
+
+#Annotation bars
+bm_count <- table(spe[,spe$tissue=="BM"]$pg_clusters)
+bm_count[setdiff(colnames(exp_mat), names(bm_count))] <- 0
+bm_count <- bm_count[colnames(exp_mat)]
+pt_count <- table(spe[,spe$tissue=="PT"]$pg_clusters)
+pt_count[setdiff(colnames(exp_mat), names(pt_count))] <- 0
+pt_count <- pt_count[colnames(exp_mat)]
+
+mean_morph <- aggregate(t(morph_mat_clipped), list(spe$pg_clusters), mean)
+area_mean = mean_morph[,"area"]
+solidity_mean = mean_morph[,"solidity"]
+col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(area_mean))/2, max(area_mean)), c("blue", "white", "red"))
+col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c("blue", "white", "red"))
+
+column_ha = HeatmapAnnotation(#pg_clusters = colnames(exp_mat),
+                              roundness = solidity_mean,
+                              #area = area_mean,
+                              #ncells_overall=anno_barplot(as.data.frame(table(spe$pg_clusters))[,"Freq"], add_numbers=T, height = unit(2.2, "cm")),
+                              ncells_PT=anno_barplot(unname(pt_count), add_numbers=F, height = unit(0.7, "cm"), gp = gpar(fill = "brown")),
+                              #ncells_bm=anno_barplot(unname(bm_count), add_numbers=F, height = unit(0.7, "cm"), gp = gpar(fill = "aquamarine4")),
+                              #ncells = anno_barplot(matrix(nc=2, c(unname(pt_count), unname(bm_count))), beside=T, attach=T, height = unit(2.2, "cm")),
+                              col=list(#pg_clusters=metadata(spe)$color_vectors$col_clusters
+                                       roundness = col_mean_solidity
+                                       #area = col_mean_area
+                                       ), 
+                              #annotation_legend_param = list(pg_clusters = list(
+                       	      #at = colnames(exp_mat)[order(mean_metaclust$x)])),
+                              show_legend=T)
+
+#Function to set dot size based on percentage expressed
+cell_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= percent_mat[i, j]/2 * min(unit.c(w, h)),
+                      gp = gpar(fill = col_fun(exp_mat[i, j]), col = NA))}
+
+#Function to set dot color based on mean expression
+col_fun = circlize::colorRamp2(c(min(exp_mat),(max(exp_mat)-min(exp_mat))/2, max(exp_mat)), viridis(100)[c(1,50,100)])
+
+#Function to set legend size according to percentage expressed
+layer_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= pindex(percent_mat, i, j)/1 * unit(1.5, "mm"),
+                      gp = gpar(fill = col_fun(pindex(exp_mat, i, j)), col = NA))}
+
+#Generate legend for percentage expressed
+lgd_list = list(
+    Legend( labels = c(0,0.25,0.5,0.75,1), title = "percentage expressed",
+            graphics = list(
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.25 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.5 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.75 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 1 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")))
+            ))
+
+#Heatmap
+hp <- Heatmap(exp_mat,
+        heatmap_legend_param=list(title="expression"),
+        column_title = "Dotplot - normalized mean expression and %expressed", 
+        top_annotation = column_ha, 
+        col=col_fun,
+        rect_gp = gpar(type = "none"),
+        clustering_distance_columns="pearson", #use euclidean, kendall or pearson
+        clustering_method_columns="average", #use centroid, average or single
+        layer_fun = layer_fun,
+        row_labels=sapply(strsplit(rownames(exp_mat), "_"), "[[", 1),
+        cell_fun = cell_fun,
+        show_row_dend = F,
+        column_dend_height = unit(1.5, "cm"),
+        row_names_gp = gpar(fontsize = 10),
+        column_names_gp = gpar(fontsize = 10),
+        column_names_rot = 45,
+        border = "black")
+
+d1 <- draw( hp, annotation_legend_list = lgd_list)
+
+setEPS()
+postscript(file.path(path, "results/Manuscript/2_Ext_Figure/R/bubbleplot_scaled_PT.eps"), height=7.2, width=18)
+d1
+dev.off()
 ```
 
 Then, we will perform dimensionality reduction by UMAP for visualization.
@@ -1070,8 +1186,8 @@ annotation <- read.csv(file.path(path, "results/Manuscript/1_Figure", "annotatio
 #non-merged clusters
 # BM_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$BM.annotation.2), annotation$cluster)
 # PT_cluster_names <- setNames(paste0(annotation$cluster, "_", annotation$PT.annotation.2), annotation$cluster)
-BM_cluster_names <- setNames(annotation$BM.annotation.3, annotation$cluster)
-PT_cluster_names <- setNames(annotation$PT.annotation.3, annotation$cluster)
+BM_cluster_names <- setNames(annotation$BM.annotation, annotation$cluster)
+PT_cluster_names <- setNames(annotation$PT.annotation, annotation$cluster)
 
 BM_celltypes <- recode(spe[,spe$tissue=="BM"]$pg_clusters, !!!BM_cluster_names)
 PT_celltypes <- recode(spe[,spe$tissue=="PT"]$pg_clusters, !!!PT_cluster_names)
@@ -1097,7 +1213,7 @@ spe[,spe$tissue=="PT"]$metacluster<- as.vector(PT_metacelltypes)
 ```
 
 Now, we have one cluster GD2+MPO+, which is double positive and a mixture of DTCs and granulocytes. We will try to seperate them with gaussian mixture models. 
-```{r GD2+MPO+ subclustering, fig.width=10, fig.height=8}
+```{r GD2+MPO+ subclustering}
 
 library(mclust)
 
@@ -1118,6 +1234,8 @@ tmp2 <- t(assay(spe[,spe$celltype=="GD2+MPO+"], "exprs")[rowData(spe)$use_channe
 ht<- Heatmap(t(tmp2), 
         column_title = "Single-cell heatmap",
         cluster_columns=F,
+        show_row_dend = F,
+        row_labels=sapply(strsplit(colnames(tmp2), "_"), "[[", 1),
         top_annotation=column_ha,
         column_order= order(unname(clusters), decreasing=F),
         show_column_dend = T,
@@ -1126,12 +1244,15 @@ ht<- Heatmap(t(tmp2),
         )
 draw(ht)
 
-#dtc <- rownames(tmp2[clusters==2,])
-#no_dtc <- rownames(tmp2[clusters==1,])
+tiff(filename = file.path(path, paste0("results/Manuscript/2_Ext_Figure/R/GMM_heatmap.tiff")),
+     width = 170, height = 150, units = "mm", res=600)
+draw(ht)
+dev.off()
 
-# spe[,colnames(spe)%in%dtc]$celltype <- "CD24- marker-lo TC"
-#spe[,colnames(spe)%in%no_dtc]$celltype <- "other"
-#spe[,colnames(spe)%in%dtc]$metacluster <- "other"
+setEPS()
+postscript(file.path(path, "results/Manuscript/2_Ext_Figure/R/GMM_heatmap.eps"), height=5.9, width=6.7)
+draw(ht)
+dev.off()
 ```
 
 The cells in cluster 2 are most probably clustering together based on MPO and GD2 coexpression. We can see that some DTCs co-express CD56, some CD24 and some GATA3. To correctly assign these cells to the correct tumor celltype, we will use singleR. 
@@ -1146,7 +1267,17 @@ ref_clusters <- spe[markers,spe$metacluster=="tumor"]$celltype
 
 predicted_labels <- SingleR(test = query, ref = ref, labels = ref_clusters, BPPARAM = MulticoreParam(workers=10, RNGseed=20231030))
 
-plotScoreHeatmap(predicted_labels)
+plotScoreHeatmap(predicted_labels, annotation_colors=list(Labels = col_clusters), annotation_legend=F, treeheight_row=0) #define the colors first 
+
+tiff(filename = file.path(path, paste0("results/Manuscript/2_Ext_Figure/R/singleR_prediction-score.tiff")),
+     width = 90, height = 55, units = "mm", res=600)
+plotScoreHeatmap(predicted_labels, annotation_colors=list(Labels = col_clusters), annotation_legend=F, treeheight_row=0) #define the colors first 
+dev.off()
+
+setEPS()
+postscript(file.path(path, "results/Manuscript/2_Ext_Figure/R/singleR_prediction-score.eps"), height=2.1, width=3.5)
+plotScoreHeatmap(predicted_labels, annotation_colors=list(Labels = col_clusters), annotation_legend=F, treeheight_row=0) #define the colors first 
+dev.off()
 
 labels <- predicted_labels$labels
 

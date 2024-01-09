@@ -552,7 +552,6 @@ plot_list <- list()
 for(i in 1: length(samples)){
   spe$sample_binary <- spe[[var]] == samples[i] 
   
-  background <- as.data.frame(reducedDim(spe[,spe$sample_binary == FALSE], "UMAP_asinh_comp"))
   foreground <- as.data.frame(reducedDim(spe[,spe$sample_binary == TRUE], "UMAP_asinh_comp"))
   plot_list[[i]] <- ggplot(background, aes(x=V1, y=V2) ) +
     geom_point(color="gray90", size=0.05) + 

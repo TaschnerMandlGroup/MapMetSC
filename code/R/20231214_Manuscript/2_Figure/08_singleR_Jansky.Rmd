@@ -23,7 +23,7 @@ library(monocle3)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
 
-rna <- readRDS(file.path(path,"results/Manuscript/1_Figure/public_datasets/Jansky/adrenal_medulla_Seurat.RDS"))
+rna <- readRDS(file.path(path,"results/Manuscript/2_Figure/public_datasets/Jansky/adrenal_medulla_Seurat.RDS"))
 
 DefaultAssay(rna) <- "RNA"
 rna <- UpdateSeuratObject(object = rna)
@@ -50,7 +50,7 @@ rowData(protein)$channel <- rownames(protein)
 protein <- as.Seurat(protein, counts = "counts", data = "exprs")
 Idents(protein) <- "celltype"
 
-#protein <- readRDS(file.path(path, "results/Manuscript/1_Figure/public_datasets/imc_seurat.rds"))
+#protein <- readRDS(file.path(path, "results/Manuscript/2_Figure/public_datasets/imc_seurat.rds"))
 protein <- UpdateSeuratObject(object = protein)
 
 common_features <- intersect(row.names(rna), row.names(protein))
@@ -296,7 +296,7 @@ hp <- Heatmap(exp_mat,
 d1 <- draw( hp, annotation_legend_list = lgd_list)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/1_Figure/public_datasets/Jansky/Jansky_bubbleplot_scaled.eps"), height=6, width=8)
+postscript(file.path(path, "results/Manuscript/2_Figure/public_datasets/Jansky/Jansky_bubbleplot_scaled.eps"), height=6, width=8)
 d1
 dev.off()
 ```
@@ -316,7 +316,7 @@ data$modality <- as.factor(modality)
 set.seed(20231215)
 pca <- fviz_pca_ind(data.pca, repel=T, habillage=data$modality) + scale_color_manual(values=c("lightcoral", "ivory4"))
 setEPS()
-postscript(file.path(path, "results/Manuscript/1_Figure/public_datasets/Jansky/Jansky_PCA_biplot.eps"), height=6, width=8)
+postscript(file.path(path, "results/Manuscript/2_Figure/public_datasets/Jansky/Jansky_PCA_biplot.eps"), height=6, width=8)
 pca
 dev.off()
 

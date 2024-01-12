@@ -121,12 +121,12 @@ cluster_names <- setNames(order(unique(cellular_communities$community_cluster)),
 cellular_communities$community_cluster <- recode(cellular_communities$community_cluster, !!!cluster_names)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/2_Figure/R/2_Figure_dendogram_PT_DE_samples.eps"), height=12, width=30)
+postscript(file.path(path, "results/Manuscript/3_Figure/R/3_Figure_dendogram_PT_DE_samples.eps"), height=12, width=30)
 plot(hc)
 dev.off()
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/2_Figure/R/2_Figure_barplot_PT_DE_samples.eps"), height=12, width=20)
+postscript(file.path(path, "results/Manuscript/3_Figure/R/3_Figure_barplot_PT_DE_samples.eps"), height=12, width=20)
 p
 dev.off()
 ```
@@ -142,7 +142,7 @@ sce_ME <- sce[,sce$metacluster!="tumor" & sce$metacluster!="mesenchymal"]
 p_ME <- plotAbundances(sce_ME, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype_ordered)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/2_Figure/R/2_Figure_barplot_PT_DE_ME_samples.eps"), height=12, width=20)
+postscript(file.path(path, "results/Manuscript/3_Figure/R/3_Figure_barplot_PT_DE_ME_samples.eps"), height=12, width=20)
 p_ME
 dev.off()
 ```
@@ -227,7 +227,7 @@ rownames(meta_all) <- paste0(meta_all$Sample, "_", meta_all$Tissue)
 meta_all <- meta_all[clustered_samples,]
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/2_Figure/R/PT_DE_annotation_bar.eps"), height=30, width=30)
+postscript(file.path(path, "results/Manuscript/3_Figure/R/PT_DE_annotation_bar.eps"), height=30, width=30)
 
 columnAnnotation(control=meta_all$control, col=list(control=col_control)) %v%
 columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation_legend_param = list(sample = list(grid_height=unit(0.05, "cm"), labels_gp = gpar(fontsize = 5)))) %v%
@@ -285,12 +285,12 @@ dev.off()
 
 #absolute cellcount
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/2_Figure/R/PT_DE_annotationbar_ncells.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/3_Figure/R/PT_DE_annotationbar_ncells.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/2_Figure/R/PT_DE_annotationbar_nMEcells.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/3_Figure/R/PT_DE_annotationbar_nMEcells.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce_ME$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
@@ -308,12 +308,12 @@ clipper <- function(data, lower, upper) {
 immune_infiltration <- round((unname(table(sce_ME$sample_id))/unname(table(sce$sample_id)))*100,3)
 immune_inf_norm <- round(clipper(immune_infiltration, 0, 0.65),3)
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/2_Figure/R/PT_DE_annotationbar_immune_inf.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/3_Figure/R/PT_DE_annotationbar_immune_inf.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(immune_infiltration), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/2_Figure/R/PT_DE_annotationbar_immune_inf_norm.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/3_Figure/R/PT_DE_annotationbar_immune_inf_norm.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(immune_inf_norm), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 ```
@@ -356,7 +356,7 @@ plot_list[[d]] <- ggplot(result, aes(x="", y=Freq, fill=dis_var, group=dis_var))
     theme_void()
 }
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/2_Figure/R/PT_DE_metadata_discrete.eps")), height=40, width=6)
+postscript(file.path(path, paste0("results/Manuscript/3_Figure/R/PT_DE_metadata_discrete.eps")), height=40, width=6)
 do.call("grid.arrange", c(plot_list, ncol=1))
 dev.off() 
 
@@ -392,7 +392,7 @@ plot_list[[d]] <- ggboxplot(df, x = "community_cluster", y = d,
                 theme(aspect.ratio = 1.5, legend.position="none") 
 }
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/2_Figure/R/PT_DE_metadata_continuous.eps")), height=40, width=6)
+postscript(file.path(path, paste0("results/Manuscript/3_Figure/R/PT_DE_metadata_continuous.eps")), height=40, width=6)
 do.call("grid.arrange", c(plot_list, ncol=1))
 dev.off()
 ```
@@ -405,7 +405,7 @@ metadata(sce)$cluster_codes <- data.frame(celltype = factor(sce$metacluster))
 p_all <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_metacluster)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/2_Figure/R/2_Figure_barplot_PT_DE_all_samples.eps"), height=12, width=20)
+postscript(file.path(path, "results/Manuscript/3_Figure/R/3_Figure_barplot_PT_DE_all_samples.eps"), height=12, width=20)
 p_all
 dev.off()
 ```

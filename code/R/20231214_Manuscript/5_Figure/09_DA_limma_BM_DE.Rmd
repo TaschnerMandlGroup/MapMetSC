@@ -42,7 +42,7 @@ We will first read in the previously generated `SpatialExperiment` object and tr
 ```{r read-data-pheno, message=FALSE}
 
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$celltype != "other" & spe$timepoint=="DE" & spe$metacluster=="tumor" & & spe$tissue=="BM" & (spe$MYCN_amp==1 | spe$MYCN_amp==0)
+keep_cols <- spe$celltype != "other" & spe$timepoint=="DE" & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal"  & spe$tissue=="BM" & spe$MYCN_amp==1 
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
@@ -70,7 +70,7 @@ sce$progress <- as.factor(progress)
 sce$timepoint <- spe[keep_rows, keep_cols]$timepoint
 sce$timepoint <- factor(sce$timepoint)
 sce$tissue_crtl <- paste0(sce$tissue, "_", sce$control)
-sce$condition <- sce$mna
+sce$condition <- sce$progress
 
 sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 
@@ -122,7 +122,7 @@ for (i in seq_along(condition)){
 clustered_samples <- as.character(clustered_samples)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/4_Figure/R/barplot_BM_DE_NoProgvsProg_samples.eps"), height=12, width=20)
+postscript(file.path(path, "results/Manuscript/5_Figure/R/barplot_BM_DE_NoProgvsProg_samples.eps"), height=12, width=20)
 p
 dev.off()
 ```
@@ -270,7 +270,7 @@ sce$sample_id <- factor(sce$sample_id, levels=clustered_samples)
 
 #absolute cellcount
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/4_Figure/R/BM_DE_annotationbar_ncells.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/5_Figure/R/BM_DE_annotationbar_ncells.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
@@ -336,7 +336,7 @@ plot_list[[d]] <- ggboxplot(df, x = "condition", y = d,
 }
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/4_Figure/R/BM_DE_NoProgvsProg_continuous.eps")), height=30, width=5)
+postscript(file.path(path, paste0("results/Manuscript/5_Figure/R/BM_DE_NoProgvsProg_continuous.eps")), height=30, width=5)
 do.call("grid.arrange", c(plot_list, ncol=1))
 dev.off()
 ```
@@ -391,8 +391,8 @@ nrow(contrast) == ncol(design)
 # Test for differential abundance (DA) of clusters
 res_DA <- testDA_voom(d_counts,design, contrast, 
                        min_cells=3, 
-                       #min_samples=round(dim(d_counts)[2]*0.05)#has to be used when working with ME 
-                       min_samples=round(dim(d_counts)[2]*0.2)
+                       min_samples=round(dim(d_counts)[2]*0.05)#has to be used when working with ME 
+                       #min_samples=round(dim(d_counts)[2]*0.2)
                        )
 
 
@@ -411,7 +411,7 @@ library(gtools)
 
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
 
-comparisons <- c("nMNAvsMNA")
+comparisons <- c("NoProgvsProg")
 
 plot_list_values <- list()
 plot_list_stars <- list()
@@ -441,7 +441,7 @@ for(i in 1:length(unique(p$data$cluster_id))){
 
   color <- unname(metadata(spe)$color_vectors$col_celltype_ordered[as.character(cluster_name)]) 
   
-  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", order=c("nMNA", "MNA"),
+  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", order=c("NoProg", "Prog"),
               color = "condition", palette =c(color, color), 
               #lwd=1.6, 
               add.params = list(size = 3),
@@ -458,11 +458,33 @@ for(i in 1:length(unique(p$data$cluster_id))){
 }
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/4_Figure/R/BM_DE_nMNAvsMNA_tumor_boxplot_voom.eps"), height=26, width=20)
+postscript(file.path(path, "results/Manuscript/5_Figure/R/BM_DE_NoProgvsProg_ME_MNA_boxplot_voom.eps"), height=26, width=20)
 grid.arrange(grobs = plot_list_fc, ncol = 6)
    dev.off()
 ```
+We will plot the logFC for the comparisons between conditions in a barplot.
+```{r barplot-logFC, fig.width=22, fig.height=8}
 
+df <- res[, c("logFC", "p_adj")]
+df$p_adj_signif <- stars.pval(df$p_adj)
+df$p_adj_signif[df$p_adj_signif==" "] <- "ns"
+df$cluster <- rownames(df)
 
+p <- ggplot(df, aes(fill=cluster, y=logFC, x=cluster)) + 
+  ggtitle(colnames(contrasts)[i]) +
+  geom_bar(
+    stat="identity",
+    position="dodge",
+    show.legend = F) + 
+  scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype_ordered) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_text(aes(label = p_adj_signif), vjust = 0)
+
+setEPS()
+postscript(file.path(path, "results/Manuscript/5_Figure/R/BM_DE_NoProgProg_ME_MNA_barplots_voom.eps"), height=12, width=16)
+  p
+dev.off()
+
+```
 
 

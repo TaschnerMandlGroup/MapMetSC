@@ -56,11 +56,13 @@ colData(protein)[, metadata]
 colData(protein) <- colData(protein)[, metadata]
 
 protein <- as.Seurat(protein, counts = "counts", data = "exprs")
+
 Idents(protein) <- "celltype"
 
 common_features <- intersect(row.names(rna), row.names(protein))
 
-saveRDS(protein, file.path(path, "results/Manuscript/2_Figure/public_datasets/imc_seurat.rds"))
+saveRDS(protein, file.path(path, "results/Manuscript/2_Figure/Sara/imc_seurat.rds"))
+#saveRDS(protein, file.path(path, "results/Manuscript/2_Figure/public_datasets/imc_seurat.rds"))
 ```
 
 # Quality control on public dataset

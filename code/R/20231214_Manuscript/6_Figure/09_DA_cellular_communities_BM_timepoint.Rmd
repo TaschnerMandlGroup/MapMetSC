@@ -50,7 +50,7 @@ sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, k
 
 #for combining RE1 and RE2
 sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
-sce[,sce$timepoint=="RE1"]$timepoint <- "RE2"
+#sce[,sce$timepoint=="RE1"]$timepoint <- "RE2"
 sce$condition <- factor(sce$timepoint)
 
 sce$control <- factor(spe[keep_rows, keep_cols]$control)
@@ -117,7 +117,7 @@ p <- plotAbundances(sce_tumor, k = "celltype", by = "sample", col_clust=T, k_pal
 #Best linkage: ward.D
 #Best distance: manhattan
 
-condition <- c("DE", "RE2", "REL")
+condition <- c("DE", "RE1", "RE2", "REL")
 clustered_samples <- list()
 for (i in seq_along(condition)){
   clustered_samples <- c(clustered_samples, sapply(strsplit(levels(droplevels(p$data[p$data$condition==condition[i],]$sample_id)), "_"), function(x) paste(x[4], x[5], sep = "_")))
@@ -127,7 +127,7 @@ clustered_samples <- as.character(clustered_samples)
 #clustered_samples <- levels(p$data$sample_id) #when subsetting the dataset
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/5_Figure/R/barplot_BM_timepointamples.eps"), height=12, width=20)
+postscript(file.path(path, "results/Manuscript/6_Figure/R/barplot_BM_timepointamples.eps"), height=12, width=20)
 p
 dev.off()
 ```
@@ -143,7 +143,7 @@ sce_tumor <- sce[,sce$metacluster=="tumor"]
 p_me <- plotAbundances(sce_ME, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype_ordered)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/5_Figure/R/barplot_BM_timepointamples_ME.eps"), height=12, width=20)
+postscript(file.path(path, "results/Manuscript/6_Figure/R/barplot_BM_timepointamples_ME.eps"), height=12, width=20)
 p_me
 dev.off()
 ```
@@ -231,7 +231,7 @@ rownames(meta_all) <- paste0(meta_all$Sample, "_", meta_all$Tissue)
 meta_all <- meta_all[clustered_samples,]
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/5_Figure/R/annoationbar_BM_timepoint.eps"), height=30, width=30)
+postscript(file.path(path, "results/Manuscript/6_Figure/R/annoationbar_BM_timepoint.eps"), height=30, width=30)
 
 columnAnnotation(control=meta_all$control, col=list(control=col_control)) %v%
 columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation_legend_param = list(sample = list(grid_height=unit(0.05, "cm"), labels_gp = gpar(fontsize = 5)))) %v%
@@ -289,12 +289,12 @@ dev.off()
 
 #absolute cellcount
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/5_Figure/R/BM_timepoint_annotationbar_ncells.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_ncells.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/5_Figure/R/BM_timepoint_annotationbar_ntumorcells.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_ntumorcells.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce_tumor$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
@@ -312,12 +312,12 @@ clipper <- function(data, lower, upper) {
 tumor_infiltration <- round((unname(table(sce_tumor$sample_id))/unname(table(sce$sample_id)))*100,3)
 tumor_inf_norm <- round(clipper(tumor_infiltration, 0, 0.65),3)
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/5_Figure/R/BM_timepoint_annotationbar_tumor_inf.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_tumor_inf.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(tumor_infiltration), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/5_Figure/R/BM_timepoint_annotationbar_tumor_inf_norm.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_tumor_inf_norm.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(tumor_inf_norm), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 ```
@@ -328,7 +328,7 @@ library(gridExtra)
 
 #when testing between other groups than cellular communities
 tmp <- meta_all$Timepoint
-tmp[tmp=="RE1"] <- "RE2"
+#tmp[tmp=="RE1"] <- "RE2"
 condition <- tmp
 
 meta_all$condition <- condition
@@ -364,7 +364,7 @@ plot_list[[d]] <- ggplot(result, aes(x="", y=Freq, fill=dis_var, group=dis_var))
 }
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/5_Figure/R/BM_timepoint_discrete.eps")), height=30, width=5)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_discrete_RE1RE2.eps")), height=30, width=5)
 do.call("grid.arrange", c(plot_list, ncol=1))
 dev.off() 
 
@@ -408,7 +408,7 @@ for (d in colnames(cont_df)[1:ncol(cont_df)-1]) {
 #logarithmic scale for perc_tumor
   if (d == "perc_tumor"){
     plot_list[[d]] <- ggboxplot(df, x = "condition", y = d,
-            color = "condition", palette =c("slategray1", "slategray", "slategray3"), 
+            color = "condition", palette =c("skyblue2", "slategray1", "slategray3", "slategray"), 
             add.params = list(size = 3),
             add = "jitter")+ 
             stat_pvalue_manual(stats_df, label = "p_long", y.position = log10(max(df$y)), step.increase = 0.2,) +
@@ -422,7 +422,7 @@ for (d in colnames(cont_df)[1:ncol(cont_df)-1]) {
             #theme(panel.grid.minor = element_blank())
   }else{
     plot_list[[d]] <- ggboxplot(df, x = "condition", y = d,
-                color = "condition", palette =c("slategray1", "slategray", "slategray3"), 
+                color = "condition", palette =c("skyblue2", "slategray1", "slategray3", "slategray"), 
                 add.params = list(size = 3),
                 add = "jitter")+ 
                 stat_pvalue_manual(stats_df, label = "p_long", y.position = max(df$y), step.increase = 0.2,) +
@@ -431,7 +431,7 @@ for (d in colnames(cont_df)[1:ncol(cont_df)-1]) {
 }
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/5_Figure/R/BM_timepoint_continuous.eps")), height=30, width=5)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_continuous_RE1RE2.eps")), height=30, width=5)
 do.call("grid.arrange", c(plot_list, ncol=1))
 dev.off()
 
@@ -446,7 +446,7 @@ metadata(sce)$cluster_codes <- data.frame(celltype = factor(sce$metacluster))
 p_all <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_metacluster)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/5_Figure/R/barplot_BM_timepoint_metaclusters_samples.eps"), height=12, width=20)
+postscript(file.path(path, "results/Manuscript/6_Figure/R/barplot_BM_timepoint_metaclusters_samples.eps"), height=12, width=20)
 p_all
 dev.off()
 ```

@@ -135,6 +135,105 @@ postscript(file.path(path, "results/Manuscript/6_Figure/R/dendogram_BM_DE_sample
 plot(hc)
 dev.off()
 ```
+## Plot overview of cohort - RE1
+
+We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
+
+```{r read-data-pheno, message=FALSE}
+
+samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster=="tumor"]$sample_id) #be careful here- use sample_id when looking for samples with and sample when looking for samples without tumor cells
+
+keep_rows <- rowData(spe)$use_channel 
+keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$sample_id%in%samples_with_tumor_cells & spe$control=="no" & spe$timepoint == "RE1"
+
+sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
+
+#for combining RE1 and RE2
+sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
+sce$condition <- factor(sce$timepoint)
+
+sce$control <- factor(spe[keep_rows, keep_cols]$control)
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
+sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
+sce$metacluster <- factor(spe[keep_rows, keep_cols]$metacluster)
+sce$tmp <- factor(spe[keep_rows, keep_cols]$tmp)
+
+sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
+mna <- as.vector(sce$mna)
+mna <- replace(x = mna, list =  mna %in% c(1), values =  'MNA')
+mna <- replace(x = mna, list =  mna %in% c(3), values =  'het')
+mna <- replace(x = mna, list =  mna %in% c(0), values =  'nMNA')
+mna <- replace(x = mna, list =  mna %in% c(9), values =  'unknown')
+sce$mna <- as.factor(mna)
+
+sce$progress <- factor(spe[keep_rows, keep_cols]$progression)
+progress <- as.vector(sce$progress)
+progress <- replace(x = progress, list =  progress==0, values =  'NoProg')
+progress <- replace(x = progress, list =  progress==1, values =  'Prog')
+sce$progress <- as.factor(progress)
+
+sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
+
+# Add celltype information to metadata
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
+
+# Add metadata
+metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,patient, mna, condition, progress) %>% 
+    summarise(n_cells=n(),.groups = 'drop') %>%
+    as.data.frame()
+
+# Define cell_type_markers 
+type_markers <- c("MPO_Y89_mean", "CD44_In115_mean", "CD11b_Nd142_mean", "HLA-DR_Nd143_mean", "PRPH_Nd144_mean", "HLA-ABC_Sm147_mean", "CD20_Nd148_mean", "LUM_Sm149_mean", "CD11c_Nd150_mean",
+                  "CD24_Eu151_mean", "CD3_Sm152_mean", "CD45_Eu153_mean", "CD8a_Sm154_mean", "GD2_Gd155_mean", "CD34_Gd156_mean", "CD10_Gd158_mean", "CXCR4_Tb159_mean","SOX10_Dy162_mean",
+                  "FOXP3_Dy163_mean", "CHGA_Dy164_mean", "GATA3_Er168_mean", "CD56_Er170_mean", "CD4_Yb171_mean", "ELAVL4_Yb174_mean", "CD14_Lu175_mean", "Vimentin_Pt196_mean", "CD15_Bi209_mean")
+
+# Define cell_state_markers 
+state_markers <- c("CD274_Gd160_mean", "S100B_Dy161_mean", "CD279_Ho165_mean", "Ki-67_Tm169_mean", "GZMB_Yb173_mean")
+
+# Add to spe
+rowData(sce)$marker_class <- ifelse(rownames(sce) %in% type_markers, "type",
+                                    ifelse(rownames(sce) %in% state_markers, "state", 
+                                    "other"))
+
+#Add dim reduction
+
+reducedDim(sce, "UMAP") <- reducedDim(spe, "UMAP")[keep_cols,]
+```
+
+Differential analysis of cell population abundance compares the proportions of cell types across experimental conditions and aims to highlight populations that are present at different ratios. First, we calculate two tables: one that contains cell counts for each sample and population and one with the corresponding  proportions of cell types by sample.  The proportions are used only for plotting, since the statistical modeling takes the cell counts by cluster and sample as input.
+
+For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
+
+```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=20, fig.height=10}
+#DE
+sce_RE1 <- sce[,sce$metacluster=="tumor"]
+p_RE1 <- plotAbundances(sce_RE1, k = "celltype", by = "sample", col_clust=T, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, 
+                    linkage="ward.D", distance="manhattan") 
+clustered_samples_RE1 <- levels(p_RE1$data$sample_id)
+setEPS()
+postscript(file.path(path, "results/Manuscript/6_Figure/R/barplot_BM_timepointamples_RE1.eps"), height=12, width=20)
+p_RE1
+dev.off()
+
+#Dendogram
+set.seed(20231103)
+wide_df <- p_RE1$data %>%
+  select(-condition) %>%
+  pivot_wider(names_from = cluster_id, values_from = Freq)
+
+wide_df <- data.frame(wide_df)
+rownames(wide_df) <- wide_df$sample_id
+wide_df <- wide_df %>% select(-sample_id)
+
+dist_matrix <- dist(wide_df, method = "manhattan")
+hc <- hclust(dist_matrix, method = "ward.D")
+
+setEPS()
+postscript(file.path(path, "results/Manuscript/6_Figure/R/dendogram_BM_RE1_samples.eps"), height=12, width=30)
+plot(hc)
+dev.off()
+```
 
 ## Plot overview of cohort - RE2
 
@@ -145,13 +244,13 @@ We will first read in the previously generated `SpatialExperiment` object and tr
 samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster=="tumor"]$sample_id) #be careful here- use sample_id when looking for samples with and sample when looking for samples without tumor cells
 
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$sample_id%in%samples_with_tumor_cells & spe$control=="no" & (spe$timepoint == "RE1" | spe$timepoint == "RE2")
+keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$sample_id%in%samples_with_tumor_cells & spe$control=="no" & spe$timepoint == "RE2"
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
 #for combining RE1 and RE2
 sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
-sce[,sce$timepoint=="RE1"]$timepoint <- "RE2"
+#sce[,sce$timepoint=="RE1"]$timepoint <- "RE2"
 sce$condition <- factor(sce$timepoint)
 
 sce$control <- factor(spe[keep_rows, keep_cols]$control)
@@ -352,7 +451,7 @@ sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, k
 
 #for combining RE1 and RE2
 sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
-sce[,sce$timepoint=="RE1"]$timepoint <- "RE2"
+#sce[,sce$timepoint=="RE1"]$timepoint <- "RE2"
 sce$condition <- factor(sce$timepoint)
 
 sce$control <- factor(spe[keep_rows, keep_cols]$control)
@@ -403,7 +502,7 @@ rowData(sce)$marker_class <- ifelse(rownames(sce) %in% type_markers, "type",
 
 reducedDim(sce, "UMAP") <- reducedDim(spe, "UMAP")[keep_cols,]
 
-clustered_samples <- c(clustered_samples_DE, clustered_samples_RE2, clustered_samples_REL)
+clustered_samples <- c(clustered_samples_DE, clustered_samples_RE1, clustered_samples_RE2, clustered_samples_REL)
 sce$sample_id <- factor(sce$sample_id, levels=clustered_samples)
 sce_tumor <- sce[,sce$metacuster=="tumor"]
 
@@ -412,7 +511,7 @@ sce_ME <- sce[,sce$metacluster!="tumor" & sce$metacluster!="mesenchymal"]
 p_me <- plotAbundances(sce_ME, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_celltype_ordered)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/6_Figure/R/barplot_BM_DE_samples_ME_sepclust.eps"), height=12, width=20)
+postscript(file.path(path, "results/Manuscript/6_Figure/R/barplot_BM_DE_samples_ME_sepclust_RE1RE2.eps"), height=12, width=20)
 p_me
 dev.off()
 ```
@@ -501,7 +600,7 @@ rownames(meta_all) <- paste0(meta_all$Sample, "_", meta_all$Tissue)
 meta_all <- meta_all[clustered_samples_short,]
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/6_Figure/R/annoationbar_BM_timepoint_sepclust.eps"), height=30, width=30)
+postscript(file.path(path, "results/Manuscript/6_Figure/R/annoationbar_BM_timepoint_sepclust_RE1RE2.eps"), height=30, width=30)
 
 columnAnnotation(control=meta_all$control, col=list(control=col_control)) %v%
 columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation_legend_param = list(sample = list(grid_height=unit(0.05, "cm"), labels_gp = gpar(fontsize = 5)))) %v%
@@ -559,12 +658,12 @@ dev.off()
 
 #absolute cellcount
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_ncells_sepclust.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_ncells_sepclust_RE1RE2.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_ntumorcells_sepclust.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_ntumorcells_sepclust_RE1RE2.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(unname(table(sce_tumor$sample_id))), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
@@ -582,12 +681,12 @@ clipper <- function(data, lower, upper) {
 tumor_infiltration <- round((unname(table(sce_tumor$sample_id))/unname(table(sce$sample_id)))*100,3)
 tumor_inf_norm <- round(clipper(tumor_infiltration, 0, 0.65),3)
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_tumor_inf_sepclust.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_tumor_inf_sepclust_RE1RE2.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(tumor_infiltration), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_tumor_inf_norm_sepclust.eps")), height=30, width=30)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_annotationbar_tumor_inf_norm_sepclust_RE1RE2.eps")), height=30, width=30)
 draw(anno_barplot(as.vector(tumor_inf_norm), add_numbers=T, height = unit(1, "cm")))
 dev.off() 
 ```
@@ -598,7 +697,7 @@ library(gridExtra)
 
 #when testing between other groups than cellular communities
 tmp <- meta_all$Timepoint
-tmp[tmp=="RE1"] <- "RE2"
+#tmp[tmp=="RE1"] <- "RE2"
 condition <- tmp
 
 meta_all$condition <- condition
@@ -634,7 +733,7 @@ plot_list[[d]] <- ggplot(result, aes(x="", y=Freq, fill=dis_var, group=dis_var))
 }
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_discrete.eps")), height=30, width=5)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_discrete_RE1RE2.eps")), height=30, width=5)
 do.call("grid.arrange", c(plot_list, ncol=1))
 dev.off() 
 
@@ -678,7 +777,7 @@ for (d in colnames(cont_df)[1:ncol(cont_df)-1]) {
 #logarithmic scale for perc_tumor
   if (d == "perc_tumor"){
     plot_list[[d]] <- ggboxplot(df, x = "condition", y = d,
-            color = "condition", palette =c("slategray1", "slategray", "slategray3"), 
+            color = "condition", palette =c("skyblue2", "slategray1", "slategray3", "slategray"), 
             add.params = list(size = 3),
             add = "jitter")+ 
             stat_pvalue_manual(stats_df, label = "p_long", y.position = log10(max(df$y)), step.increase = 0.2,) +
@@ -692,7 +791,7 @@ for (d in colnames(cont_df)[1:ncol(cont_df)-1]) {
             #theme(panel.grid.minor = element_blank())
   }else{
     plot_list[[d]] <- ggboxplot(df, x = "condition", y = d,
-                color = "condition", palette =c("slategray1", "slategray", "slategray3"), 
+                color = "condition", palette =c("skyblue2", "slategray1", "slategray3", "slategray"), 
                 add.params = list(size = 3),
                 add = "jitter")+ 
                 stat_pvalue_manual(stats_df, label = "p_long", y.position = max(df$y), step.increase = 0.2,) +
@@ -701,7 +800,7 @@ for (d in colnames(cont_df)[1:ncol(cont_df)-1]) {
 }
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_continuous.eps")), height=30, width=5)
+postscript(file.path(path, paste0("results/Manuscript/6_Figure/R/BM_timepoint_continuous_RE1RE2.eps")), height=30, width=5)
 do.call("grid.arrange", c(plot_list, ncol=1))
 dev.off()
 
@@ -716,7 +815,7 @@ metadata(sce)$cluster_codes <- data.frame(celltype = factor(sce$metacluster))
 p_all <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_metacluster)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/6_Figure/R/barplot_BM_timepoint_metaclusters_samples_sepclust.eps"), height=12, width=20)
+postscript(file.path(path, "results/Manuscript/6_Figure/R/barplot_BM_timepoint_metaclusters_samples_sepclust_RE1RE2.eps"), height=12, width=20)
 p_all
 dev.off()
 ```

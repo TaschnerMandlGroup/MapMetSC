@@ -40,15 +40,15 @@ names(metadata(spe)$color_vectors$col_celltype_ordered) <- recode(names(metadata
 We will first read in the previously generated `SpatialExperiment` object and transform it into a catalyst compatible object.
 
 ```{r read-data-pheno, message=FALSE}
-BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "DE"]$study_id )
-BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "RE1"]$study_id )
-BM_patients_3 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster=="tumor" & spe$timepoint == "RE2"]$study_id )
+BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster == "tumor" & spe$timepoint == "DE"]$study_id )
+BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster == "tumor" & spe$timepoint == "RE1"]$study_id )
+BM_patients_3 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster == "tumor" & spe$timepoint == "RE2"]$study_id )
 
 paired_patients <- intersect(BM_patients_1, BM_patients_2)
-paired_patients <- intersect(paired_patients, BM_patients_3)
+#paired_patients <- intersect(paired_patients, BM_patients_3)
 
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$metacluster=="tumor" & spe$control=="no" #spe$study_id%in%paired_patients & (spe$timepoint=="DE" | spe$timepoint=="RE1" | spe$timepoint=="RE2")#& spe$MYCN_amp==1 & spe$progression==1
+keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$metacluster=="tumor" & spe$control=="no" & (spe$timepoint=="DE" | spe$timepoint=="RE1"  | spe$timepoint=="RE2") #& spe$study_id%in%paired_patients & spe$MYCN_amp==1 & spe$progression==1
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
@@ -67,7 +67,7 @@ sce$tmp <- factor(spe[keep_rows, keep_cols]$tmp)
 sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna <- as.vector(sce$mna)
 mna <- replace(x = mna, list =  mna %in% c(1), values =  'MNA')
-mna <- replace(x = mna, list =  mna %in% c(3), values =  'het')
+mna <- replace(x = mna, list =  mna %in% c(2), values =  'het')
 mna <- replace(x = mna, list =  mna %in% c(0), values =  'nMNA')
 mna <- replace(x = mna, list =  mna %in% c(9), values =  'unknown')
 sce$mna <- as.factor(mna)
@@ -78,7 +78,7 @@ progress <- replace(x = progress, list =  progress==0, values =  'NoProg')
 progress <- replace(x = progress, list =  progress==1, values =  'Prog')
 sce$progress <- as.factor(progress)
 
-sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
+sce$sample_id <- factor(paste0(sce$mna, "_", sce$progress, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 
 # Add celltype information to metadata
 metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
@@ -121,7 +121,7 @@ p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=T, k_pal=metad
 #Best distance: manhattan
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/6_Figure/R/barplot_BM_DEvsRE1vsRE2_samples_paired.eps"), height=12, width=20)
+postscript(file.path(path, "results/Manuscript/9_Ext_Figure/R/barplot_BM_ME_DEvsRE1_samples_paired.eps"), height=12, width=20)
 p
 dev.off()
 ```
@@ -167,11 +167,15 @@ d_counts <- calcCounts(d_se)
 library(edgeR)
 #Create design matrix
 design <- model.matrix(~0+condition, experiment_info) 
+#design <- model.matrix(~0+condition+mna, experiment_info) #correcting for MYCN does not work
 
-colnames(design) <- c("DE", "RE1", "RE2")
-contrasts <- makeContrasts(DEvsRE1 = DE-RE1,
-                           DEvsRE2 = DE-RE2,
-                           RE1vsRE2 = RE1-RE2,
+colnames(design) <- c("DE", "RE2", "REL")
+#colnames(design) <- c("DE","RE2", "REL","mna", "nmna")
+contrasts <- makeContrasts(DEvsRE2 = DE-RE2,
+                           #DEvsRE1 = DE-RE1,
+                           DEvsREL = DE-REL,
+                           #RE1vsRE2 = RE1-RE2,
+                           RE2vsREL = RE2-REL,
                            levels = design)
 
 res <- list()
@@ -186,8 +190,6 @@ for (i in 1:ncol(contrasts)){
     
     res <- append(res, list(data.frame(rowData(res_DA))))
 }
-
-
 ```
 
 Paired analysis:
@@ -205,7 +207,8 @@ nrow(contrast) == ncol(design)
 # Test for differential abundance (DA) of clusters
 res_DA <- testDA_edgeR(d_counts,design, contrast, 
                        min_cells=3, 
-                       min_samples=2 #for paired analysis
+                       #min_samples=2 #for paired analysis
+                       min_samples=1 #for paired analysis for ME
                        )
 
 
@@ -254,7 +257,7 @@ for(i in 1:length(unique(p$data$cluster_id))){
 
   color <- unname(metadata(spe)$color_vectors$col_celltype_ordered[as.character(cluster_name)]) 
   
-  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", order=c("DE", "RE1", "RE2"),
+  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", order=c("DE", "RE2", "REL"),
               color = "condition", palette =c(color, color,color), 
               #lwd=1.6, 
               add.params = list(size = 3),
@@ -271,7 +274,7 @@ for(i in 1:length(unique(p$data$cluster_id))){
 }
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/6_Figure/R/BM_timepoint_tumor_boxplot_DERE1RE2_paired_edgeR.eps"), height=26, width=20)
+postscript(file.path(path, "results/Manuscript/6_Figure/R/BM_timepoint_tumor_boxplot_edgeR_MNA.eps"), height=26, width=20)
 grid.arrange(grobs = plot_list_fc, ncol = 6)
    dev.off()
 ```
@@ -286,7 +289,7 @@ library(gtools)
 
 p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
 
-comparisons <- c("DEvsREL")
+comparisons <- c("DEvsRE2")
 
 plot_list_values <- list()
 plot_list_stars <- list()
@@ -315,7 +318,7 @@ for(i in 1:length(unique(p$data$cluster_id))){
 
   color <- unname(metadata(spe)$color_vectors$col_celltype_ordered[as.character(cluster_name)]) 
   
-  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", order=c("DE", "REL"),
+  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", order=c("DE", "RE2"),
               color = "condition", palette =c(color, color), 
               #lwd=1.6, 
               add.params = list(size = 3),
@@ -332,9 +335,34 @@ for(i in 1:length(unique(p$data$cluster_id))){
 }
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/6_Figure/R/BM_timepoint_tumor_boxplot_DEvsREL_paired_edgeR.eps"), height=26, width=20)
+postscript(file.path(path, "results/Manuscript/9_Ext_Figure/R/BM_timepoint_ME_boxplot_DEvsRE1_paired_edgeR.eps"), height=26, width=20)
 grid.arrange(grobs = plot_list_fc, ncol = 6)
    dev.off()
+```
+
+We will plot the logFC for the comparisons between conditions in a barplot.
+```{r barplot-logFC, fig.width=22, fig.height=8}
+
+df <- res[, c("logFC", "p_adj")]
+df$p_adj_signif <- stars.pval(df$p_adj)
+df$p_adj_signif[df$p_adj_signif==" "] <- "ns"
+df$cluster <- rownames(df)
+
+p <- ggplot(df, aes(fill=cluster, y=logFC, x=cluster)) + 
+  ggtitle(colnames(contrasts)[i]) +
+  geom_bar(
+    stat="identity",
+    position="dodge",
+    show.legend = F) + 
+  scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype_ordered) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_text(aes(label = p_adj_signif), vjust = 0)
+
+setEPS()
+postscript(file.path(path, "results/Manuscript/9_Ext_Figure/R/BM_timepoint_ME_dodge_DEvsRE1_paired_edgeR.eps"), height=12, width=16)
+  p
+dev.off()
+
 ```
 
 Here we plot the abundances of celltypes however, we divide by the number of samples per group so that the result is not driven by outliers. 
@@ -351,7 +379,7 @@ df_normalized <- p$data %>%
 df_normalized$cluster_id <- factor(df_normalized$cluster_id)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/5_Figure/R/BM_timepoint_tumor_dodge.eps"), height=4, width=8)
+postscript(file.path(path, "results/Manuscript/6_Figure/R/BM_timepoint_tumor_dodge_RE1RE2.eps"), height=4, width=8)
 
 
 ggplot(df_normalized, aes(fill=cluster_id, y=normalized_count, x=condition)) + 
@@ -366,7 +394,7 @@ dev.off()
 
 #Piechart
 setEPS()
-postscript(file.path(path, "results/Manuscript/5_Figure/R/BM_timepoint_tumor_piechart.eps"), height=2, width=6.5)
+postscript(file.path(path, "results/Manuscript/6_Figure/R/BM_timepoint_tumor_piechart_RE1RE2.eps"), height=2, width=6.5)
 
 ggplot(df_normalized, aes(x="", y=normalized_count, fill=cluster_id, group=cluster_id)) +
   geom_bar(stat="identity", width=1, color="white") +

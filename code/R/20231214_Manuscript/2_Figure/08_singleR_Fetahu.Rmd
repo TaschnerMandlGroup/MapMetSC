@@ -1,5 +1,5 @@
 ---
-title: "Read in scRNAseq data"
+title: "SingleR for label transfer"
 output: html_document
 date: '2023-07-06'
 ---
@@ -10,8 +10,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Read in the single-cell data {#read-data}
 
-Here we will read in single-cell RNAseq data from a single-cell adrenal gland atlas by 
-[Jansky et al.](https://adrenal.kitz-heidelberg.de/developmental_programs_NB_viz/), and
+Here we will read in single-cell RNAseq data from the single-cell bone marrow atlas by 
+[Fetahu et al.](https://pubmed.ncbi.nlm.nih.gov/37365178/), and
 our imaging-based single-cell data
 
 ```{r read-data, message=FALSE}
@@ -61,13 +61,13 @@ Idents(protein) <- "celltype"
 
 common_features <- intersect(row.names(rna), row.names(protein))
 
-saveRDS(protein, file.path(path, "results/Manuscript/2_Figure/Sara/imc_seurat.rds"))
-#saveRDS(protein, file.path(path, "results/Manuscript/2_Figure/public_datasets/imc_seurat.rds"))
+#saveRDS(protein, file.path(path, "results/Manuscript/2_Figure/Sara/imc_seurat.rds"))
+
 ```
 
 # Quality control on public dataset
 
-We will first look at cluster similarity to evaulate which clusters are similar. 
+We will first look at cluster similarity to evaluate which clusters are similar. 
 ```{r mean-per-cluster-protein, fig.height=15, message=FALSE}
 library(scuttle)
 library(bruceR)
@@ -305,7 +305,7 @@ Heatmap(as.matrix(protein_mat_scaled),
         )
 ```
 
-```{r mean-per-cluster-protein, fig.height= 5, fig.width= 5, message=FALSE}
+```{r mean-per-cluster-predicted, fig.height= 5, fig.width= 5, message=FALSE}
 library(bruceR)
 
 mat <- protein_mat

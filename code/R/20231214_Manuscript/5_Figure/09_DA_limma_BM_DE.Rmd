@@ -42,9 +42,11 @@ We will first read in the previously generated `SpatialExperiment` object and tr
 ```{r read-data-pheno, message=FALSE}
 
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$celltype != "other" & spe$timepoint=="DE" & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal"  & spe$tissue=="BM" & spe$MYCN_amp==1 
+keep_cols <- spe$celltype != "other" & spe$timepoint=="DE" & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal"  & spe$tissue=="BM"
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
+
+sce$solidity_clipped <- spe[keep_rows, keep_cols]$solidity_clipped
 
 sce$control <- factor(spe[keep_rows, keep_cols]$control)
 sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
@@ -305,11 +307,17 @@ temp <- temp[clustered_samples, ]
 perc_tumor <- round((as.vector(unname(table(sce$sample_id)[clustered_samples]))/temp[clustered_samples,]$Freq)*100,3)
 het_t <- as.vector(unname(het[clustered_samples]))
 
+#roundness
+df <- aggregate(sce[,sce$metacluster=="granulocyte"]$solidity_clipped, list(sce[,sce$metacluster=="granulocyte"]$sample_id), mean)
+rownames(df) <- df$Group.1
+df <- df[clustered_samples,]
+roundness <- as.vector(df$x)
+
 age <- meta_all$age_at_diag
 age_clipped <- meta_all$age_at_diag
 age_clipped[age_clipped > quantile(age_clipped, 0.95, na.rm=T) & !is.na(age_clipped)] <- quantile(age_clipped, 0.95, na.rm=T)
 
-cont_df <- data.frame(cbind(perc_tumor, het, age, age_clipped, condition),row.names=clustered_samples)
+cont_df <- data.frame(cbind(perc_tumor, het, age, age_clipped, roundness, condition),row.names=clustered_samples)
 
 plot_list <- list()
 
@@ -336,7 +344,7 @@ plot_list[[d]] <- ggboxplot(df, x = "condition", y = d,
 }
 
 setEPS()
-postscript(file.path(path, paste0("results/Manuscript/5_Figure/R/BM_DE_NoProgvsProg_continuous.eps")), height=30, width=5)
+postscript(file.path(path, paste0("results/Manuscript/5_Figure/R/BM_DE_NoProgvsProg_continuous_roundness.eps")), height=30, width=5)
 do.call("grid.arrange", c(plot_list, ncol=1))
 dev.off()
 ```

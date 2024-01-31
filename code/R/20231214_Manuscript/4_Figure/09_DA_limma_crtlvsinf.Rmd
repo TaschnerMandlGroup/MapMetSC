@@ -42,9 +42,11 @@ We will first read in the previously generated `SpatialExperiment` object and tr
 ```{r read-data-pheno, message=FALSE}
 
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$celltype != "other" & (spe$timepoint=="DE"|spe$timepoint=="") & spe$metacluster=="tumor" 
+keep_cols <- spe$tissue=="BM" & spe$celltype != "other" & (spe$timepoint=="DE"|spe$timepoint=="") & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal" 
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
+
+sce$solidity_clipped <- spe[keep_rows, keep_cols]$solidity_clipped
 
 sce$control <- factor(spe[keep_rows, keep_cols]$control)
 sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
@@ -70,7 +72,7 @@ sce$progress <- as.factor(progress)
 sce$timepoint <- spe[keep_rows, keep_cols]$timepoint
 sce$timepoint <- factor(sce$timepoint)
 sce$tissue_crtl <- paste0(sce$tissue, "_", sce$control)
-sce$condition <- sce$tissue
+sce$condition <- sce$control
 
 sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 
@@ -151,7 +153,6 @@ prop <- prop[,clustered_samples]
 het <- apply(prop,2, entropy)
 ```
 
-
 Next, we will plot metadata on top of the clustered barplot. First, we will define the color code for the metadata. Find all built-in R color names [here](https://www.farb-tabelle.de/de/farbtabelle.htm). The [paletteer package](https://r-charts.com/color-palettes/) offers a wide range of color palettes.  
 
 ```{r define-color-code, message=FALSE}
@@ -206,8 +207,15 @@ Now, we will plot an overview of the cohort.
 rownames(meta_all) <- paste0(meta_all$Sample, "_", meta_all$Tissue)
 meta_all <- meta_all[clustered_samples,]
 
+#reading patient groups from Figure 5
+patient_groups <- read.csv(file.path(path, "results/Manuscript/5_Figure/R/cellular_communities.csv"))
+rownames(patient_groups) <- sapply(strsplit(patient_groups$X, "_"), function(x) paste(x[4], x[5], sep = "_"))
+meta_all$patient_groups <- "na"
+meta_all[rownames(patient_groups),]$patient_groups <- patient_groups$community_cluster
+col_patient_group = setNames(c("slategray1", "slategray", "slategray3", "black"),c("1", "2", "3", "na"))
+
 setEPS()
-postscript(file.path(path, "results/Manuscript/4_Figure/R/annotationbar_BM_crtlvsDE.eps"), height=30, width=30)
+postscript(file.path(path, "results/Manuscript/4_Figure/R/annotationbar_BM_crtlvsDE_patientgroups.eps"), height=30, width=30)
 
 columnAnnotation(control=meta_all$control, col=list(control=col_control)) %v%
 columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation_legend_param = list(sample = list(grid_height=unit(0.05, "cm"), labels_gp = gpar(fontsize = 5)))) %v%
@@ -257,7 +265,8 @@ columnAnnotation(ALK_mut=meta_all$ALK_mut, col=list(ALK_mut=col_aberrations), sh
 
 columnAnnotation(age=meta_all$age_at_diag, col=list(age=col_age_diag)) %v%
 columnAnnotation(therapy=meta_all$therapy, col=list(therapy=col_therapy)) %v%
-columnAnnotation(het=het, col=list(het=col_het))
+columnAnnotation(het=het, col=list(het=col_het)) %v%
+columnAnnotation(patient_group=meta_all$patient_groups, col=list(patient_group=col_patient_group), show_legend=FALSE)
 
 
 dev.off()
@@ -286,6 +295,43 @@ clipper <- function(data, lower, upper) {
   return(clipped_data)}
 ```
 
+Subsequently, we will calculate the mean roundness of the granulocyte cluster per sample.
+```{r granulocyte-roundness, message=FALSE}
+library("ggpubr")
+library(gtools)
+
+sce$sample <- factor(sapply(strsplit(as.character(sce$sample_id), "_"), function(x) paste(x[4], x[5], sep = "_")))
+df <- aggregate(sce[,sce$metacluster=="granulocyte"]$solidity_clipped, list(sce[,sce$metacluster=="granulocyte"]$sample), mean)
+rownames(df) <- df[,1]
+df <- df[-c(1)]
+colnames (df) <- "y"
+
+rownames(meta_all) <- paste0(meta_all$Sample, "_", meta_all$Tissue)
+df$condition <- meta_all[rownames(df),]$control
+
+stats_df <- compare_means(y ~ condition,  
+                      #p.adjust.method = "BH", 
+                      method='wilcox.test', 
+                      data = df)
+  
+stats_df$p_adj_signif <- stars.pval(stats_df$p.adj)
+stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
+stats_df$p_long <- paste0(stats_df$p.adj, " (", stats_df$p_adj_signif, ")")
+
+p <- ggboxplot(df, x = "condition", y = "y",
+                color = "condition", palette =c("slategray1", "slategray"),
+                add.params = list(size = 3),
+                add = "jitter")+ 
+                stat_pvalue_manual(stats_df, label = "p_long", y.position = max(df$y), step.increase = 0.2,) +
+                theme(aspect.ratio = 1.5, legend.position="none") 
+
+setEPS()
+postscript(file.path(path, paste0("results/Manuscript/4_Figure/R/BM_crtl_inf_roundness.eps")), height=30, width=5)
+p
+dev.off()
+
+
+```
 
 ## Differential cell population abundance
 Since the diffcyt wrapper does not work, we will test the test-functions from the diffcyt package. 

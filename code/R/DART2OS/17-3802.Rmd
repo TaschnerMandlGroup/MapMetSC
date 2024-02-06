@@ -198,7 +198,7 @@ spe$pg_clusters <- clusters
 ##Single-cell heatmap after clustering
 Next we will look at the single cell heatmap ordered by the identified phenograph clusters for 2000 randomly selected cells. 
 
-```{r single-cell-heatmap-clusters, message=FALSE, fig.width=9, fig.height=9}
+```{r single-cell-heatmap-clusters, message=FALSE, fig.width=14, fig.height=9}
 library(ComplexHeatmap)
 library(viridis)
 library(circlize)
@@ -207,9 +207,8 @@ library(paletteer)
 
 
 set.seed(20230521)
-
-col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-col_clusters = setNames(sample(col_vector_433, length(unique(spe$pg_clusters))), unique(spe$pg_clusters))
+colors <- c(brewer.pal(12, "Paired"), brewer.pal(8, "Dark2")[4], brewer.pal(8, "Dark2")[7:8])
+col_clusters = setNames(sample(colors, length(unique(spe$pg_clusters))), unique(spe$pg_clusters))
 
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
@@ -224,6 +223,7 @@ Heatmap(mat[,rand_cells],
         cluster_columns=F,
         column_order= order(clusters[rand_cells], decreasing=F),
         show_column_dend = T,
+        show_row_dend = F,
         show_column_names=F,
         col=viridis(100)
         )
@@ -235,9 +235,6 @@ Heatmap(mat[,rand_cells],
 library(tidyr)
 library(tidyHeatmap)
 library(bruceR)
-
-col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-col_clusters = setNames(sample(col_vector_433, length(unique(spe$pg_clusters))), unique(spe$pg_clusters))
 
 #Mean expression per cluster
 exp_mat_ <- aggregate(t(mat), list(spe$pg_clusters), mean)
@@ -259,7 +256,7 @@ percent_mat <- t(percent_mat)
 percent_mat[percent_mat < 0.1] <- 0.1 #setting min values higher to make points in heatmap visible
 head(percent_mat)
 
-column_ha = HeatmapAnnotation(ncellsl=anno_barplot(as.data.frame(table(spe$pg_clusters))[,"Freq"], add_numbers=T, height = unit(2.2, "cm")),
+column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(spe$pg_clusters))[,"Freq"], add_numbers=T, height = unit(2.2, "cm")),
                               col=list(pg_clusters=metadata(spe)$color_vectors$col_clusters), 
                               show_legend=T)
 
@@ -317,20 +314,133 @@ hp <- Heatmap(exp_mat,
 
 d1 <- draw( hp, annotation_legend_list = lgd_list)
 
-# setEPS()
-# postscript(file.path(path, "results/Manuscript/2_Ext_Figure/R/bubbleplot_scaled_PT.eps"), height=7.2, width=18)
-# d1
-# dev.off()
+setEPS()
+postscript("/mnt/Multimodal_Imaging_Daria/DART2OS/17-3802/results/bubbleplot.eps", height=6.5, width=8)
+d1
+dev.off()
 ```
+##Mean-per-cluster heatmap
+Next, we will look at the mean marker expression per cluster. The next two code blocks can be also run for tissue types (PT/BM) separately. 
 
-## Save objects
+```{r ingle-cell-heatmap-clusters-mean, message=FALSE, fig.height=8}
+library(scuttle)
 
-Finally, the generated data objects can be saved for further downstream 
-processing and analysis.We will exclude low-quality samples.
+set.seed(20230135)
 
-```{r save-objects-read-data}
+#calculate mean heatmap over all cells
+matrix_hq <- intensity_mat_hq_wo_zeros
+clust <- droplevels(spe$pg_clusters)
 
-saveRDS(spe, file.path(path, "results/Manuscript/1_Figure/spe_0px_refined.rds"))
+mean <- aggregate(t(matrix_hq), list(clust), mean)
+
+mean_t <- t(mean[,2:ncol(mean)])
+colnames(mean_t) <- mean[,"Group.1"]
+#mean_t <- t(apply(mean_t, 1, RESCALE, to=0:1))
+
+column_ha = HeatmapAnnotation(cluster = mean[,"Group.1"],
+                              ncells=anno_barplot(as.data.frame(table(clust))[,"Freq"], height = unit(2, "cm")),
+                              col=list(cluster=col_clusters), 
+                              show_legend=T)
+
+h <- Heatmap(mean_t, 
+        column_title = "Cluster-means heatmap with phenograph clusters (1px -mean)-nonscaled",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+
+setEPS()
+postscript("/mnt/Multimodal_Imaging_Daria/DART2OS/17-3802/results/mean-heatmap-nonscaled.eps", height=6.5, width=8)
+h
+dev.off()
+```
+##UMAP
+Then, we will perform dimensionality reduction by UMAP for visualization.
+
+```{r UMAP, message=FALSE, fig.width=15, fig.height=30}
+library(scater)
+library(BiocParallel)
+library(dittoSeq)
+library(patchwork)
+library(cowplot)
+
+mat_red <- calculateUMAP(mat, n_neighbors=30, BPPARAM = MulticoreParam(RNGseed = 221228))
+
+rownames(mat_red) <- colnames(spe)
+
+#Apply changes to SPE object
+reducedDim(spe, "UMAP") <- mat_red
+
+
+## UMAP colored by cell type and expression - dittoDimPlot
+p1 <- dittoDimPlot(spe, var = "pg_clusters", 
+             reduction.use = "UMAP", size = 1, labels.size=4,
+             do.label = T,
+             legend.show=F) +
+  scale_color_manual(values = col_clusters) +
+  theme(legend.title = element_blank()) +
+  ggtitle("Celltype on UMAP")
+
+setEPS()
+postscript("/mnt/Multimodal_Imaging_Daria/DART2OS/17-3802/results/UMAP_clusters.eps", height=3.74, width=4.52)
+p1
+dev.off()
+
+##UMAP colored by marker expression
+type_markers <- rownames(mat)
+state_markers <- c("none")
+
+# Add to spe
+rowData(spe)$marker_class <- ifelse(rownames(spe) %in% type_markers, "type",
+                                    ifelse(rownames(spe) %in% state_markers, "state", 
+                                    "other"))
+
+plot_list  <- lapply(rownames(spe)[rowData(spe)$marker_class == "type"], function(x){
+  p <- dittoDimPlot(spe, 
+                     var = x, 
+                     assay = "exprs",
+                     reduction.use = "UMAP",
+                     order="increasing",
+                     size = 0.8, 
+                     colors = viridis(100), 
+                     legend.show=F,
+                     do.label = TRUE) + scale_color_viridis()
+
+                      return(p)
+                    })
+
+setEPS()
+postscript("/mnt/Multimodal_Imaging_Daria/DART2OS/17-3802/results/UMAP_markers.eps", height=12, width=6)
+plot_grid(plotlist = plot_list, ncol=4, nrow=8)
+dev.off()
+```
+##Labeled mask
+We will now visualize the clusters in the mask.
+
+```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
+library(cytomapper)
+
+files <- list.files(file.path(path, "masks"))
+
+for(i in 1: length(files)){
+  
+  masks <- loadImages(file.path(path, "masks", files[i]), as.is = TRUE)
+  mcols(masks) <- DataFrame(sample_id = names(masks))
+  
+  plotCells(masks,
+            object = spe,
+            cell_id = "ObjectNumber", img_id = "sample_id",
+            colour_by = "pg_clusters",
+            colour = list(pg_clusters = col_clusters),
+            display = "single",
+            save_plot = list(filename = file.path("/mnt/Multimodal_Imaging_Daria/DART2OS/17-3802/results/", paste0(files[i], "f"))),
+            legend = NULL)
+
+}
+
 ```
 
 ## Session Info

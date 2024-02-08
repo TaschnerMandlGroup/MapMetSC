@@ -193,6 +193,10 @@ Rphenograph_out <- Rphenoannoy(t(mat), k = 30)
 clusters <- factor(membership(Rphenograph_out[[2]]))
 
 spe$pg_clusters <- clusters
+
+df <- data.frame(c("sample_id"=colnames(spe), "cluster"=spe$pg_clusters))
+
+write_feather(df, "/mnt/Multimodal_Imaging_Daria/DART2OS/20-5699/results/clusters.feather")
 ```
 
 ##Single-cell heatmap after clustering
@@ -209,6 +213,9 @@ library(paletteer)
 set.seed(20230521)
 colors <- c(brewer.pal(12, "Paired"), brewer.pal(8, "Dark2")[4], brewer.pal(8, "Dark2")[7:8])
 col_clusters = setNames(sample(colors, length(unique(spe$pg_clusters))), unique(spe$pg_clusters))
+
+df <- data.frame(c("cluster"=names(col_clusters), "color"=unname(col_clusters)))
+write_feather(df, "/mnt/Multimodal_Imaging_Daria/DART2OS/20-5699/results/colors.feather")
 
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 

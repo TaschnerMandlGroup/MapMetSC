@@ -24,7 +24,7 @@ meta_all$order <- factor(paste0(meta_all$Tissue, meta_all$Timepoint), levels=cus
 meta_all <- meta_all[order(meta_all$order), ]
 
 #Anonymize sample ID
-codes <- setNames(paste0("Sample_", sprintf("%03d", 1: length(unique(meta_all$Sample)))), unique(meta_all$Sample))
+codes <- setNames(paste0(sapply(strsplit(unique(meta_all$Sample), "-"), `[`, 1), "-", sprintf("%03d", 1: length(unique(meta_all$Sample)))), unique(meta_all$Sample))
 anon_sample_id <- recode(meta_all$Sample, !!!codes)
 
 #Anonymize study ID

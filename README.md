@@ -1,5 +1,5 @@
-<img src="https://github.com/TaschnerMandlGroup/MapMetSC/blob/main/docs/img/logo.png" align="right" alt="Logo" width="55" />
+# MapMetSC
 
-# MapMet - Single cell analysis
+A [workflowr][] project.
 
-This repository covers all scripts used to produce the results and figures of the [publication]() by Lazic, Gutwein et al. 
+[workflowr]: https://github.com/workflowr/workflowr

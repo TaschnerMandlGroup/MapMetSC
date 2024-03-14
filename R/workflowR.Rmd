@@ -1,0 +1,43 @@
+---
+title: "workflowR"
+output: html_document
+date: '2024-03-14'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Configure Git
+
+- to do so, install install.packages("git2r")
+- in case of error missing libgit2 (a C library, to interface with Git repositories)
+  - to execute commands inside the docker container as root user, enter the following in terminal after SSH into CCRI: docker exec -it <container-id-or-name> bash 
+  - then install libgit2: 
+    sudo apt-get update
+    sudo apt-get install libgit2-dev
+
+```{setting up workflowR}
+library(workflowr)
+
+# Configure Git (only need to do once per computer)
+wflow_git_config(user.name = "LazDaria", user.email = "daria_lazic@yahoo.com")
+
+# Start a new workflowr project
+wflow_start("MapMetSC")
+
+# Build the site
+wflow_build()
+
+# Customize your site!
+#   1. Edit the R Markdown files in analysis/
+#   2. Edit the theme and layout in analysis/_site.yml
+#   3. Add new or copy existing R Markdown files to analysis/
+
+# Preview your changes
+wflow_build()
+
+# Publish the site, i.e. version the source code and HTML results
+wflow_publish("analysis/*", "Start my new project")
+```
+

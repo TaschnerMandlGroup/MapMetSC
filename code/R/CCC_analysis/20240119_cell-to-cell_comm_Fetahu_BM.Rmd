@@ -1,0 +1,2676 @@
+---
+title: "Cell-to-cell communication analysis"
+author: "Sara Wernig-Zorc"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+    collapsed: false
+    code_folding: hide
+    highlight: pygments
+    theme: spacelab
+    df_print: paged
+params:
+  input: "/home/data/MapMet/"
+  out: "/home/out/MapMet/"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      tidy = TRUE, 
+                      error = FALSE, 
+                      messages = FALSE,
+                      warning = FALSE)
+
+library(parallel)
+future::plan(strategy = 'future::multicore', workers = 12)
+options(future.globals.maxSize = 8 * 10^9)
+```
+
+## __Project description__ 
+<br>
+MapMet project: IMC data (Lazic et al. 2024)
+<br>
+Analysis done on scRNA-seq data from Fetahu et al., 2023
+<br>
+1. heatmaps: hierarhical clustering with column normalization 
+(by subtracting the column mean)
+<br>
+2. label transfer from IMC data to scRNA-seq data
+<br>
+3. CCC analysis 
+<br>
+4. T-cell exhustion and activation markers
+<br>
+We also check if PD1+ T-cells co-express the exhustion and activation markers
+to further suppport our hypothesis that T-cells are exhusted in NB tumors. 
+Meaning they have identified the tumor cells as tumor cells, but they can no
+longer attack them/eradicate them, as they are exhusted.
+<br>
+5. Label transfer from MONACO immune cells dataset to T-cell clusters 
+<br>
+Here we would like to identify T-cells sub-types. We first look at the 
+CD4/CD8/S100B/GZMB expression per T-cell cluster. Second, as the CD4 RNA
+expression is known to be low, we also do a label transfer based on closest
+expression profile (with SingleR). 
+<br>
+Analysis done in R v4.3.2 in a docker (mapmet_v2024-01-19.Dockerfile) container
+<br>
+docker exec -it --user root d04b26a70393 /bin/bash
+<br>
+
+# __Load libraries__
+
+```{r R packages: install, eval=FALSE, include=FALSE, echo=FALSE}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("OmnipathR",force = TRUE)
+BiocManager::install("ComplexHeatmap",force = TRUE)
+BiocManager::install("presto",force = TRUE)
+BiocManager::install("Biobase",force = TRUE)
+BiocManager::install("BiocGenerics",force = TRUE)
+BiocManager::install("BiocNeighbors",force = TRUE)
+BiocManager::install("SingleR")
+devtools::install_github("immunogenomics/presto")
+
+install.packages("tidyverse", clean = TRUE)
+install.packages("stringr", clean = TRUE)
+
+install.packages('igraph', repos = c(igraph = 'https://igraph.r-universe.dev',
+                           CRAN = 'https://cloud.r-project.org'))
+
+devtools::install_github("jinworks/CellChat")
+
+install.packages('Cairo', repo='https://RForge.net')
+
+devtools::install_github('VPetukhov/ggrastr')
+
+devtools::install_version('speedglm', version = '0.3-4', 
+                          repos = 'https://packagemanager.rstudio.com/cran/2023-03-31')
+
+remotes::install_github(repo = 'cole-trapnell-lab/monocle3')
+
+
+install.packages("magick")
+BiocManager::install("SpatialExperiment",force = TRUE)
+```
+
+```{r R packages: load, include=FALSE}
+library("Seurat")
+library("SingleCellExperiment")
+library("tidyverse")
+library("OmnipathR")
+library("ComplexHeatmap")
+library("stringr")
+library("tidyverse")
+library("CellChat")
+library("monocle3")
+library("SpatialExperiment")
+library("SingleR")
+library("magrittr")
+library("CellChat")
+library("RColorBrewer")
+```
+
+# __Input data__
+
+Results of CCC analysis from Fetahu et al., 2023
+
+```{r input data Fetahu et al - published, eval=FALSE, include=FALSE}
+# Already analysed cell to cell communication using CellChat v 1.1.0
+cellchat <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/ccc_cellchat_object.rds")
+signaling <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/ccc_signaling_data.rds")
+```
+
+```{r input data Fetahu et al - new}
+# New analysis with CellChat v2.1.1
+scrna_data <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/rna_decontaminated.rds")
+metadata <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/metadata.rds")
+
+nb_metadata <- 
+  metadata %>% 
+  select(
+    cell, library_size, n_features, sample,
+    group, cellont_name, cellont_abbr, 
+  ) %>% 
+  filter(cellont_abbr != "other", group != "I") %>% 
+  mutate(
+    cellont_abbr =
+      cellont_abbr %>% 
+      fct_drop() %>% 
+      fct_relevel("NB", "pDC", "M", "B", "T", "NK", "SC", "E")
+  ) %>% 
+  column_to_rownames("cell")
+
+expr_data <- 
+  scrna_data %>% 
+  assay("soupx_counts") %>% 
+  normalizeData(scale.factor = 1e6) %>% 
+  extract(, rownames(nb_metadata))
+expr_data 
+```
+
+# __Subset RNA data by IMC markers__
+
+```{r input data Lazic et al}
+protein2gene <- read.csv("/home/data/MapMet/lazic.imc.2024/gene_list/protein2gene.csv", 
+                         sep=";", header = TRUE)
+imc_data <- readRDS("/home/data/MapMet/lazic.imc.2024/Rds/imc_seurat.rds")
+
+head(protein2gene)
+
+IMC_markers <- protein2gene %>% filter(used_for_clustering == "yes")
+
+gene.list <- IMC_markers$gene_name
+```
+
+
+```{r subset Fetahu et al., 2023 data by Lazic et al., 2024 gene markers}
+# Filter gene expression matrix by the 42 genes used in IMC
+expr_data_39markers <- expr_data[rownames(expr_data) %in% gene.list, ]
+
+#saveRDS(expr_data_39markers, 
+#        file = "/home/out/MapMet/Rds/fetahu2023.expr_data.39markers.IMC.Rds")
+
+expr_data_39markers <- as.matrix(expr_data_39markers)
+```
+
+
+# __CCC analysis__
+
+CellChat v2.1.1
+
+## All metaclusters
+
+```{r CellChat: meta clusters}
+# New analysis with CellChat v2.1.1
+cellchat <- createCellChat(
+  expr_data,
+  meta = nb_metadata,
+  group.by = "cellont_abbr",
+)
+cellchat@DB <- CellChatDB.human
+
+# only keep genes in CellChatDB
+cellchat <- subsetData(cellchat)
+
+# find overexpressed ligands/receptors
+cellchat <- identifyOverExpressedGenes(cellchat)
+
+# find overexpressed interactions
+cellchat <- identifyOverExpressedInteractions(cellchat)
+
+# calculate communication probability between cell groups
+cellchat <- computeCommunProb(cellchat, seed.use = 1)
+
+# filter communications occurring with less than 10 cells in a cell group
+cellchat <- filterCommunication(cellchat)
+
+# calculate communication probability on the signaling pathway level
+cellchat <- computeCommunProbPathway(cellchat)
+
+# calculate aggregated communication network
+cellchat <- aggregateNet(cellchat)
+
+# determine network centrality pathways
+cellchat <- netAnalysis_computeCentrality(cellchat)
+
+# single LR dotplot data
+df_net <-
+  cellchat %>% 
+  subsetCommunication(thresh = NA) %>% 
+  as_tibble() %>% 
+  group_by(interaction_name_2) %>% 
+  mutate(prob.norm = prob / max(prob)) %>% 
+  ungroup() %>% 
+  mutate(
+    source = factor(source, c("NB", "pDC", "M", "B", "T", "NK", "SC", "E")),
+    target = factor(target, c("NB", "pDC", "M", "B", "T", "NK", "SC", "E")),
+  )
+
+df_net
+
+cellchat %>% saveRDS(paste0(params$out,"Rds/fetahu2023.cellchat.rds"))
+df_net %>% saveRDS(paste0(params$out,"/home/out/MapMet/Rds/fetahu2023.signaling.rds"))
+
+```
+
+Reproduce data from the Fetahu et al., 2023 paper (to check that the new version 
+of cellChat gives similar results)
+
+```{r CellChat figures}
+library(latex2exp)
+source("/home/data/MapMet/fetahu.scRNA.2023/scripts/csbg-neuroblastoma-d976641/styling.R")
+
+#cellchat <- readRDS("/home/out/MapMet/Rds/fetahu2023.cellchat.rds")
+#sig_data <- readRDS("/home/out/MapMet/Rds/fetahu2023.signaling.rds")
+
+
+## 3a ----
+
+plot_n_interactions <- function() {
+  rc_order <- names(CELL_TYPE_ABBREVIATIONS)
+  mat <- cellchat@net$count[rc_order, rc_order]
+  total_target <- colSums(mat)
+  total_source <- rowSums(mat)
+  bar_ylim <- c(0, max(total_source, total_target))
+  
+  Heatmap(
+    mat,
+    col = RColorBrewer::brewer.pal(9, "YlOrBr"),
+    name = "number of\ninteractions",
+    
+    cluster_rows = FALSE, 
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    row_names_side = "left",
+    row_title = "source (ligand)", 
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    
+    cluster_columns = FALSE, 
+    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    column_title = "target (receptor)",
+    column_title_side = "bottom",
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    
+    width = unit(20, "mm"),
+    height = unit(20, "mm"),
+    
+    top_annotation = HeatmapAnnotation(
+      count_bar = anno_barplot(
+        total_target,
+        ylim = bar_ylim,
+        border = FALSE, 
+        axis = FALSE,
+        gp = gpar(fill = "gray70", col = "gray70")
+      ),
+      count_text = anno_text(
+        total_target, 
+        gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      ), 
+      simple_anno_size_adjust = TRUE,
+      show_annotation_name = FALSE
+    ), 
+    
+    right_annotation = rowAnnotation(
+      count_text = anno_text(
+        total_source, 
+        gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      ), 
+      count_bar = anno_barplot(
+        total_source,
+        ylim = bar_ylim,
+        border = FALSE, 
+        axis = FALSE,
+        gp = gpar(fill = "gray70", col = "gray70")
+      ),
+      simple_anno_size_adjust = TRUE,
+      show_annotation_name = FALSE
+    ), 
+    
+    heatmap_legend_param = list(
+      at = c(min(mat), max(mat)),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+      title_position = "topleft", 
+      border = NA, 
+      legend_height = unit(20, "mm"), 
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+      grid_width = unit(2, "mm")
+    )
+  )
+}
+
+(p <- plot_n_interactions())
+ggsave(paste0(params$out,"/figures/3a_n_interactions.png"), plot = p, width = 6, height = 5)
+
+
+
+## 3b ----
+
+plot_contribution_celltype <- function(cell_type = "NB", signif = 0.05) {
+   sig_data %>%
+    filter(
+      pathway_name %in% cellchat@netP$pathways, 
+      source == {{cell_type}}, 
+      target != {{cell_type}},
+      pval <= signif
+    ) %>%
+    group_by(interaction = interaction_name_2) %>%
+    summarise(
+      prob.norm = sum(prob.norm),
+      count = n(),
+      pathway_name = first(pathway_name)
+    ) %>%
+    ungroup() %>%
+    mutate(prob.avg = prob.norm / count) %>% 
+    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
+    ggplot(aes(interaction, prob.norm)) +
+    geom_col(fill = "#ffb03e", width = 0.85) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    geom_text(
+      aes(y = 2.68, label = pathway_name),
+      size = BASE_TEXT_SIZE_MM,
+      fontface = "italic"
+    ) +
+    xlab("ligand-receptor pair") +
+    scale_y_continuous(
+      "total outgoing communication score from NB",
+      expand = expansion(0)
+    ) +
+    coord_flip() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.title.x = element_text(hjust = 1),
+      axis.ticks.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
+    )
+}
+
+plot_contribution_celltype()
+ggsave(paste0(params$out,"3b_outgoing_comm_score.png"), width = 5.5, height = 5)
+
+
+## 3c ----
+
+plot_selected_dots <- function(interactions, source_type = "NB") {
+  vis_data <- 
+    sig_data %>% 
+    filter(
+      interaction_name %in% {{interactions}}, 
+      source == {{source_type}}
+    ) %>%
+    mutate(
+      pathway_name = factor(pathway_name),
+      source = fct_recode(source, "from NB (source) to" = "NB"),
+      target = factor(target, levels = names(CELL_TYPE_ABBREVIATIONS))
+    )
+  
+  ggplot(vis_data, aes(target, interaction_name_2)) +
+    geom_point(
+      aes(color = prob.norm, size = pmin(5, -log10(pval)))
+    ) + 
+    scale_radius(
+      TeX("-log_{10} p-Value_{cap.}"),
+      range = c(1, 5),
+      guide = "none"
+    ) +
+    scale_color_distiller(
+      "relative communication score",
+      type = "seq",
+      palette = "YlOrBr",
+      direction = 1,
+      breaks = round(range(vis_data$prob.norm), 2),
+      guide = guide_colorbar(
+        barheight = unit(2, "mm"),
+        barwidth = unit(15, "mm"),
+        ticks = FALSE,
+        title.position = "top"
+      )
+    ) +
+    xlab("cell type (target)") +
+    ylab("ligand-receptor pair\nand pathway") +
+    facet_grid(
+      vars(pathway_name), 
+      vars(source),
+      scales = "free",
+      space = "free",
+      switch = "both"
+    ) + 
+    theme_nb(grid = FALSE) + 
+    theme(
+      axis.text.x = element_text(
+        size = BASE_TEXT_SIZE_PT, 
+        margin = margin(t = 1, b = 1, r = 1, l = 1, unit = "mm")
+      ),
+      axis.text.y = element_text(size = BASE_TEXT_SIZE_PT),
+      axis.ticks.length.x = unit(2, "mm"),
+      axis.ticks.x = element_line(
+        arrow = arrow(length = unit(1,"mm"), ends = "first", type = "closed")
+      ),
+      axis.title = element_text(size = BASE_TEXT_SIZE_PT),
+      
+      panel.border = element_rect(color = "black", size = BASE_LINE_SIZE),
+      panel.spacing = unit(-BASE_LINE_SIZE / 2, "pt"),
+      
+      strip.background.y = element_rect(
+        fill = "gray95",
+        size = BASE_LINE_SIZE
+      ),
+      strip.background.x = element_rect(
+        fill = "gray95",
+        size = BASE_LINE_SIZE
+      ),
+      strip.text.x =  element_text(
+        size = BASE_TEXT_SIZE_PT, 
+        margin = margin(t = 1, b = 1, r = 4, l = 4, unit = "mm"),
+        angle = 0
+      ),
+      strip.text.y.left = element_text(
+        size = BASE_TEXT_SIZE_PT, 
+        margin = margin(t = 0.5, b = 0.5, r = 1, l = 1, unit = "mm"),
+        angle = 0
+      ),
+      strip.switch.pad.grid = unit(0, "pt"),
+      
+      legend.position = c(-.4, -.2),
+      legend.direction = "horizontal",
+      legend.text = element_text(size = BASE_TEXT_SIZE_PT),
+      legend.title = element_text(size = BASE_TEXT_SIZE_PT),
+    )
+}
+
+plot_selected_dots(c("MDK_NCL", "MDK_LRP1", "MIF_CD74_CXCR4", "MIF_CD74_CD44"))
+ggsave(paste0(params$out,"/figures/3c_dots.png"), height = 3.4, width = 7)
+
+
+
+```
+
+
+## __Clustering based on IMC markers__
+
+```{r heatmap: all cell types}
+# Plotting the gene expression
+fetahu.39.IMC.markers <- CreateSeuratObject(counts = expr_data_39markers, 
+                                            meta.data = nb_metadata)
+
+# Convert count data for the 39 markers to a matrix
+mat <- fetahu.39.IMC.markers[["RNA"]]@data %>% as.matrix()
+
+## scale the rows
+mat <- t(scale(t(mat)))
+
+cluster_anno <- fetahu.39.IMC.markers@meta.data$cellont_abbr
+
+quantile(mat, c(0.1, 0.95))
+
+## make the black color map to 0. the yellow map to highest and the purle map to the lowest
+col_fun = circlize::colorRamp2(c(-1, 0, 1, 1.5), c("purple", "white", "lightgreen", "darkgreen"))
+
+marker.expression <- 
+  Heatmap(mat, name = "IMC markers gene expression",  
+        column_split = factor(cluster_anno),
+        cluster_columns = TRUE,
+        show_column_dend = TRUE,
+        cluster_column_slices = TRUE,
+        column_title_gp = gpar(fontsize = 8),
+        column_gap = unit(0.5, "mm"),
+        cluster_rows = TRUE,
+        show_row_dend = TRUE,
+        col = col_fun,
+        row_names_gp = gpar(fontsize = 4),
+        column_title_rot = 90,
+        top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))),
+        show_column_names = FALSE,
+        use_raster = TRUE,
+        raster_quality = 4)
+
+marker.expression
+
+pdf(file = paste0(params$out,"/figures/fetahu.exp.IMC.markers.pdf"))
+marker.expression
+dev.off()
+
+marker.expression.v2 <- 
+  Heatmap(mat, name = "IMC markers gene expression",  
+        column_split = factor(cluster_anno),
+        cluster_columns = TRUE,
+        show_column_dend = TRUE,
+        cluster_column_slices = TRUE,
+        column_title_gp = gpar(fontsize = 8),
+        column_gap = unit(0.5, "mm"),
+        cluster_rows = TRUE,
+        show_row_dend = TRUE,
+        row_names_gp = gpar(fontsize = 4),
+        column_title_rot = 90,
+        top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))),
+        show_column_names = FALSE,
+        use_raster = TRUE,
+        raster_quality = 4)
+
+pdf(file = paste0(params$out,"/figures/fetahu.exp.IMC.markers.v2.pdf"))
+marker.expression.v2
+dev.off()
+
+
+```
+
+## __Tumor cells only__
+
+```{r heatmap: NB cells only, eval=FALSE, include=FALSE}
+
+Idents(rna) <- rna@meta.data$orig.ident
+tumor_cells <- "NB (8)"
+fetahu.39.IMC.markers.NB <- subset(rna, idents = tumor_cells, invert = FALSE)
+fetahu.39.IMC.markers.NB
+
+data <- fetahu.39.IMC.markers.NB[["RNA"]]@data
+filter <- rownames(data) == gene.list
+
+data <- fetahu.39.IMC.markers.NB[["RNA"]]@data %>% as.data.frame() 
+
+data %>% 
+  filter(rownames(data) == gene.list) 
+
+# Convert count data for the 39 markers to a matrix
+mat <- fetahu.39.IMC.markers.NB[["RNA"]]@data %>% as.matrix() 
+
+
+## scale the rows
+mat <- t(scale(t(mat)))
+
+quantile(mat, c(0.1, 0.95), na.rm = T)
+
+
+## make the black color map to 0. the yellow map to highest and the purle map to the lowest
+col_fun = circlize::colorRamp2(c(-0.5, 0,0.5, 1), c("purple", "white", "lightgreen","darkgreen"))
+
+marker.expression <- 
+  Heatmap(mat, name = "IMC markers gene expression",  
+        cluster_columns = TRUE,
+        show_column_dend = TRUE,
+        cluster_column_slices = TRUE,
+        column_title_gp = gpar(fontsize = 8),
+        column_gap = unit(0.5, "mm"),
+        cluster_rows = TRUE,
+        show_row_dend = TRUE,
+        col = col_fun,
+        row_names_gp = gpar(fontsize = 4),
+        column_title_rot = 90,
+        top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))),
+        show_column_names = FALSE,
+        use_raster = TRUE,
+        raster_quality = 4,
+        na_col = "black",)
+
+marker.expression
+
+pdf(file = paste0(params$out,"/figures/fetahu.exp.IMC.markers.NBonly.v1.pdf"))
+marker.expression
+dev.off()
+
+marker.expression.v2 <- 
+  Heatmap(mat, name = "IMC markers gene expression",  
+        cluster_columns = TRUE,
+        show_column_dend = TRUE,
+        cluster_column_slices = TRUE,
+        column_title_gp = gpar(fontsize = 8),
+        column_gap = unit(0.5, "mm"),
+        cluster_rows = TRUE,
+        show_row_dend = TRUE,
+        row_names_gp = gpar(fontsize = 4),
+        column_title_rot = 90,
+        top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))),
+        show_column_names = FALSE,
+        use_raster = TRUE,
+        raster_quality = 4)
+
+pdf(file = paste0(params$out,"/figures/fetahu.exp.IMC.markers.NBonly.v2.pdf"))
+marker.expression.v2
+dev.off()
+
+
+```
+
+```{r sub-cluster the tumor cluster}
+filter <- nb_metadata$cellont_abbr == "NB"
+tumor.metadata <- nb_metadata[filter,]
+
+
+fetahu <- CreateSeuratObject(counts = expr_data, metadata = nb_metadata)
+fetahu@meta.data$orig.ident <- nb_metadata$cellont_abbr
+Idents(fetahu) <- fetahu@meta.data$orig.ident
+tumor_cells <- c("NB (8)")
+fetahu.NB <- subset(fetahu, 
+                    idents = tumor_cells, 
+                    invert = FALSE)
+
+fetahu.NB
+fetahu.NB <- AddMetaData(fetahu.NB,metadata = tumor.metadata)
+
+fetahu.NB[["percent.mt"]] <- PercentageFeatureSet(object = fetahu.NB, 
+                                                  pattern = "^MT-")
+
+DefaultAssay(fetahu.NB) <- "RNA"
+fetahu.NB <- fetahu.NB %>%
+    NormalizeData() %>%
+    FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
+    ScaleData() %>%
+    SCTransform(vars.to.regress = c("percent.mt"))
+
+# Calculate PCs using variable features determined by SCTransform
+fetahu.NB <- RunPCA(fetahu.NB, assay = "SCT", seed.use = 28, npcs = 50)
+PCAPlot(object = fetahu.NB)
+
+
+top2000 <- head(VariableFeatures(fetahu.NB), 4000)
+fetahu.NB <- fetahu.NB[top2000]
+
+fetahu.NB <- RunPCA(fetahu.NB, assay = "SCT", npcs = 10)
+fetahu.NB <- FindNeighbors(fetahu.NB, reduction = "pca", 
+                           dims = 1:5,
+                           k.param = 50)
+
+# tested k nearest neighbors: 10, 50, 80
+# tested number fo dimensions: 5, 10, 20, 50
+
+# define neighbours based on gene expression rather than dimensionlity reduction
+# Compute an SNN on the gene expression level
+#fetahu.NB <- FindNeighbors(fetahu.NB, 
+#                           features = VariableFeatures(object = fetahu.NB))
+
+fetahu.NB <- FindClusters(fetahu.NB, resolution = 0.2,
+                          random.seed = 28,
+                          group.singletons = FALSE) # 4 = Leiden, default = Louvain 
+fetahu.NB <- RunUMAP(fetahu.NB, 
+                     reduction = "pca", 
+                     dims = 1:5,
+                     n.epochs = 500,
+                     min.dist = 0.1,
+                     seed.use = 28)
+
+# Tested minimum distance 0.5, 0.1, 0.01, 0.001
+
+# Visualization
+p1 <- DimPlot(fetahu.NB, reduction = "umap", 
+              group.by = "sample")
+p2 <- DimPlot(fetahu.NB, reduction = "umap",
+              group.by = "group")
+
+p1 + p2
+
+p3 <- DimPlot(fetahu.NB, reduction = "umap", 
+              label = TRUE, repel = TRUE)
+p3
+
+saveRDS(fetahu.NB, 
+        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.cluster.Rds"))
+
+```
+
+# __Sub-setting the tumor cluster markers__
+
+```{r}
+fetahu.NB <- readRDS(file = 
+                       paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
+
+# find cluster markers with Seurat
+fetahu.NB.markers <- FindAllMarkers(fetahu.NB, 
+                                      min.pct  = 0.1, 
+                                      logfc.threshold = 0.25,
+                                      min.cells.group = 50,
+                                      random.seed = 28)
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 10, order_by = avg_log2FC)
+
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+DoHeatmap(fetahu.NB, features = fetahu.NB.markers$gene) + NoLegend()
+
+library(DElegate)
+
+# find cluster markers with DElegate 
+de_results <- DElegate::findDE(object = fetahu.NB,
+                               group_column = "seurat_clusters")
+marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB,
+                                            group_column = "seurat_clusters")
+dplyr::filter(marker_results, feature_rank < 6)
+
+DoHeatmap(marker_results)
+
+
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+
+
+```
+
+```{r}
+
+NB.marker.genes <- c("NCAM1", "B4GALNT1", "L1CAM", "MYCN", "GATA2", 
+                     "DBH", "CHGB", "CHGA", "SYP", "TH", "PHOX2A", "PHOX2B")
+
+DoHeatmap(fetahu.NB, features = NB.marker.genes,assay = "RNA")
+
+top100 <- head(VariableFeatures(fetahu.NB), 100)
+top100
+DoHeatmap(fetahu.NB, features = top100) + NoLegend()
+
+
+var.genes <- as.data.frame(x =  VariableFeatures(fetahu.NB))
+
+colnames(var.genes) <- "var_genes"
+
+overlap = var.genes$var_genes[var.genes$var_genes %in% gene.list]
+overlap
+# I find 6 genes from the IMC markers to be among the 2000 most variable genes
+# in the tumor cluster
+
+```
+
+
+
+
+# __Label transfer__
+
+Transfer cell type annotations from Lazic et al. 2024 to Fetahu et al. 2023
+
+
+```{r label transfer}
+library(BiocParallel)
+library(SingleR)
+library(tidyr)
+
+metadata <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/metadata.rds")
+scrna_data <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/rna_decontaminated.rds")
+
+rna <- as.Seurat(scrna_data, data=NULL)
+rna <- RenameAssays(object = rna, originalexp = 'RNA')
+
+
+rna@active.ident <- setNames(pull(metadata[match(metadata$cell,colnames(rna)),"cellont_cluster"], "cellont_cluster"),pull(metadata[match(metadata$cell,colnames(rna)), "cell"], "cell"))
+DefaultAssay(rna) <- "RNA"
+
+
+rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")
+
+rna_clusters <- rna@active.ident
+common_genes_rna <- rownames(rna_mat) %in% gene.list
+
+rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")[common_genes_rna,]
+
+protein_mat <- GetAssayData(imc_data, assay = "originalexp", slot = "counts")
+common_genes_protein <- rownames(protein_mat) %in% rownames(rna_mat)
+protein_mat <- GetAssayData(imc_data, assay = "originalexp", slot = "counts")[common_genes_protein,]
+imc_clusters <- imc_data@meta.data$celltype
+predicted_labels <- SingleR(test = rna_mat, # Transfer labels to RNA data
+                            ref = protein_mat, # Original cell types from IMC data
+                            labels = imc_clusters, # Cell types defined by IMC data
+                            BPPARAM = MulticoreParam(workers=10, RNGseed=20231030)) 
+
+saveRDS(predicted_labels,
+        file = paste0(params$out,"Rds/20240126_predicted_labels_IMCtoRNA.rds"))
+
+################################################################################
+
+# Take only the BM samples (because some cell types were only present in the PT)
+imc_data@meta.data$tissue
+imc_BM <- subset(imc_data, tissue == "BM")
+imc_BM 
+
+protein_mat <- GetAssayData(imc_BM, assay = "originalexp", slot = "counts")
+common_genes_protein <- rownames(protein_mat) %in% rownames(rna_mat)
+protein_mat <- GetAssayData(imc_BM, assay = "originalexp", slot = "counts")[common_genes_protein,]
+imc_clusters <- imc_BM@meta.data$celltype
+predicted_labels <- SingleR(test = rna_mat, # Transfer labels to RNA data
+                            ref = protein_mat, # Original cell types from IMC data
+                            labels = imc_clusters, # Cell types defined by IMC data
+                            BPPARAM = MulticoreParam(workers=10, RNGseed=20231030)) 
+
+saveRDS(predicted_labels,
+        file = paste0(params$out,"Rds/20240126_predicted_labels_IMC-BMtoRNA.rds"))
+
+```
+
+
+```{r match colors, message=FALSE, fig.height=17}
+col_clusters <- c(#"GD2+MPO+"=rgb(255,255,162, maxColorValue = 255),
+                #"DTC"=rgb(255,221,57, maxColorValue = 255),
+                #"DTC"=rgb(246,246,0, maxColorValue = 255),
+                "other"=rgb(255,255,209, maxColorValue = 255),
+                "LIN- Ki67+"=rgb(254,217,166, maxColorValue = 255),
+                "HSPC"=rgb(253,180,98, maxColorValue = 255),
+                #"GZMB+ S100B- DC/NK"=rgb(255,137,0, maxColorValue = 255),
+                "GZMB+ S100B- DC/NK"=rgb(28,146,255, maxColorValue = 255),
+                "B cell"=rgb(168,128,250, maxColorValue = 255),
+                "GZMB+ S100B+ DC/NK"=rgb(0,255,255, maxColorValue = 255),
+                #"HLA-DR+ CXCR4+"=rgb(152,78,163, maxColorValue = 255),
+                #"B cell"=rgb(82,75,181, maxColorValue = 255),
+                "CD8+ naive T cell"=rgb(188,128,189, maxColorValue = 255),
+                "DN GZMB+ T cell"=rgb(190,174,212, maxColorValue = 255),
+                "CD8+ S100B+ T cell"=rgb(253,218,236, maxColorValue = 255),
+                "CD8+ GZMB+ PD1lo T cell"=rgb(251,154,153, maxColorValue = 255),
+                "CD4+ naive T cell"=rgb(242,3,137, maxColorValue = 255),
+                "DN T cell"=rgb(251,128,114, maxColorValue = 255),
+                "CD4+ PD1+ T cell"=rgb(254,142,175, maxColorValue = 255),
+                "CD8+ PDL1lo T cell"=rgb(240,0,240, maxColorValue = 255),
+                "CD4+ S100B+ T cell"=rgb(227,26,28, maxColorValue = 255),
+                "dense T cell region"=rgb(145,2,144, maxColorValue = 255),
+                "CD24+ marker-lo TC"=rgb(230,245,201, maxColorValue = 255),
+                "early SYM-like TC"=rgb(204,235,197, maxColorValue = 255),
+                "neural progenitor"=rgb(238,118,0, maxColorValue = 255),
+                "bridge-like TC"=rgb(198,255,72, maxColorValue = 255),
+                "GATA3hi TC"=rgb(65,208,57, maxColorValue = 255),
+                "CD24- marker-lo TC"=rgb(60,119,97, maxColorValue = 255),
+                "CD14+ PDL1- MO"=rgb(104,180,238, maxColorValue = 255),
+                "monoblast-like"=rgb(128,177,211, maxColorValue = 255),
+                "CD14+ PDL1+ MO"=rgb(51,180,180, maxColorValue = 255),
+                "CHGAhi TC"=rgb(102,166,30, maxColorValue = 255),
+                "Ki67hi TC"=rgb(149,144,89, maxColorValue = 255),
+                "CXCR4hi TC"=rgb(210,205,126, maxColorValue = 255),
+                "CD44+ mes-like TC"=rgb(27,158,119, maxColorValue = 255),
+                "GD2lo TC"=rgb(102,194,165, maxColorValue = 255),
+                "CD14- PDL1- MO/DC"=rgb(39,130,187, maxColorValue = 255),
+                "CD14- PDL1+ MO/DC"=rgb(166,206,227, maxColorValue = 255),
+                "pDC"=rgb(212,241,240, maxColorValue = 255),
+                "band cell"=rgb(169,189,210, maxColorValue = 255),
+                "myelocyte"=rgb(217,217,217, maxColorValue = 255),          
+                #"granulocyte"=rgb(251,241,232, maxColorValue = 255),
+                "myeloblast"=rgb(2,0,138, maxColorValue = 255),
+                "neutrophil"=rgb(113,113,113, maxColorValue = 255),
+                "fibroblast/endothel"=rgb(212,89,67, maxColorValue = 255),
+                "schwann cell"=rgb(156,76,24, maxColorValue = 255),
+                "MSC"=rgb(174,129,37, maxColorValue = 255),
+                "HPC"=rgb(212,143,75, maxColorValue = 255),
+                "Ki67+ CXCR4+ cell"=rgb(254,215,0, maxColorValue = 255))
+ 
+pie(rep(1, length(col_clusters)), col=col_clusters, labels=names(col_clusters))
+ 
+col_clusters
+
+```
+
+using BM and PT samples (IMC data) for label transfer
+```{r heatmap of transferred labels}
+library(viridis)
+library(RColorBrewer)
+set.seed(20230517)
+
+predicted_labels <- readRDS(file = paste0(params$out,"Rds/20240126_predicted_labels_IMCtoRNA.rds"))
+
+plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),], 
+                 annotation_legend=T, treeheight_row=0) 
+
+pdf(paste0(params$out,"figures/labeltransfer_score_heatmap.pdf"))
+plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),], 
+                 annotation_legend=T, treeheight_row=0) 
+dev.off()
+
+true_label <- rna@active.ident
+predicted_label <- predicted_labels$labels
+
+n <- length(unique(predicted_label))
+
+table(predicted_label)
+
+
+
+### downsample
+
+rna.small <- subset(rna, downsample = 500)
+rna_mat.small <- GetAssayData(rna.small, assay = "RNA", slot = "data")[common_genes_rna,]
+
+rna_mat_scaled <-  t(scale(t(rna_mat.small)))
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+
+col_predicted_labels = setNames(sample(col_vector_433, length(unique(predicted_label))), unique(predicted_label))
+col_true_labels <- metadata$cellont_abbr
+
+column_ha = HeatmapAnnotation(predicted_label = predicted_label[rna_mat_scaled],
+                              true_cluster = true_label[rna_mat_scaled],
+                              col=list(predicted_label=col_predicted_labels, 
+                                       true_label=col_true_labels
+                                       ), 
+                              show_legend=T)
+
+
+cluster_anno <- rna.small@meta.data$predicted_celltype
+
+quantile(rna_mat_scaled, c(0.1, 0.95))
+
+## make the white color map to 0. the green map to highest and the purle map to the lowest
+col_fun = circlize::colorRamp2(c(-0.5, 0, 0.5, 1), 
+                               c("purple", "white", "lightgreen", "darkgreen"))
+
+rna <- SetIdent(rna, value = "predicted_celltype")
+
+x <- Heatmap(rna_mat_scaled, name = "IMC markers gene expression",  
+             column_split = factor(cluster_anno),
+             cluster_columns = TRUE,
+             show_column_dend = TRUE,
+             cluster_column_slices = TRUE,
+             column_title_gp = gpar(fontsize = 8),
+             column_gap = unit(0.5, "mm"),
+             cluster_rows = TRUE,
+             show_row_dend = TRUE,
+             col = col_fun,
+             row_names_gp = gpar(fontsize = 4),
+             column_title_rot = 90,
+             top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))),
+             show_column_names = FALSE,
+             use_raster = TRUE,
+             raster_quality = 4)
+
+pdf(paste0(params$out,"figures/labeltransfer_expression_heatmap.pdf"))
+x
+dev.off()
+
+pdf(paste0(params$out,"figures/labeltransfer_IMC_marker_expression_dotplot.pdf"))
+DotPlot(rna, features = gene.list) + RotatedAxis()
+dev.off()
+
+
+tumor_markers <- c("ELAVL4", "CXCR4", "MME", "CD74", "HLA-A", "CD274", "GATA3", 
+                   "VIM", "MKI67", "CD44", "NCAM1", "ST8SIA1", "PRPH", "LUM", 
+                   "CHGA", "SOX10", "S100B")
+
+pdf(paste0(params$out,"figures/labeltransfer_tumor_marker_expression_dotplot.pdf"))
+DotPlot(rna, features = tumor_markers) + RotatedAxis()
+dev.off()
+
+DoHeatmap(subset(rna, downsample = 500), 
+          features = gene.list, 
+          size = 3, 
+          slot = "counts")
+
+
+# Plot in the UMAP published and predicted cell types (based on IMC protein data)
+
+library(scater)
+library(patchwork)
+library(cowplot)
+library(viridis)
+
+data <- data.frame(IMC_markers=predicted_label, 
+                   original_clusters=rna@active.ident)
+
+data$freq <- 1
+data_wide <- data %>% pivot_wider(names_from = c("original_clusters"), 
+                                  values_from = "freq", 
+                                  values_fn = sum, 
+                                  values_fill = 0)
+
+data_long <- data_wide %>% pivot_longer(cols = !IMC_markers, 
+                                        names_to = "original_clusters", 
+                                        values_to = "count") 
+
+
+IMC_cell_types <- data_wide$IMC_markers
+data <- data_wide
+data <- data[,-1]
+rownames(data) <- IMC_cell_types
+data <- (prop.table(as.matrix(data), margin=2))
+original_clusters <- names(unlist(apply(data, 2, which.max)))
+predicted_clust_1 <- data_wide[unname(unlist(apply(data, 2, which.max))), "IMC_markers"]
+proportion_1 <- unname(unlist(apply(data, 2, max)))
+predicted_clust_2 <- unname(apply(data, 2, function(x){rownames(data)[order(x, decreasing=T)][2]}))
+proportion_2 <- unname(apply(data, 2, function(x){sort(x, decreasing=T)[2]}))
+
+assignments <- as.data.frame(cbind("original_clusters" = original_clusters, 
+                                   "predicted_cluster_1" = predicted_clust_1, 
+                                   "proportion_1" = proportion_1, 
+                                   "predicted_cluster_2" = predicted_clust_2, 
+                                   "proportion_2" = proportion_2))
+
+assignments
+
+rna$original_celltype <- rna@active.ident
+rna$predicted_celltype <- predicted_label
+
+bar_plot <- ggplot(data_long, aes(fill=IMC_markers, y=count, x=original_clusters)) + 
+  ggtitle("") +
+  geom_bar(position="fill", stat="identity", show.legend = T) + 
+  scale_fill_manual(values = col_clusters) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+
+pdf(paste0(params$out,"figures/barplot_predicted_celltypes_proportion.pdf"),
+    height = 10,width = 20)
+bar_plot
+dev.off()
+
+
+## UMAP colored by cell type and expression - dittoDimPlot
+p1 <- DimPlot(rna, 
+             reduction = "UMAP", 
+             pt.size = 0.3, 
+             seed = 28, 
+             label =T, 
+             group.by = "predicted_celltype")
+
+
+
+pdf(file=paste0(params$out,"figures/umap.pdf"),height = 10, width = 20)
+p1
+dev.off()
+
+
+table(rna$predicted_celltype)
+table(rna$orig.ident)
+
+rna$original_celltype
+
+compare_cell_types <- cbind(rna$orig.ident,rna$predicted_celltype)
+
+
+write.table(compare_cell_types, 
+             file = paste0(params$out,"tables/fetahu.scRNA.original.vs.predicted.celltypes.csv"),
+             sep = "\t", quote = F)
+
+```
+
+using only BM samples (IMC data) for label transfer
+```{r heatmap of transferred labels 2}
+library(viridis)
+library(RColorBrewer)
+set.seed(20230517)
+
+predicted_labels <- 
+  readRDS(file = paste0(params$out,"Rds/20240126_predicted_labels_IMC-BMtoRNA.rds"))
+
+plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),], 
+                 annotation_legend=T, treeheight_row=0) 
+
+pdf(paste0(params$out,"figures/labeltransfer_IMC-BM_score_heatmap.pdf"))
+plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),], 
+                 annotation_legend=T, treeheight_row=0) 
+dev.off()
+
+rna@meta.data$original_celltype <- rna@active.ident
+true_label <- rna@meta.data$original_celltype
+
+predicted_label <- predicted_labels$labels
+rna@meta.data$predicted_celltype <- predicted_label
+
+
+n <- length(unique(predicted_label))
+
+table(predicted_label)
+
+rna_mat_scaled <-  t(scale(t(rna_mat)))
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+
+col_predicted_labels = setNames(sample(col_vector_433, length(unique(predicted_label))), unique(predicted_label))
+col_true_labels <- metadata$cellont_abbr
+
+column_ha = HeatmapAnnotation(predicted_label = predicted_label[rna_mat_scaled],
+                              true_cluster = true_label[rna_mat_scaled],
+                              col=list(predicted_label=col_predicted_labels, 
+                                       true_label=col_true_labels
+                                       ), 
+                              show_legend=T)
+
+
+
+quantile(rna_mat_scaled, c(0.1, 0.95))
+
+## make the white color map to 0. the green map to highest and the purle map to the lowest
+col_fun = circlize::colorRamp2(c(-0.5, 0, 0.5, 1), 
+                               c("purple", "white", "lightgreen", "darkgreen"))
+
+rna <- SetIdent(rna, value = "predicted_celltype")
+
+x <- Heatmap(rna_mat_scaled, name = "IMC markers gene expression",  
+             #column_split = factor(predicted_label),
+             cluster_columns = TRUE,
+             show_column_dend = TRUE,
+             cluster_column_slices = TRUE,
+             column_title_gp = gpar(fontsize = 8),
+             column_gap = unit(0.5, "mm"),
+             cluster_rows = TRUE,
+             show_row_dend = TRUE,
+             col = col_fun,
+             row_names_gp = gpar(fontsize = 4),
+             column_title_rot = 90,
+             top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))),
+             show_column_names = FALSE,
+             use_raster = TRUE,
+             raster_quality = 4)
+
+pdf(paste0(params$out,"figures/labeltransfer_IMC-BM_expression_heatmap.pdf"))
+x
+dev.off()
+
+DotPlot(rna, features = gene.list) + RotatedAxis()
+
+pdf(paste0(params$out,"figures/labeltransfer_IMC-BM_marker_expression_dotplot.pdf"))
+DotPlot(rna, features = gene.list) + RotatedAxis()
+dev.off()
+
+
+tumor_markers <- c("ELAVL4", "CXCR4", "MME", "CD74", "HLA-A", "CD274", "GATA3", 
+                   "VIM", "MKI67", "CD44", "NCAM1", "ST8SIA1", "PRPH", "LUM", 
+                   "CHGA", "SOX10", "S100B")
+
+pdf(paste0(params$out,"figures/labeltransfer_IMC-BM_tumor_marker_expression_dotplot.pdf"))
+DotPlot(rna, features = tumor_markers) + RotatedAxis()
+dev.off()
+
+DoHeatmap(subset(rna, downsample = 500), 
+          features = gene.list, 
+          size = 3, 
+          slot = "counts")
+
+
+# Plot in the UMAP published and predicted cell types (based on IMC protein data)
+
+library(scater)
+library(patchwork)
+library(cowplot)
+library(viridis)
+
+data <- data.frame(IMC_cell_types=predicted_label, 
+                   original_clusters=rna@meta.data$original_celltype)
+
+data$freq <- 1
+data_wide <- data %>% pivot_wider(names_from = c("original_clusters"), 
+                                  values_from = "freq", 
+                                  values_fn = sum, 
+                                  values_fill = 0)
+
+data_long <- data_wide %>% pivot_longer(cols = !IMC_cell_types, 
+                                        names_to = "original_clusters", 
+                                        values_to = "count") 
+
+
+IMC_cell_types <- data_wide$IMC_cell_types
+data <- data_wide
+data <- data[,-1]
+rownames(data) <- IMC_cell_types
+data <- (prop.table(as.matrix(data), margin=2))
+original_clusters <- names(unlist(apply(data, 2, which.max)))
+predicted_clust_1 <- data_wide[unname(unlist(apply(data, 2, which.max))), "IMC_cell_types"]
+proportion_1 <- unname(unlist(apply(data, 2, max)))
+predicted_clust_2 <- unname(apply(data, 2, function(x){rownames(data)[order(x, decreasing=T)][2]}))
+proportion_2 <- unname(apply(data, 2, function(x){sort(x, decreasing=T)[2]}))
+
+assignments <- as.data.frame(cbind("original_clusters" = original_clusters, 
+                                   "predicted_cluster_1" = predicted_clust_1, 
+                                   "proportion_1" = proportion_1, 
+                                   "predicted_cluster_2" = predicted_clust_2, 
+                                   "proportion_2" = proportion_2))
+
+assignments
+
+
+#rna <- SetIdent(rna, value = "predicted_celltype")
+
+
+bar_plot <- ggplot(data_long, aes(fill=IMC_cell_types, y=count, x=original_clusters)) + 
+  ggtitle("") +
+  geom_bar(position="fill", stat="identity", show.legend = T) + 
+  scale_fill_manual(values = col_clusters) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+
+bar_plot
+
+pdf(paste0(params$out,"figures/barplot_predicted_celltypes_IMC-BM_proportion.pdf"),
+    height = 10,width = 20)
+bar_plot
+dev.off()
+
+
+## UMAP colored by cell type and expression - dittoDimPlot
+p1 <- DimPlot(rna, 
+             reduction = "UMAP", 
+             pt.size = 0.3, 
+             seed = 28, 
+             label =T, 
+             group.by = "predicted_celltype")
+
+
+
+pdf(file=paste0(params$out,"figures/umap_IMC-BM_labelTransfer.pdf"),height = 10, width = 20)
+p1
+dev.off()
+
+
+table(rna$predicted_celltype)
+table(rna$orig.ident)
+
+rna$original_celltype
+
+compare_cell_types <- c(rna$orig.ident,rna$predicted_celltype)
+
+```
+
+
+# __CCC analysis__
+
+To infer the cell state-specific communications, CellChat v2 identifies over-expressed 
+ligands or receptors in one cell group and then identifies over-expressed 
+ligand-receptor interactions if either ligand or receptor are over-expressed.
+
+## Sub-clusters (from Lazic et al., 2024)
+
+```{r CellChat: sub-clusters}
+
+Idents(rna) <- rna@meta.data$predicted_celltype
+#nb_metadata$predicted_celltype <- Idents(rna)
+rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")
+
+# New analysis with CellChat v2.1.1
+cellchat <- createCellChat(
+  rna_mat,
+  meta = rna@meta.data,
+  group.by = "predicted_celltype",
+)
+cellchat@DB <- CellChatDB.human
+
+# only keep genes in CellChatDB
+cellchat <- subsetData(cellchat)
+
+# find overexpressed ligands/receptors
+cellchat <- identifyOverExpressedGenes(cellchat)
+
+# find overexpressed interactions
+cellchat <- identifyOverExpressedInteractions(cellchat)
+
+# calculate communication probability between cell groups
+cellchat <- computeCommunProb(cellchat, seed.use = 1)
+
+# filter communications occurring with less than 10 cells in a cell group
+cellchat <- filterCommunication(cellchat)
+
+# calculate communication probability on the signaling pathway level
+cellchat <- computeCommunProbPathway(cellchat)
+
+# calculate aggregated communication network
+cellchat <- aggregateNet(cellchat)
+
+# determine network centrality pathways
+cellchat <- netAnalysis_computeCentrality(cellchat)
+
+# define which clusters to compare
+all_clusters <- c("other",
+                  "LIN- Ki67+",
+                  "HSPC",
+                  "GZMB+ S100B- DC/NK",
+                  "B cell", 
+                  "GZMB+ S100B+ DC/NK",
+                  "CD8+ naive T cell",
+                  "DN GZMB+ T cell",
+                  "CD8+ S100B+ T cell",
+                  "CD8+ GZMB+ PD1lo T cell",
+                  "CD4+ naive T cell",
+                  "DN T cell",
+                  "CD4+ PD1+ T cell",
+                  "CD8+ PDL1lo T cell", 
+                  "CD4+ S100B+ T cell", 
+                  "dense T cell region", 
+                  "CD24+ marker-lo TC", 
+                  "early SYM-like TC",
+                  "neural progenitor",
+                  "bridge-like TC",
+                  "GATA3hi TC","
+                  CD24- marker-lo TC",
+                  "CD14+ PDL1- MO",
+                  "monoblast-like",
+                  "CD14+ PDL1+ MO", 
+                  "CHGAhi TC", 
+                  "Ki67hi TC", 
+                  "CXCR4hi TC", 
+                  "CD44+ mes-like TC",
+                  "GD2lo TC",
+                  "CD14- PDL1- MO/DC", 
+                  "CD14- PDL1+ MO/DC", 
+                  "pDC",
+                  "band cell", 
+                  "myelocyte", 
+                  "myeloblast",
+                  "neutrophil",
+                  "fibroblast/endothel",
+                  "schwann cell",
+                  "MSC", 
+                  "HPC",
+                  "Ki67+ CXCR4+ cell")
+
+treat_resist <- c("early SYM-like TC","CD44+ mes-like TC",
+                  "CD14+ PDL1+ MO","CD4+ PD1+ T cell")
+
+# single LR dotplot data
+# only cells associated with treatment resistance and progression
+df_net_int <-
+  cellchat %>% 
+  subsetCommunication(thresh = NA) %>% 
+  as_tibble() %>% 
+  group_by(interaction_name_2) %>% 
+  mutate(prob.norm = prob / max(prob)) %>% 
+  ungroup() %>% 
+  mutate(
+    source = factor(source, treat_resist),
+    target = factor(target, treat_resist),
+  )
+
+
+df_net_int
+
+# all cells / clusters
+df_net_all <-
+  cellchat %>% 
+  subsetCommunication(thresh = NA) %>% 
+  as_tibble() %>% 
+  group_by(interaction_name_2) %>% 
+  mutate(prob.norm = prob / max(prob)) %>% 
+  ungroup() %>% 
+  mutate(
+    source = factor(source, all_clusters),
+    target = factor(target, all_clusters),
+  )
+
+
+df_net_all
+
+cellchat %>% 
+  saveRDS(paste0(params$out,"Rds/fetahu2023.cellchat.predictedCellTypes.fromIMC.rds"))
+df_net_all %>% 
+  saveRDS(paste0(params$out,"Rds/fetahu2023.signaling.predictedCellTypes.fromIMC.rds"))
+df_net_int %>% 
+  saveRDS(paste0(params$out,"Rds/fetahu2023.signaling.predictedCellTypes.fromIMC.TreatResistCellsOnly.rds"))
+
+```
+
+
+```{r CellChat figures: sub-clusters}
+library(latex2exp)
+source("/home/data/MapMet/fetahu.scRNA.2023/scripts/csbg-neuroblastoma-d976641/styling.R")
+
+#cellchat <- readRDS(paste0(params$out,"Rds/fetahu2023.signaling.predictedCellTypes.fromIMC.TreatResistCellsOnly.rds"))
+#sig_data <- readRDS(paste0(params$out,"Rds/fetahu2023.cellchat.predictedCellTypes.fromIMC.rds"))
+
+summary_treat_resist <- drop_na(df_net_int)
+write.table(summary_treat_resist, 
+            file = paste0(params$out,"figures/CCC_treatResist.csv"),
+            sep = "\t", quote = FALSE)
+
+mat <- cellchat@net$count
+total_target <- colSums(mat)
+total_source <- rowSums(mat)
+bar_ylim <- c(0, max(total_source, total_target))
+
+## plot: Number of interactions between all cell types
+BASE_TEXT_SIZE_PT = 20
+
+int_plot <- Heatmap(mat,
+    col = RColorBrewer::brewer.pal(9, "YlOrBr"),
+    name = "number of\ninteractions",
+    
+    cluster_rows = FALSE, 
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    row_names_side = "left",
+    row_title = "source (ligand)", 
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    
+    cluster_columns = FALSE, 
+    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    column_title = "target (receptor)",
+    column_title_side = "bottom",
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT))
+
+pdf(paste0(params$out,"figures/number_of_interactions_all_celltypes.pdf"), 
+    height = 20, width = 20)
+int_plot
+dev.off()
+
+
+## plot: one cell type to all
+
+# 1. early SYM-like TC
+treat_resist[1]
+
+plot_contribution_celltype <- function(cell_type = treat_resist[1], signif = 0.05) {
+   df_net_int %>%
+    filter(
+      pathway_name %in% cellchat@netP$pathways, 
+      source == {{cell_type}}, 
+      target != {{cell_type}},
+      pval <= signif
+    ) %>%
+    group_by(interaction = interaction_name_2) %>%
+    summarise(
+      prob.norm = sum(prob.norm),
+      count = n(),
+      pathway_name = first(pathway_name)
+    ) %>%
+    ungroup() %>%
+    mutate(prob.avg = prob.norm / count) %>% 
+    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
+    ggplot(aes(interaction, prob.norm)) +
+    geom_col(fill = "#ffb03e", width = 0.85) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    geom_text(
+      aes(y = 2.68, label = pathway_name),
+      size = BASE_TEXT_SIZE_MM,
+      fontface = "italic"
+    ) +
+    xlab("ligand-receptor pair") +
+    scale_y_continuous(
+      "total outgoing communication score from treatment resistant cells",
+      expand = expansion(0)
+    ) +
+    coord_flip() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.title.x = element_text(hjust = 1),
+      axis.ticks.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
+    )
+}
+
+plot_contribution_celltype()
+ggsave(paste0(params$out,"figures/early_SYM-like_TC_outgoing_comm_score_allCellTypes.png"))
+
+plot_contribution_celltype <- function(cell_type = treat_resist[1], signif = 0.05) {
+   df_net_all %>%
+    filter(
+      pathway_name %in% cellchat@netP$pathways, 
+      source == {{cell_type}}, 
+      target != {{cell_type}},
+      pval <= signif
+    ) %>%
+    group_by(interaction = interaction_name_2) %>%
+    summarise(
+      prob.norm = sum(prob.norm),
+      count = n(),
+      pathway_name = first(pathway_name)
+    ) %>%
+    ungroup() %>%
+    mutate(prob.avg = prob.norm / count) %>% 
+    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
+    ggplot(aes(interaction, prob.norm)) +
+    geom_col(fill = "#ffb03e", width = 0.85) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    geom_text(
+      aes(y = 2.68, label = pathway_name),
+      size = BASE_TEXT_SIZE_MM,
+      fontface = "italic"
+    ) +
+    xlab("ligand-receptor pair") +
+    scale_y_continuous(
+      "total outgoing communication score from treatment resistant cells",
+      expand = expansion(0)
+    ) +
+    coord_flip() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.title.x = element_text(hjust = 1),
+      axis.ticks.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
+    )
+}
+
+plot_contribution_celltype()
+ggsave(paste0(params$out,"figures/early_SYM-like_TC_outgoing_comm_score_treatResistCells.png"))
+
+# 2. CD44+ mes-like TC
+treat_resist[2]
+
+plot_contribution_celltype <- function(cell_type = treat_resist[2], signif = 0.05) {
+   df_net_int %>%
+    filter(
+      pathway_name %in% cellchat@netP$pathways, 
+      source == {{cell_type}}, 
+      target != {{cell_type}},
+      pval <= signif
+    ) %>%
+    group_by(interaction = interaction_name_2) %>%
+    summarise(
+      prob.norm = sum(prob.norm),
+      count = n(),
+      pathway_name = first(pathway_name)
+    ) %>%
+    ungroup() %>%
+    mutate(prob.avg = prob.norm / count) %>% 
+    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
+    ggplot(aes(interaction, prob.norm)) +
+    geom_col(fill = "#ffb03e", width = 0.85) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    geom_text(
+      aes(y = 2.68, label = pathway_name),
+      size = BASE_TEXT_SIZE_MM,
+      fontface = "italic"
+    ) +
+    xlab("ligand-receptor pair") +
+    scale_y_continuous(
+      "total outgoing communication score from treatment resistant cells",
+      expand = expansion(0)
+    ) +
+    coord_flip() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.title.x = element_text(hjust = 1),
+      axis.ticks.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
+    )
+}
+
+plot_contribution_celltype()
+ggsave(paste0(params$out,"figures/CD44+_mes-like_TC_outgoing_comm_score_allCellTypes.png"))
+
+plot_contribution_celltype <- function(cell_type = treat_resist[2], signif = 0.05) {
+   df_net_all %>%
+    filter(
+      pathway_name %in% cellchat@netP$pathways, 
+      source == {{cell_type}}, 
+      target != {{cell_type}},
+      pval <= signif
+    ) %>%
+    group_by(interaction = interaction_name_2) %>%
+    summarise(
+      prob.norm = sum(prob.norm),
+      count = n(),
+      pathway_name = first(pathway_name)
+    ) %>%
+    ungroup() %>%
+    mutate(prob.avg = prob.norm / count) %>% 
+    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
+    ggplot(aes(interaction, prob.norm)) +
+    geom_col(fill = "#ffb03e", width = 0.85) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    geom_text(
+      aes(y = 2.68, label = pathway_name),
+      size = BASE_TEXT_SIZE_MM,
+      fontface = "italic"
+    ) +
+    xlab("ligand-receptor pair") +
+    scale_y_continuous(
+      "total outgoing communication score from treatment resistant cells",
+      expand = expansion(0)
+    ) +
+    coord_flip() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.title.x = element_text(hjust = 1),
+      axis.ticks.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
+    )
+}
+
+plot_contribution_celltype()
+ggsave(paste0(params$out,"figures/CD44+_mes-like_TC_outgoing_comm_score_treatResistCells.png"))
+
+# 3. CD14+ PDL1+ MO
+treat_resist[3]
+
+plot_contribution_celltype <- function(cell_type = treat_resist[3], signif = 0.05) {
+   df_net_int %>%
+    filter(
+      pathway_name %in% cellchat@netP$pathways, 
+      source == {{cell_type}}, 
+      target != {{cell_type}},
+      pval <= signif
+    ) %>%
+    group_by(interaction = interaction_name_2) %>%
+    summarise(
+      prob.norm = sum(prob.norm),
+      count = n(),
+      pathway_name = first(pathway_name)
+    ) %>%
+    ungroup() %>%
+    mutate(prob.avg = prob.norm / count) %>% 
+    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
+    ggplot(aes(interaction, prob.norm)) +
+    geom_col(fill = "#ffb03e", width = 0.85) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    geom_text(
+      aes(y = 2.68, label = pathway_name),
+      size = BASE_TEXT_SIZE_MM,
+      fontface = "italic"
+    ) +
+    xlab("ligand-receptor pair") +
+    scale_y_continuous(
+      "total outgoing communication score from treatment resistant cells",
+      expand = expansion(0)
+    ) +
+    coord_flip() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.title.x = element_text(hjust = 1),
+      axis.ticks.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
+    )
+}
+
+plot_contribution_celltype()
+ggsave(paste0(params$out,"figures/CD14+_PDL1+_MO_outgoing_comm_score_allCellTypes.png"))
+
+plot_contribution_celltype <- function(cell_type = treat_resist[3], signif = 0.05) {
+   df_net_all %>%
+    filter(
+      pathway_name %in% cellchat@netP$pathways, 
+      source == {{cell_type}}, 
+      target != {{cell_type}},
+      pval <= signif
+    ) %>%
+    group_by(interaction = interaction_name_2) %>%
+    summarise(
+      prob.norm = sum(prob.norm),
+      count = n(),
+      pathway_name = first(pathway_name)
+    ) %>%
+    ungroup() %>%
+    mutate(prob.avg = prob.norm / count) %>% 
+    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
+    ggplot(aes(interaction, prob.norm)) +
+    geom_col(fill = "#ffb03e", width = 0.85) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    geom_text(
+      aes(y = 2.68, label = pathway_name),
+      size = BASE_TEXT_SIZE_MM,
+      fontface = "italic"
+    ) +
+    xlab("ligand-receptor pair") +
+    scale_y_continuous(
+      "total outgoing communication score from treatment resistant cells",
+      expand = expansion(0)
+    ) +
+    coord_flip() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.title.x = element_text(hjust = 1),
+      axis.ticks.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
+    )
+}
+
+plot_contribution_celltype()
+ggsave(paste0(params$out,"figures/CD14+_PDL1+_MO_outgoing_comm_score_treatResistCells.png"))
+
+# 3. CD4+ PD1+ T cell
+treat_resist[4]
+
+plot_contribution_celltype <- function(cell_type = treat_resist[4], signif = 0.05) {
+   df_net_int %>%
+    filter(
+      pathway_name %in% cellchat@netP$pathways, 
+      source == {{cell_type}}, 
+      target != {{cell_type}},
+      pval <= signif
+    ) %>%
+    group_by(interaction = interaction_name_2) %>%
+    summarise(
+      prob.norm = sum(prob.norm),
+      count = n(),
+      pathway_name = first(pathway_name)
+    ) %>%
+    ungroup() %>%
+    mutate(prob.avg = prob.norm / count) %>% 
+    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
+    ggplot(aes(interaction, prob.norm)) +
+    geom_col(fill = "#ffb03e", width = 0.85) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    geom_text(
+      aes(y = 2.68, label = pathway_name),
+      size = BASE_TEXT_SIZE_MM,
+      fontface = "italic"
+    ) +
+    xlab("ligand-receptor pair") +
+    scale_y_continuous(
+      "total outgoing communication score from treatment resistant cells",
+      expand = expansion(0)
+    ) +
+    coord_flip() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.title.x = element_text(hjust = 1),
+      axis.ticks.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
+    )
+}
+
+plot_contribution_celltype()
+ggsave(paste0(params$out,"figures/CD4+_PDL1+_T_outgoing_comm_score_allCellTypes.png"))
+
+plot_contribution_celltype <- function(cell_type = treat_resist[4], signif = 0.05) {
+   df_net_all %>%
+    filter(
+      pathway_name %in% cellchat@netP$pathways, 
+      source == {{cell_type}}, 
+      target != {{cell_type}},
+      pval <= signif
+    ) %>%
+    group_by(interaction = interaction_name_2) %>%
+    summarise(
+      prob.norm = sum(prob.norm),
+      count = n(),
+      pathway_name = first(pathway_name)
+    ) %>%
+    ungroup() %>%
+    mutate(prob.avg = prob.norm / count) %>% 
+    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
+    ggplot(aes(interaction, prob.norm)) +
+    geom_col(fill = "#ffb03e", width = 0.85) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    geom_text(
+      aes(y = 2.68, label = pathway_name),
+      size = BASE_TEXT_SIZE_MM,
+      fontface = "italic"
+    ) +
+    xlab("ligand-receptor pair") +
+    scale_y_continuous(
+      "total outgoing communication score from treatment resistant cells",
+      expand = expansion(0)
+    ) +
+    coord_flip() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.title.x = element_text(hjust = 1),
+      axis.ticks.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
+    )
+}
+
+plot_contribution_celltype()
+ggsave(paste0(params$out,"figures/CD4+_PDL1+_T_outgoing_comm_score_treatResistCells.png"))
+
+## 3c ----
+
+plot_selected_dots <- function(interactions, source_type = "NB") {
+  vis_data <- 
+    sig_data %>% 
+    filter(
+      interaction_name %in% {{interactions}}, 
+      source == {{source_type}}
+    ) %>%
+    mutate(
+      pathway_name = factor(pathway_name),
+      source = fct_recode(source, "from NB (source) to" = "NB"),
+      target = factor(target, levels = names(CELL_TYPE_ABBREVIATIONS))
+    )
+  
+  ggplot(vis_data, aes(target, interaction_name_2)) +
+    geom_point(
+      aes(color = prob.norm, size = pmin(5, -log10(pval)))
+    ) + 
+    scale_radius(
+      TeX("-log_{10} p-Value_{cap.}"),
+      range = c(1, 5),
+      guide = "none"
+    ) +
+    scale_color_distiller(
+      "relative communication score",
+      type = "seq",
+      palette = "YlOrBr",
+      direction = 1,
+      breaks = round(range(vis_data$prob.norm), 2),
+      guide = guide_colorbar(
+        barheight = unit(2, "mm"),
+        barwidth = unit(15, "mm"),
+        ticks = FALSE,
+        title.position = "top"
+      )
+    ) +
+    xlab("cell type (target)") +
+    ylab("ligand-receptor pair\nand pathway") +
+    facet_grid(
+      vars(pathway_name), 
+      vars(source),
+      scales = "free",
+      space = "free",
+      switch = "both"
+    ) + 
+    theme_nb(grid = FALSE) + 
+    theme(
+      axis.text.x = element_text(
+        size = BASE_TEXT_SIZE_PT, 
+        margin = margin(t = 1, b = 1, r = 1, l = 1, unit = "mm")
+      ),
+      axis.text.y = element_text(size = BASE_TEXT_SIZE_PT),
+      axis.ticks.length.x = unit(2, "mm"),
+      axis.ticks.x = element_line(
+        arrow = arrow(length = unit(1,"mm"), ends = "first", type = "closed")
+      ),
+      axis.title = element_text(size = BASE_TEXT_SIZE_PT),
+      
+      panel.border = element_rect(color = "black", size = BASE_LINE_SIZE),
+      panel.spacing = unit(-BASE_LINE_SIZE / 2, "pt"),
+      
+      strip.background.y = element_rect(
+        fill = "gray95",
+        size = BASE_LINE_SIZE
+      ),
+      strip.background.x = element_rect(
+        fill = "gray95",
+        size = BASE_LINE_SIZE
+      ),
+      strip.text.x =  element_text(
+        size = BASE_TEXT_SIZE_PT, 
+        margin = margin(t = 1, b = 1, r = 4, l = 4, unit = "mm"),
+        angle = 0
+      ),
+      strip.text.y.left = element_text(
+        size = BASE_TEXT_SIZE_PT, 
+        margin = margin(t = 0.5, b = 0.5, r = 1, l = 1, unit = "mm"),
+        angle = 0
+      ),
+      strip.switch.pad.grid = unit(0, "pt"),
+      
+      legend.position = c(-.4, -.2),
+      legend.direction = "horizontal",
+      legend.text = element_text(size = BASE_TEXT_SIZE_PT),
+      legend.title = element_text(size = BASE_TEXT_SIZE_PT),
+    )
+}
+
+plot_selected_dots(c("MDK_NCL", "MDK_LRP1", "MIF_CD74_CXCR4", "MIF_CD74_CD44"))
+ggsave(paste0(params$out,"/figures/3c_dots.png"), height = 3.4, width = 7)
+
+```
+
+
+```{r load previous analysis}
+metadata <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/metadata.rds")
+scrna_data <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/rna_decontaminated.rds")
+predicted_labels <- readRDS(file = paste0(params$out,"Rds/20240126_predicted_labels_IMCtoRNA.rds"))
+
+rna <- as.Seurat(scrna_data, data=NULL)
+rna <- RenameAssays(object = rna, originalexp = 'RNA')
+
+rna@active.ident <- setNames(pull(metadata[match(metadata$cell,colnames(rna)),"cellont_cluster"], "cellont_cluster"),pull(metadata[match(metadata$cell,colnames(rna)), "cell"], "cell"))
+DefaultAssay(rna) <- "RNA"
+
+true_label <- rna@active.ident
+predicted_label <- predicted_labels$labels
+
+rna$original_celltype <- rna@active.ident
+rna$predicted_celltype <- predicted_label
+
+rna@meta.data
+```
+
+
+# __PDL-1+ and PD-1+ immune cells__
+
+```{r}
+library(viridis)
+pal <- viridis(n = 10, option = "C", direction = -1)
+
+# CD274 gene encodes for the Programmed death-ligand 1 (PDL-1)
+pdf(paste0(params$out,"figures/CD274_expression.pdf"))
+FeaturePlot(rna, label = TRUE,
+            features = "CD274", 
+            order = T, cols = pal)
+dev.off()
+
+
+FeaturePlot(rna, label = TRUE,
+            features = "CD274", 
+            order = T, cols = pal)
+
+# PDCD1 gene encodes for the Programmed cell death protein 1 (PD-1)
+pdf(paste0(params$out,"figures/PDCD1_expression.pdf"))
+FeaturePlot(rna, label = TRUE,
+            features = "PDCD1", 
+            order = T, cols = pal)
+dev.off()
+```
+
+Violin plot for PD1 expression in T cell clusters
+
+```{r Violin plot}
+features <- "PDCD1"
+tcells <- tcells_pd1 %>%
+  NormalizeData(normalization.method = "LogNormalize") %>%
+  ScaleData()
+
+VlnPlot(tcells,features,log = TRUE)
+DoHeatmap(tcells,features)
+
+
+# PD1+ T cells only
+tcells_pd1 <- tcells_pd1 %>%
+  NormalizeData(normalization.method = "LogNormalize") %>%
+  ScaleData()
+
+VlnPlot(tcells_pd1,features,log = TRUE)
+RidgePlot(tcells_pd1,features,log=TRUE)
+
+# Gene set enrichment score
+
+features <- c("PDCD1","CTLA4","BATF","VHL",
+              "LAG3","CD244","CD160","HAVCR2",
+              "IL10RA","PRDM1","GATA3","IKZF2","TBX21","EOMES")
+
+tcells <- AddModuleScore(tcells, features,
+                         name = "exhustion_markers_set", seed = 28)
+
+tcells_pd1 <- AddModuleScore(tcells_pd1, features,
+                         name = "exhustion_markers_set", seed = 28)
+
+# Plot scores
+FeaturePlot(tcells,
+            features = "exhustion_markers_set1", label = TRUE, repel = TRUE, 
+            order = TRUE, pt.size = 1) +
+            scale_colour_gradientn(colours = brewer.pal(n = 20, name = "RdPu"))
+
+
+VlnPlot(tcells,features = "exhustion_markers_set1", log = TRUE,pt.size = 0)
+
+VlnPlot(tcells_pd1,features = "exhustion_markers_set1", log = TRUE,pt.size = 0)
+
+RidgePlot(tcells_pd1, features = "exhustion_markers_set1", log = TRUE)
+
+```
+
+
+
+CD4, CD8 and GZMB expression in T-cells
+
+The question here is, which T-cells express PD-1, are these CD8+ or CD4+ T-cells
+and are the cells also positive for GZNB?
+
+```{r CD4, CD8 and GZMB expression in T-cells}
+FeaturePlot(rna, label = TRUE,
+            features = "CD274", 
+            order = T, cols = pal)
+
+FeaturePlot(rna, label = TRUE,
+            features = "PDCD1", 
+            order = T, cols = pal)
+
+FeaturePlot(rna, label = TRUE,
+            features = "CD8A", 
+            order = T, cols = pal)
+
+FeaturePlot(rna, label = TRUE,
+            features = "CD4", 
+            order = T, cols = pal)
+
+FeaturePlot(rna, label = TRUE,
+            features = "S100B", 
+            order = T, cols = pal)
+ 
+FeaturePlot(rna, label = TRUE,
+            features = "GZMB", 
+            order = T, cols = pal)
+```
+
+Is PD1 co-expressed with CD8/CD4/GZMB/S100B?
+
+```{r PD1+ T-cells}
+# T-cells
+tcells <- subset(x = rna, idents = c("T (6)","T (9)","T (5)")) # 19126 
+# with "T (18)" -> 19428  cells
+
+# PD1+ T cells
+tcells_pd1 <- subset(x = rna, idents = c("T (6)","T (9)","T (5)"),
+                 subset = PDCD1 > 0.1, ) 
+# with "T (18)" -> 552 cells
+
+
+# S100B+ cells
+tcells_s100b <- subset(x = rna, idents = c("T (6)","T (9)","T (5)"),
+                 subset = S100B > 0.1, ) # 897 cells
+
+
+features <- c("CD8A","CD4","GZMB","S100B")
+DotPlot(tcells, features = features) + RotatedAxis()
+DotPlot(tcells_pd1, features = features) + RotatedAxis()
+```
+
+CD69 - early T cell activation marker
+HLA-DR - late T cell activation marker
+CD4 - T helper cell marker (CD4+ T cells)
+CD8 - cytotoxic T cell marker (CD8+ T cells) 
+CD3 - predominantly located on T cells
+
+T cell activation (HLA-DR and CD38), 
+senescence and exhaustion (CD57 and PD1), 
+CD57 = B3GAT1 
+CD25 = IL2RA
+differentiation (CD45RA, CCR7, CD28, and CD27), 
+regulatory T cells (Treg, considered as CD25high and CD127low), 
+
+```{r S100B+ T-cells}
+features <- c("CD69","HLA-DRA", "CD38", "IL2RA","B3GAT1", 
+              "PTPRC","CCR7","CD28","CD27",
+              "CD3G","CD8A","CD4")
+DotPlot(tcells, features = features) + RotatedAxis()
+
+DotPlot(tcells_s100b, features = features) + RotatedAxis()
+```
+
+
+Co-expression of T-cell exhustion markers
+
+Elevated co-expression of inhibitory checkpoint receptors such as PDCD1, CTLA4, 
+HAVCR2, and LAG3, TOX TFs, PRDM1, NR4A TFs, KLRG1, B3GAT1
+
+CXCL13 is a common marker of PD-1 high CD8+ and PD-1 high CD4+ T cells 
+
+High levels of expression of GZMB and FASL but low levels of IFNG and TNF
+
+```{r T-cell exhustion markers, fig.height=10, fig.width=10}
+features <- c("PDCD1","CTLA4", "LAG3", "HAVCR2", "CSF1", "CD38",
+              "PRDM1", "TOX", "TOX2", "TOX3", "TOX4", "IRF4", "BATF4",
+              "NR4A1", "NR4A2", "NR4A3", "KLRG1", "B3GAT1", "MKI67",
+              "GZMB" , "FASLG" , "IFNG" , "TNF", "CXCL13","TCF7",
+              "IGKC", "HLA−DRA","CCL3", "CXCR6", "IL13","CLCF1", 
+              "OSM", "IL10RA","CCL4","CCL5","CCL16",
+               "CCR3", "CCR4", "CCR5", "CCR6", "PTPRC")
+
+#RidgePlot(rna, features = features, ncol = 2)
+#VlnPlot(rna, features = features)
+#FeaturePlot(rna, features = features)
+
+
+x <- DotPlot(rna, features = features) + RotatedAxis()
+x
+
+DotPlot(tcells, features = features) + RotatedAxis()
+
+
+
+
+pdf(paste0(params$out,"figures/Tcell_exhustion_markers_dotPlot.pdf"))
+x
+dev.off()
+
+# Tumor reactivity-related genes
+tumor_reactivity_genes <- c("TCF7", "PDCD1", "LAG3", "HAVCR2", "CTLA4" , 
+                            "TNFRSF9" , "TNFRSF18" , "ENTPD1", "ITGAE", "CXCL13")
+
+tumor_reactivity_genes_2 <- c("PDCD1", "LAG3", "HAVCR2", "CTLA4" , 
+                            "TNFRSF9" , "TNFRSF18" , "ENTPD1", "CXCL13")
+
+# IL-8 receptors
+IL8_receptors <- c("IL18","IL18BP", "IL1A", "IL1B", "IL1F10", "IL1F3","IL1RA", "IL1F5", "IL1F6",
+ "IL1F7", "IL1F8", "IL1RL2", "IL1F9", "IL33")
+DotPlot(rna, features = IL8_receptors) + RotatedAxis()
+
+# IL-1 Receptors
+IL1_receptors <- c("IL18R1", "IL18RAP", "IL1R1", "IL1R2", "IL1R3", "IL1R8", "IL1R9", "IL1RL1", "SIGIRR")
+DotPlot(rna, features = IL1_receptors) + RotatedAxis()
+
+# Interferon (IFN)
+IFN_receptors <- c("IFNA1", "IFNA10", "IFNA13", "IFNA14", "IFNA2", "IFNA4", 
+                   "IFNA7", "IFNB1", "IFNE", "IFNG", "IFNZ", "IFNA8", "IFNA5", 
+                   "IFNW1","IFNAR1" ,"IFNAR2", "IFNGR1", "IFNGR2")
+DotPlot(rna, features = IFN_receptors) + RotatedAxis()
+
+# IFN Receptor
+
+# IL6 Family & Receptors
+IL6_family_receptors <- c("CLCF1", "CNTF", "IL11", "IL31", "IL6", "Leptin" ,"LIF", 
+                   "OSM","CNTFR", "IL11RA", "IL6R", "LEPR", "LIFR", "OSMR", "IL31RA")
+DotPlot(rna, features = IL6_family_receptors) + RotatedAxis()
+
+
+# IL10 Family & Receptors
+IL10_family_receptors <- c("IL10", "IL19", "IL20", "IL22", "IL24", "IL28B", 
+                           "IL28A", "IL29", "IL10RA", "IL10RB", "IL20RA", 
+                           "IL20RB", "IL22RA2", "IL22R")
+
+DotPlot(rna, features = IL10_family_receptors) + RotatedAxis()
+
+# TGF beta Family
+#TGF-beta 1/TGFB1TGF-beta 2/TGFB2TGF-beta 3/TGFB3
+# TGF beta Family Receptor
+#ALK-7ATF2CD105/ENGTGFBR1TGFBR2TGFBR3
+
+# Chemokine
+Chemokines <- c("CCL1","CCL11","CCL12","CCL13","CCL14","CCL15","CCL16","CCL17",
+                "CCCL18","CCL19","CCL2","CCL20","CCL21","CCL22","CCCL23","CCL24",
+                "CCL25","CCL26","CCL27","CCL28","CCL3","CCL3L3","CCL4","CCL4L1",
+                "CCL5","CCL6","CCL7","CCL8","CCL9","CX3CL1","CXCL1","CXCL10",
+                "CXCL11","CXCL12","CXCL13","CXCL14","CXCL15","CXCL16","CXCL17",
+                "CXCL2","CXCL3","CXCL4","CXCL5","CXCL6","CXCL7","CXCL9IL8",
+                "CXCL8","XCL1","XCL2","FAM19A1","FAM19A2","FAM19A3","FAM19A4",
+                "FAM19A5")
+DotPlot(rna, features = Chemokines) + RotatedAxis()
+
+# Chemokine Receptor
+Chemokine_receptors <- c("CCR1", "CCR2", "CCR3", "CCR4", "CCR5", "CCR6", "CCR7",
+                         "CCR8", "CCRL1", "CXCR3", "CXCR4", "CXCR5", "CXCR6",
+                         "CXCR7", "CXCR1", "CXCR2")
+DotPlot(rna, features = Chemokine_receptors) + RotatedAxis()
+
+
+y <- DotPlot(rna, features = tumor_reactivity_genes) + RotatedAxis()
+y
+
+DotPlot(rna, features = tumor_reactivity_genes_2) + RotatedAxis()
+
+pdf(paste0(params$out,"figures/Tcell_tumor_reactivity_markers_dotPlot.pdf"))
+y
+dev.off()
+
+```
+
+## T-cell exhustion markers from Sevgi and Christoph (CCRI)
+
+```{r}
+sevgi_christoph_gene_set <- c("PDCD1","CTLA4","NFATC1","SPRY2","BATF","VHL",
+                              "FOXO1","FOXP1","LAG3","CD244","CD160","HAVCR2",
+                              "TRAF1","TNFRSF9","IL10RA","IL10","PRDM1","STAT3",
+                              "IFNA1","IFNB1","IL21","CXCR5","SOCS3","GATA3",
+                              "IKZF2","BCL6","BCL2","TBX21","EOMES")
+
+sevgi_christoph_gene_set <- c("PDCD1","CTLA4","BATF","VHL",
+                              "LAG3","CD244","CD160","HAVCR2",
+                              "IL10RA","PRDM1","GATA3","IKZF2","TBX21","EOMES")
+
+DotPlot(tcells, features = sevgi_christoph_gene_set,dot.scale = 10,
+        cols = c("gray","purple")) + RotatedAxis()
+
+sevgi2024
+
+pdf(paste0(params$out,"figures/Tcell_exhustion_markers_fromSevgi-CCRI_dotPlot.pdf"))
+sevgi2024
+dev.off()
+
+```
+
+## T-cell exhustion markers from Mei et al., 2024
+
+```{r Mei et al., 2024}
+gene_list_mei2024 <- c("TOX", "NR4A1","NR4A2","NR4A3","PDCD1","CTLA4","TIGIT",
+                       "HAVCR2","LAG3","BTLA","CD244","TBX21","EOMES",
+                       "BATF","VHL","FOXO1", "FOXO3", "FOXO4",  "FOXO6","FOXP1",
+                       "ENTPD1","CXCL13",
+                       "MYO1E","PRDM1","WARS","CREM","LAYN","PHLDA1",
+                       "SNAP47","CD38","MYO7A","PARK7",
+                       "NFATC1", "NFATC2", "NFATC3", "NFATC4", "NFAT5")
+
+mei2024 <- DotPlot(tcells, features = gene_list_mei2024) + RotatedAxis()
+mei2024_pd1 <- DotPlot(tcells_pd1, features = gene_list_mei2024) + RotatedAxis()
+
+mei2024
+mei2024_pd1
+
+pdf(paste0(params$out,"figures/Tcell_exhustion_markers_fromMei2024_dotPlot.pdf"))
+mei2024
+dev.off()
+
+```
+
+# ___CCC analysis___
+
+# Fetahu et al., 2023
+```{r original labels}
+
+true_label <- rna@active.ident
+predicted_label <- predicted_labels$labels
+
+rna$original_celltype <- rna@active.ident
+rna$predicted_celltype <- predicted_label
+
+Idents(rna) <- rna@meta.data$original_celltype
+
+
+# CellChat infers the biologically significant cell-cell communication by 
+# assigning each interaction with a probability value and peforming a permutation test. 
+pathway <- c("CXCL", "CCL")
+treat_resist_fetahu_lables <- subset(x = rna, 
+                                     idents = c("T (5)","T (6)","T (9)","T (18)",
+                                                "NB (8)", 
+                                                "M (1)","M (2)","M (10)","M (15)"))
+cellchat <- createCellChat(object = treat_resist_fetahu_lables, 
+                           group.by = "ident", assay = "RNA")
+
+# set the used database in the object
+cellchat@DB <- CellChatDB
+
+# Prepare DB
+CellChatDB <- CellChatDB.human 
+showDatabaseCategory(CellChatDB)
+
+
+# subset the expression data of signaling genes for saving computation cost
+cellchat <- subsetData(cellchat) # This step is necessary even if using the whole database
+cellchat <- identifyOverExpressedGenes(cellchat)
+cellchat <- identifyOverExpressedInteractions(cellchat)
+
+# The number of highly variable ligand-receptor pairs used for signaling inference is 2893 
+
+# project gene expression data onto PPI (Use `raw.use = FALSE` in the function 
+# computeCommunProb() in order to use the projected data)
+cellchat <- projectData(cellchat, PPI.human)
+
+# Changing the parameter for how many cells (per cluster/cell type) have to 
+# express the ligand/receptor to be considered in the analysis
+
+computeAveExpr(cellchat, features = c("PDCD1","CD274"), 
+               type =  "truncatedMean", trim = 0.01)
+
+
+# Compute the communication probability and infer cellular communication network
+cellchat <- computeCommunProb(cellchat,  
+                              #type = "truncatedMean", trim = 0.01,
+                              raw.use = FALSE, population.size = TRUE)
+
+cellchat <- filterCommunication(cellchat, min.cells = 50)
+# population.size = TRUE <- cell numbers per cell type/cluster 
+# used for the probability calculation 
+
+df.net <- subsetCommunication(cellchat)
+df.net.pathways <- subsetCommunication(cellchat, slot.name = "netP" )
+# slot.name = "netP" for nferred communications at the level of signaling pathways
+df.net.pathways
+
+# Infer the cell-cell communication at a signaling pathway level
+cellchat <- computeCommunProbPathway(cellchat)
+
+# Calculate the aggregated cell-cell communication network
+cellchat <- aggregateNet(cellchat)
+
+groupSize <- as.numeric(table(cellchat@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat@net$count, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Number of interactions")
+netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Interaction weights/strength")
+
+# Bubble plot: all the significant interactions (Ligand-Receptor pairs) from 
+# one cell groups (defined by 'sources.use') to other cell groups (defined by 'targets.use')
+
+netVisual_bubble(cellchat, sources.use = 3,  remove.isolate = FALSE)
+netVisual_chord_gene(cellchat, sources.use = 3, slot.name = "netP", legend.pos.x = 10)
+
+# Compute the network centrality scores
+cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP") 
+# the slot 'netP' means the inferred intercellular communication network of signaling pathways
+# Visualize the computed centrality scores using heatmap, allowing ready identification of major signaling roles of cell groups
+netAnalysis_signalingRole_network(cellchat, signaling = pathway, 
+                                  width = 8, height = 2.5, font.size = 10)
+
+# Visualize dominant senders (sources) and receivers (targets) in a 2D space
+
+# Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+gg1 <- netAnalysis_signalingRole_scatter(cellchat)
+#> Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+# Signaling role analysis on the cell-cell communication networks of interest
+gg2 <- netAnalysis_signalingRole_scatter(cellchat, signaling = pathway)
+#> Signaling role analysis on the cell-cell communication network from user's input
+gg1 + gg2
+
+# Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+ht1 <- netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing")
+ht2 <- netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming")
+ht1
+ht2
+
+library(NMF)
+library(ggalluvial)
+
+# run selectK to infer the number of patterns.
+#selectK(cellchat, pattern = "outgoing") # define the number of patterns/cut-off
+
+nPatterns = 3
+cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing", k = nPatterns)
+
+# river plot
+netAnalysis_river(cellchat, pattern = "outgoing")
+
+# dot plot
+netAnalysis_dot(cellchat, pattern = "outgoing")
+
+
+#selectK(cellchat, pattern = "incoming") # define the number of patterns/cut-off
+
+nPatterns = 7
+cellchat <- identifyCommunicationPatterns(cellchat, pattern = "incoming", k = nPatterns)
+
+saveRDS(cellchat, file = paste0(params$out,"/Rds/CCC_analysis_Fetahu2023.Rds"))
+
+
+df.net.fetahu <- subsetCommunication(cellchat,
+                            slot.name = "net")
+
+df.path.fetahu <- subsetCommunication(cellchat,
+                               slot.name = "netP")
+
+# Signalling source: Cluster 9
+filt <- df.net.pathways$source == "T (9)"
+df.net.pathways[filt,]
+
+# Make sure the object@dr contains a low-dimensional space of the data such as 
+# “umap” and “tsne” in order to produce the feature plot of signaling genes. 
+# A new reduced space can be add via the function addReduction.
+
+library("shiny")
+library("bslib")
+runCellChatApp(cellchat)
+
+```
+
+# Lazic et al., 2024
+```{r predicted labels}
+# Change the cell type annotation to predicted labels
+
+true_label <- rna@active.ident
+predicted_label <- predicted_labels$labels
+
+rna$original_celltype <- rna@active.ident
+rna$predicted_celltype <- predicted_label
+
+Idents(rna) <- rna@meta.data$predicted_celltype
+
+
+
+# CellChat infers the biologically significant cell-cell communication by 
+# assigning each interaction with a probability value and peforming a permutation test. 
+
+treat_resist <- c("CD14- PDL1+ MO/DC",
+                  "CD14+ PDL1+ MO", 
+                  "CD14+ PDL1+ MO",
+                  "CD4+ PD1+ T cell",
+                  "CD8+ PDL1lo T cell", 
+                  "CD8+ S100B+ T cell",
+                  "CD8+ GZMB+ PD1lo T cell",
+                  "early SYM-like TC",
+                  "CD44+ mes-like TC")
+
+#treat_resist <- c("early SYM-like TC","CD44+ mes-like TC",
+#                 "CD14+ PDL1+ MO","CD4+ PD1+ T cell")
+
+treat_resist_lazic_lables <- subset(x = rna, 
+                                     idents = treat_resist) #5814  cells
+cellchat_predict <- createCellChat(object = treat_resist_lazic_lables, 
+                           group.by = "ident", assay = "RNA")
+
+table(treat_resist_lazic_lables$predicted_celltype)
+
+# early SYM-like TC -> only 132 cells !!
+
+# Prepare DB
+cellchatDB <-  CellChatDB.human 
+showDatabaseCategory(cellchatDB)
+
+# set the used database in the object
+cellchat_predict@DB <- cellchatDB
+
+
+# subset the expression data of signaling genes for saving computation cost
+cellchat_predict <- subsetData(cellchat_predict) # This step is necessary even if using the whole database
+cellchat_predict <- identifyOverExpressedGenes(cellchat_predict)
+cellchat_predict <- identifyOverExpressedInteractions(cellchat_predict)
+
+# The number of highly variable ligand-receptor pairs used for signaling inference is 2601 
+
+# project gene expression data onto PPI (Use `raw.use = FALSE` in the function 
+# `computeCommunProb()` in order to use the projected data)
+cellchat_predict <- projectData(cellchat_predict, PPI.human)
+
+# Changing the parameter for how many cells (per cluster/cell type) have to 
+# express the ligand/receptor to be considered in the analysis
+
+computeAveExpr(cellchat_predict, features = c("PDCD1","CD274"), 
+               type =  "truncatedMean", trim = 0.01)
+
+
+# Compute the communication probability and infer cellular communication network
+cellchat_predict <- computeCommunProb(cellchat_predict,  
+                              #type = "truncatedMean", trim = 0.01,
+                              raw.use = FALSE, population.size = TRUE)
+
+# population.size = TRUE <- cell numbers per cell type/cluster 
+# used for the probability calculation 
+
+cellchat_predict <- filterCommunication(cellchat_predict, min.cells = 10)
+
+
+df.net <- subsetCommunication(cellchat_predict)
+df.net.pathways <- subsetCommunication(cellchat_predict, slot.name = "netP" )
+# slot.name = "netP" for nferred communications at the level of signaling pathways
+df.net.pathways
+
+# Infer the cell-cell communication at a signaling pathway level
+cellchat_predict <- computeCommunProbPathway(cellchat_predict)
+
+# Calculate the aggregated cell-cell communication network
+cellchat_predict <- aggregateNet(cellchat_predict)
+
+groupSize <- as.numeric(table(cellchat_predict@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat_predict@net$count, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Number of interactions")
+netVisual_circle(cellchat_predict@net$weight, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Interaction weights/strength")
+
+# Bubble plot: all the significant interactions (Ligand-Receptor pairs) from 
+# one cell groups (defined by 'sources.use') to other cell groups (defined by 'targets.use')
+
+netVisual_bubble(cellchat_predict, sources.use = 3,  remove.isolate = FALSE)
+netVisual_chord_gene(cellchat_predict, sources.use = 3, 
+                     slot.name = "netP", legend.pos.x = 10)
+
+# Compute the network centrality scores
+cellchat_predict <- netAnalysis_computeCentrality(cellchat_predict, 
+                                                  slot.name = "netP") 
+# the slot 'netP' means the inferred intercellular communication network of signaling pathways
+# Visualize the computed centrality scores using heatmap, allowing ready identification of major signaling roles of cell groups
+netAnalysis_signalingRole_network(cellchat_predict, signaling = pathway, 
+                                  width = 8, height = 2.5, font.size = 10)
+
+# Visualize dominant senders (sources) and receivers (targets) in a 2D space
+gg1 <- netAnalysis_signalingRole_scatter(cellchat_predict)
+# Signaling role analysis on the cell-cell communication networks of interest
+gg2 <- netAnalysis_signalingRole_scatter(cellchat_predict, signaling = pathway)
+#> Signaling role analysis on the cell-cell communication network from user's input
+gg1
+gg2
+
+# Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+ht1 <- netAnalysis_signalingRole_heatmap(cellchat_predict, pattern = "outgoing")
+ht2 <- netAnalysis_signalingRole_heatmap(cellchat_predict, pattern = "incoming")
+ht1
+ht2
+
+library(NMF)
+library(ggalluvial)
+
+# run selectK to infer the number of patterns.
+#selectK(cellchat_predict, pattern = "outgoing") # define the number of patterns/cut-off
+
+nPatterns = 2
+cellchat_predict <- identifyCommunicationPatterns(cellchat_predict, 
+                                                  pattern = "outgoing", 
+                                                  k = nPatterns)
+
+# river plot
+netAnalysis_river(cellchat_predict, pattern = "outgoing")
+
+# dot plot
+netAnalysis_dot(cellchat_predict, pattern = "outgoing")
+
+
+#selectK(cellchat_predict, pattern = "incoming") # define the number of patterns/cut-off
+
+nPatterns = 2
+cellchat_predict <- identifyCommunicationPatterns(cellchat_predict, 
+                                                  pattern = "incoming", 
+                                                  k = nPatterns)
+
+
+saveRDS(cellchat_predict, file = paste0(params$out,
+                                        "/Rds/CCC_analysis_Lazic2024_v2.Rds"))
+ 
+
+df.net.lazic <- subsetCommunication(cellchat_predict,
+                                    slot.name = "net")
+
+df.path.lazic <- subsetCommunication(cellchat_predict,
+                                     slot.name = "netP")
+
+# runcellchat_predictApp(cellchat_predict)
+
+```
+
+# __Tumor cluster downstream analysis__
+
+```{r}
+fetahu.NB <- readRDS(file = paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
+
+
+# Predicted cell types based on IMC data
+Idents(fetahu.NB) <- fetahu.NB@meta.data$predicted_celltype
+
+# Remove cell type labels with less than 100 cells
+filter <- table(fetahu.NB@meta.data$predicted_celltype) > 100
+filter <- subset(filter, filter == TRUE)
+TC_clusters <- rownames(filter)
+TC_clusters
+
+fetahu.NB.filt <- subset(fetahu.NB, 
+                    idents = TC_clusters, 
+                    invert = FALSE)
+
+fetahu.NB.filt
+
+treat_resist_TC <- c("early SYM-like TC", "CD44+ mes-like TC")
+
+treat_resist_TC_cells <- fetahu.NB.filt@meta.data %>%
+    filter(predicted_celltype == treat_resist_TC[1] | predicted_celltype == treat_resist_TC[2])
+treat_resist_TC_cells <- rownames(treat_resist_TC_cells)
+
+treat_resist_TC_early_SYM <- fetahu.NB.filt@meta.data %>%
+    filter(predicted_celltype == treat_resist_TC[1])
+treat_resist_TC_early_SYM <- rownames(treat_resist_TC_early_SYM)
+
+treat_resist_TC_MES_like <- fetahu.NB.filt@meta.data %>%
+    filter(predicted_celltype == treat_resist_TC[2])
+treat_resist_TC_MES_like <- rownames(treat_resist_TC_MES_like)
+
+treat_resist_TC_MES_like_col = rgb(27,158,119, maxColorValue = 255)
+treat_resist_TC_early_SYM_col = rgb(204,235,197, maxColorValue = 255)
+
+# Visualization
+DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "seurat_clusters")
+DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "sample")
+DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "group")
+DimPlot(fetahu.NB.filt, reduction = "umap",  label = TRUE, repel = TRUE)
+DimPlot(fetahu.NB.filt, reduction = "umap", repel = TRUE,
+        cells.highlight = list("early SYM-like TC" = treat_resist_TC_early_SYM, 
+                               "CD44+ MES-like TC" = treat_resist_TC_MES_like), 
+        cols.highlight = c(treat_resist_TC_early_SYM_col,
+                           treat_resist_TC_MES_like_col), 
+        cols= "grey")
+
+
+
+# find cluster markers with Seurat
+fetahu.NB.filt.markers <- FindAllMarkers(fetahu.NB.filt, 
+                                      min.pct  = 0.1, 
+                                      logfc.threshold = 0.25,
+                                      min.cells.group = 50,
+                                      random.seed = 28)
+fetahu.NB.filt.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 5, order_by = avg_log2FC)
+
+fetahu.NB.filt.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 5, wt = avg_log2FC) -> top5
+DoHeatmap(fetahu.NB.filt, features = top5) + NoLegend()
+
+print(top5, n = 70)
+
+
+library(DElegate)
+
+# find cluster markers with DElegate 
+de_results <- DElegate::findDE(object = fetahu.NB.filt,
+                               group_column = "predicted_celltype")
+marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB.filt,
+                                            group_column = "predicted_celltype")
+dplyr::filter(marker_results, feature_rank < 6)
+
+
+marker_results %>%
+    group_by("group1") %>%
+    top_n(n = 5, wt = log_fc) -> top5_predict
+
+
+print(top5_predict, n = 70)
+
+
+#####################################################################
+
+# Seurat clusters
+Idents(fetahu.NB.filt) <- fetahu.NB.filt@meta.data$seurat_clusters
+
+DoHeatmap(fetahu.NB.filt, features = NB.marker.genes, assay = "RNA")
+
+# find cluster markers with DElegate 
+de_results <- DElegate::findDE(object = fetahu.NB.filt,
+                               group_column = "seurat_clusters")
+marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB.filt,
+                                            group_column = "seurat_clusters")
+top_5 <- dplyr::filter(marker_results, feature_rank < 6)
+
+DoHeatmap(fetahu.NB.filt, features = top_5$feature, assay = "RNA")
+
+```
+
+```{r}
+DoHeatmap(fetahu.NB.filt,features = gene.list)
+
+NB.marker.genes <- c("NCAM1", "B4GALNT1", "L1CAM", "MYCN", "GATA2", 
+                     "DBH", "CHGB", "CHGA", "SYP", "TH", "PHOX2A", "PHOX2B")
+
+DoHeatmap(fetahu.NB, features = NB.marker.genes,assay = "RNA")
+
+top100 <- head(VariableFeatures(fetahu.NB), 100)
+top100
+DoHeatmap(fetahu.NB, features = top100) + NoLegend()
+
+
+saveRDS(fetahu.NB, file = paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
+
+```
+# Dong et al., 2021 dataset
+
+<br>
+
+NB primary tumors at diagnosis
+
+```{r}
+dong <- readRDS(file="/home/out/CancReg/scRNA-seq_stage_M/results/published/data/tumor_data_dong.rds")
+```
+
+
+```{r end}
+sessionInfo()
+```
+

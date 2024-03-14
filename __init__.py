@@ -1,1 +1,0 @@
-from .code.python.Registration.utils import read_channel_names

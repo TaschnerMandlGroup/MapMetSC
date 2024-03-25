@@ -61,6 +61,10 @@ Analysis done in R v4.3.2 in a docker (mapmet_v2024-01-19.Dockerfile) container
 docker exec -it --user root d04b26a70393 /bin/bash
 <br>
 
+-------------------------------------------------------------------------------
+
+PART I
+
 # __Load libraries__
 
 ```{r R packages: install, eval=FALSE, include=FALSE, echo=FALSE}
@@ -113,6 +117,8 @@ library("SingleR")
 library("magrittr")
 library("CellChat")
 library("RColorBrewer")
+library("DElegate")
+library("dplyr")
 ```
 
 # __Input data__
@@ -127,8 +133,8 @@ signaling <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/ccc_signaling_dat
 
 ```{r input data Fetahu et al - new}
 # New analysis with CellChat v2.1.1
-scrna_data <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/rna_decontaminated.rds")
-metadata <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/metadata.rds")
+scrna_data <- readRDS(paste0(params$input,"fetahu.scRNA.2023/data/rna_decontaminated.rds"))
+metadata <- readRDS(paste0(params$input,"fetahu.scRNA.2023/data/metadata.rds"))
 
 nb_metadata <- 
   metadata %>% 
@@ -172,18 +178,20 @@ gene.list <- IMC_markers$gene_name
 # Filter gene expression matrix by the 42 genes used in IMC
 expr_data_39markers <- expr_data[rownames(expr_data) %in% gene.list, ]
 
-#saveRDS(expr_data_39markers, 
-#        file = "/home/out/MapMet/Rds/fetahu2023.expr_data.39markers.IMC.Rds")
+saveRDS(expr_data_39markers, 
+        file = "/home/out/MapMet/Rds/fetahu2023.expr_data.39markers.IMC.Rds")
 
 expr_data_39markers <- as.matrix(expr_data_39markers)
 ```
-
 
 # __CCC analysis__
 
 CellChat v2.1.1
 
-## All metaclusters
+Here i want to check if the new version of CellChat gives the same results as 
+the previous version (comparing to the results in the paper Fetahu et al., 2023)
+
+## __All metaclusters__
 
 ```{r CellChat: meta clusters}
 # New analysis with CellChat v2.1.1
@@ -234,20 +242,13 @@ df_net <-
 df_net
 
 cellchat %>% saveRDS(paste0(params$out,"Rds/fetahu2023.cellchat.rds"))
-df_net %>% saveRDS(paste0(params$out,"/home/out/MapMet/Rds/fetahu2023.signaling.rds"))
+df_net %>% saveRDS(paste0(params$out,"Rds/fetahu2023.signaling.rds"))
 
 ```
-
-Reproduce data from the Fetahu et al., 2023 paper (to check that the new version 
-of cellChat gives similar results)
 
 ```{r CellChat figures}
 library(latex2exp)
 source("/home/data/MapMet/fetahu.scRNA.2023/scripts/csbg-neuroblastoma-d976641/styling.R")
-
-#cellchat <- readRDS("/home/out/MapMet/Rds/fetahu2023.cellchat.rds")
-#sig_data <- readRDS("/home/out/MapMet/Rds/fetahu2023.signaling.rds")
-
 
 ## 3a ----
 
@@ -323,8 +324,7 @@ plot_n_interactions <- function() {
 }
 
 (p <- plot_n_interactions())
-ggsave(paste0(params$out,"/figures/3a_n_interactions.png"), plot = p, width = 6, height = 5)
-
+ggsave(paste0(params$out,"figures/3a_n_interactions.png"), plot = p, width = 6, height = 5)
 
 
 ## 3b ----
@@ -373,7 +373,7 @@ plot_contribution_celltype <- function(cell_type = "NB", signif = 0.05) {
 }
 
 plot_contribution_celltype()
-ggsave(paste0(params$out,"3b_outgoing_comm_score.png"), width = 5.5, height = 5)
+ggsave(paste0(params$out,"figures/3b_outgoing_comm_score.png"), width = 5.5, height = 5)
 
 
 ## 3c ----
@@ -466,14 +466,12 @@ plot_selected_dots <- function(interactions, source_type = "NB") {
 }
 
 plot_selected_dots(c("MDK_NCL", "MDK_LRP1", "MIF_CD74_CXCR4", "MIF_CD74_CD44"))
-ggsave(paste0(params$out,"/figures/3c_dots.png"), height = 3.4, width = 7)
-
-
-
+ggsave(paste0(params$out,"figures/3c_dots.png"), height = 3.4, width = 7)
 ```
 
 
-## __Clustering based on IMC markers__
+
+# __Clustering based on IMC markers__
 
 ```{r heatmap: all cell types}
 # Plotting the gene expression
@@ -537,235 +535,61 @@ marker.expression.v2 <-
 pdf(file = paste0(params$out,"/figures/fetahu.exp.IMC.markers.v2.pdf"))
 marker.expression.v2
 dev.off()
-
-
 ```
-
-## __Tumor cells only__
-
-```{r heatmap: NB cells only, eval=FALSE, include=FALSE}
-
-Idents(rna) <- rna@meta.data$orig.ident
-tumor_cells <- "NB (8)"
-fetahu.39.IMC.markers.NB <- subset(rna, idents = tumor_cells, invert = FALSE)
-fetahu.39.IMC.markers.NB
-
-data <- fetahu.39.IMC.markers.NB[["RNA"]]@data
-filter <- rownames(data) == gene.list
-
-data <- fetahu.39.IMC.markers.NB[["RNA"]]@data %>% as.data.frame() 
-
-data %>% 
-  filter(rownames(data) == gene.list) 
-
-# Convert count data for the 39 markers to a matrix
-mat <- fetahu.39.IMC.markers.NB[["RNA"]]@data %>% as.matrix() 
-
-
-## scale the rows
-mat <- t(scale(t(mat)))
-
-quantile(mat, c(0.1, 0.95), na.rm = T)
-
-
-## make the black color map to 0. the yellow map to highest and the purle map to the lowest
-col_fun = circlize::colorRamp2(c(-0.5, 0,0.5, 1), c("purple", "white", "lightgreen","darkgreen"))
-
-marker.expression <- 
-  Heatmap(mat, name = "IMC markers gene expression",  
-        cluster_columns = TRUE,
-        show_column_dend = TRUE,
-        cluster_column_slices = TRUE,
-        column_title_gp = gpar(fontsize = 8),
-        column_gap = unit(0.5, "mm"),
-        cluster_rows = TRUE,
-        show_row_dend = TRUE,
-        col = col_fun,
-        row_names_gp = gpar(fontsize = 4),
-        column_title_rot = 90,
-        top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))),
-        show_column_names = FALSE,
-        use_raster = TRUE,
-        raster_quality = 4,
-        na_col = "black",)
-
-marker.expression
-
-pdf(file = paste0(params$out,"/figures/fetahu.exp.IMC.markers.NBonly.v1.pdf"))
-marker.expression
-dev.off()
-
-marker.expression.v2 <- 
-  Heatmap(mat, name = "IMC markers gene expression",  
-        cluster_columns = TRUE,
-        show_column_dend = TRUE,
-        cluster_column_slices = TRUE,
-        column_title_gp = gpar(fontsize = 8),
-        column_gap = unit(0.5, "mm"),
-        cluster_rows = TRUE,
-        show_row_dend = TRUE,
-        row_names_gp = gpar(fontsize = 4),
-        column_title_rot = 90,
-        top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))),
-        show_column_names = FALSE,
-        use_raster = TRUE,
-        raster_quality = 4)
-
-pdf(file = paste0(params$out,"/figures/fetahu.exp.IMC.markers.NBonly.v2.pdf"))
-marker.expression.v2
-dev.off()
-
-
-```
-
-```{r sub-cluster the tumor cluster}
-filter <- nb_metadata$cellont_abbr == "NB"
-tumor.metadata <- nb_metadata[filter,]
-
-
-fetahu <- CreateSeuratObject(counts = expr_data, metadata = nb_metadata)
-fetahu@meta.data$orig.ident <- nb_metadata$cellont_abbr
-Idents(fetahu) <- fetahu@meta.data$orig.ident
-tumor_cells <- c("NB (8)")
-fetahu.NB <- subset(fetahu, 
-                    idents = tumor_cells, 
-                    invert = FALSE)
-
-fetahu.NB
-fetahu.NB <- AddMetaData(fetahu.NB,metadata = tumor.metadata)
-
-fetahu.NB[["percent.mt"]] <- PercentageFeatureSet(object = fetahu.NB, 
-                                                  pattern = "^MT-")
-
-DefaultAssay(fetahu.NB) <- "RNA"
-fetahu.NB <- fetahu.NB %>%
-    NormalizeData() %>%
-    FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
-    ScaleData() %>%
-    SCTransform(vars.to.regress = c("percent.mt"))
-
-# Calculate PCs using variable features determined by SCTransform
-fetahu.NB <- RunPCA(fetahu.NB, assay = "SCT", seed.use = 28, npcs = 50)
-PCAPlot(object = fetahu.NB)
-
-
-top2000 <- head(VariableFeatures(fetahu.NB), 4000)
-fetahu.NB <- fetahu.NB[top2000]
-
-fetahu.NB <- RunPCA(fetahu.NB, assay = "SCT", npcs = 10)
-fetahu.NB <- FindNeighbors(fetahu.NB, reduction = "pca", 
-                           dims = 1:5,
-                           k.param = 50)
-
-# tested k nearest neighbors: 10, 50, 80
-# tested number fo dimensions: 5, 10, 20, 50
-
-# define neighbours based on gene expression rather than dimensionlity reduction
-# Compute an SNN on the gene expression level
-#fetahu.NB <- FindNeighbors(fetahu.NB, 
-#                           features = VariableFeatures(object = fetahu.NB))
-
-fetahu.NB <- FindClusters(fetahu.NB, resolution = 0.2,
-                          random.seed = 28,
-                          group.singletons = FALSE) # 4 = Leiden, default = Louvain 
-fetahu.NB <- RunUMAP(fetahu.NB, 
-                     reduction = "pca", 
-                     dims = 1:5,
-                     n.epochs = 500,
-                     min.dist = 0.1,
-                     seed.use = 28)
-
-# Tested minimum distance 0.5, 0.1, 0.01, 0.001
-
-# Visualization
-p1 <- DimPlot(fetahu.NB, reduction = "umap", 
-              group.by = "sample")
-p2 <- DimPlot(fetahu.NB, reduction = "umap",
-              group.by = "group")
-
-p1 + p2
-
-p3 <- DimPlot(fetahu.NB, reduction = "umap", 
-              label = TRUE, repel = TRUE)
-p3
-
-saveRDS(fetahu.NB, 
-        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.cluster.Rds"))
-
-```
-
-# __Sub-setting the tumor cluster markers__
-
-```{r}
-fetahu.NB <- readRDS(file = 
-                       paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
-
-# find cluster markers with Seurat
-fetahu.NB.markers <- FindAllMarkers(fetahu.NB, 
-                                      min.pct  = 0.1, 
-                                      logfc.threshold = 0.25,
-                                      min.cells.group = 50,
-                                      random.seed = 28)
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    slice_max(n = 10, order_by = avg_log2FC)
-
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    top_n(n = 10, wt = avg_log2FC) -> top10
-DoHeatmap(fetahu.NB, features = fetahu.NB.markers$gene) + NoLegend()
-
-library(DElegate)
-
-# find cluster markers with DElegate 
-de_results <- DElegate::findDE(object = fetahu.NB,
-                               group_column = "seurat_clusters")
-marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB,
-                                            group_column = "seurat_clusters")
-dplyr::filter(marker_results, feature_rank < 6)
-
-DoHeatmap(marker_results)
-
-
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    top_n(n = 10, wt = avg_log2FC) -> top10
-
-
-```
-
-```{r}
-
-NB.marker.genes <- c("NCAM1", "B4GALNT1", "L1CAM", "MYCN", "GATA2", 
-                     "DBH", "CHGB", "CHGA", "SYP", "TH", "PHOX2A", "PHOX2B")
-
-DoHeatmap(fetahu.NB, features = NB.marker.genes,assay = "RNA")
-
-top100 <- head(VariableFeatures(fetahu.NB), 100)
-top100
-DoHeatmap(fetahu.NB, features = top100) + NoLegend()
-
-
-var.genes <- as.data.frame(x =  VariableFeatures(fetahu.NB))
-
-colnames(var.genes) <- "var_genes"
-
-overlap = var.genes$var_genes[var.genes$var_genes %in% gene.list]
-overlap
-# I find 6 genes from the IMC markers to be among the 2000 most variable genes
-# in the tumor cluster
-
-```
-
-
-
 
 # __Label transfer__
 
 Transfer cell type annotations from Lazic et al. 2024 to Fetahu et al. 2023
 
+```{r match colors, message=FALSE, fig.height=17}
+col_clusters <- c("fibroblast/endothel"=rgb(212,89,67, maxColorValue = 255),
+                "schwann cell"=rgb(156,76,24, maxColorValue = 255),
+                "MSC"=rgb(174,129,37, maxColorValue = 255),
+                "HPC"=rgb(212,143,75, maxColorValue = 255),
+                "HSPC"=rgb(253,180,98, maxColorValue = 255),
+                "Ki67+ CXCR4+ cell"=rgb(254,215,0, maxColorValue = 255),
+                "LIN- Ki67+"=rgb(254,217,166, maxColorValue = 255),
+                "B cell"=rgb(168,128,250, maxColorValue = 255),
+                "GZMB+ S100B- DC/NK"=rgb(28,146,255, maxColorValue = 255),
+                "GZMB+ S100B+ DC/NK"=rgb(0,255,255, maxColorValue = 255),
+                "CD8+ naive T cell"=rgb(188,128,189, maxColorValue = 255),
+                "DN GZMB+ T cell"=rgb(190,174,212, maxColorValue = 255),
+                "CD8+ S100B+ T cell"=rgb(253,218,236, maxColorValue = 255),
+                "CD8+ GZMB+ PD1lo T cell"=rgb(251,154,153, maxColorValue = 255),
+                "CD4+ naive T cell"=rgb(242,3,137, maxColorValue = 255),
+                "DN T cell"=rgb(251,128,114, maxColorValue = 255),
+                "CD4+ PD1+ T cell"=rgb(254,142,175, maxColorValue = 255),
+                "CD8+ PDL1lo T cell"=rgb(240,0,240, maxColorValue = 255),
+                "CD4+ S100B+ T cell"=rgb(227,26,28, maxColorValue = 255),
+                "dense T cell region"=rgb(145,2,144, maxColorValue = 255),
+                "CD14+ PDL1- MO"=rgb(104,180,238, maxColorValue = 255),
+                "CD14+ PDL1+ MO"=rgb(51,180,180, maxColorValue = 255),
+                "CD14- PDL1- MO/DC"=rgb(39,130,187, maxColorValue = 255),
+                "CD14- PDL1+ MO/DC"=rgb(166,206,227, maxColorValue = 255),
+                "monoblast-like"=rgb(128,177,211, maxColorValue = 255),
+                "myelocyte"=rgb(217,217,217, maxColorValue = 255),          
+                "myeloblast"=rgb(2,0,138, maxColorValue = 255),
+                "neutrophil"=rgb(113,113,113, maxColorValue = 255),
+                "pDC"=rgb(212,241,240, maxColorValue = 255),
+                "band cell"=rgb(169,189,210, maxColorValue = 255),
+                "CD24+ marker-lo TC"=rgb(230,245,201, maxColorValue = 255),
+                "early SYM-like TC"=rgb(204,235,197, maxColorValue = 255),
+                "bridge-like TC"=rgb(198,255,72, maxColorValue = 255),
+                "GATA3hi TC"=rgb(65,208,57, maxColorValue = 255),
+                "CD24- marker-lo TC"=rgb(60,119,97, maxColorValue = 255),
+                "CHGAhi TC"=rgb(102,166,30, maxColorValue = 255),
+                "Ki67hi TC"=rgb(149,144,89, maxColorValue = 255),
+                "CXCR4hi TC"=rgb(210,205,126, maxColorValue = 255),
+                "CD44+ mes-like TC"=rgb(27,158,119, maxColorValue = 255),
+                "GD2lo TC"=rgb(102,194,165, maxColorValue = 255),
+                "neural progenitor"=rgb(238,118,0, maxColorValue = 255),
+                "other"=rgb(255,255,209, maxColorValue = 255))
 
-```{r label transfer}
+pie(rep(1, length(col_clusters)), col=col_clusters, labels=names(col_clusters))
+col_clusters
+```
+
+```{r label transfer - two ways}
 library(BiocParallel)
 library(SingleR)
 library(tidyr)
@@ -821,66 +645,9 @@ saveRDS(predicted_labels,
 
 ```
 
+## __Label transfer: using BM and PT samples (IMC data)__
 
-```{r match colors, message=FALSE, fig.height=17}
-col_clusters <- c(#"GD2+MPO+"=rgb(255,255,162, maxColorValue = 255),
-                #"DTC"=rgb(255,221,57, maxColorValue = 255),
-                #"DTC"=rgb(246,246,0, maxColorValue = 255),
-                "other"=rgb(255,255,209, maxColorValue = 255),
-                "LIN- Ki67+"=rgb(254,217,166, maxColorValue = 255),
-                "HSPC"=rgb(253,180,98, maxColorValue = 255),
-                #"GZMB+ S100B- DC/NK"=rgb(255,137,0, maxColorValue = 255),
-                "GZMB+ S100B- DC/NK"=rgb(28,146,255, maxColorValue = 255),
-                "B cell"=rgb(168,128,250, maxColorValue = 255),
-                "GZMB+ S100B+ DC/NK"=rgb(0,255,255, maxColorValue = 255),
-                #"HLA-DR+ CXCR4+"=rgb(152,78,163, maxColorValue = 255),
-                #"B cell"=rgb(82,75,181, maxColorValue = 255),
-                "CD8+ naive T cell"=rgb(188,128,189, maxColorValue = 255),
-                "DN GZMB+ T cell"=rgb(190,174,212, maxColorValue = 255),
-                "CD8+ S100B+ T cell"=rgb(253,218,236, maxColorValue = 255),
-                "CD8+ GZMB+ PD1lo T cell"=rgb(251,154,153, maxColorValue = 255),
-                "CD4+ naive T cell"=rgb(242,3,137, maxColorValue = 255),
-                "DN T cell"=rgb(251,128,114, maxColorValue = 255),
-                "CD4+ PD1+ T cell"=rgb(254,142,175, maxColorValue = 255),
-                "CD8+ PDL1lo T cell"=rgb(240,0,240, maxColorValue = 255),
-                "CD4+ S100B+ T cell"=rgb(227,26,28, maxColorValue = 255),
-                "dense T cell region"=rgb(145,2,144, maxColorValue = 255),
-                "CD24+ marker-lo TC"=rgb(230,245,201, maxColorValue = 255),
-                "early SYM-like TC"=rgb(204,235,197, maxColorValue = 255),
-                "neural progenitor"=rgb(238,118,0, maxColorValue = 255),
-                "bridge-like TC"=rgb(198,255,72, maxColorValue = 255),
-                "GATA3hi TC"=rgb(65,208,57, maxColorValue = 255),
-                "CD24- marker-lo TC"=rgb(60,119,97, maxColorValue = 255),
-                "CD14+ PDL1- MO"=rgb(104,180,238, maxColorValue = 255),
-                "monoblast-like"=rgb(128,177,211, maxColorValue = 255),
-                "CD14+ PDL1+ MO"=rgb(51,180,180, maxColorValue = 255),
-                "CHGAhi TC"=rgb(102,166,30, maxColorValue = 255),
-                "Ki67hi TC"=rgb(149,144,89, maxColorValue = 255),
-                "CXCR4hi TC"=rgb(210,205,126, maxColorValue = 255),
-                "CD44+ mes-like TC"=rgb(27,158,119, maxColorValue = 255),
-                "GD2lo TC"=rgb(102,194,165, maxColorValue = 255),
-                "CD14- PDL1- MO/DC"=rgb(39,130,187, maxColorValue = 255),
-                "CD14- PDL1+ MO/DC"=rgb(166,206,227, maxColorValue = 255),
-                "pDC"=rgb(212,241,240, maxColorValue = 255),
-                "band cell"=rgb(169,189,210, maxColorValue = 255),
-                "myelocyte"=rgb(217,217,217, maxColorValue = 255),          
-                #"granulocyte"=rgb(251,241,232, maxColorValue = 255),
-                "myeloblast"=rgb(2,0,138, maxColorValue = 255),
-                "neutrophil"=rgb(113,113,113, maxColorValue = 255),
-                "fibroblast/endothel"=rgb(212,89,67, maxColorValue = 255),
-                "schwann cell"=rgb(156,76,24, maxColorValue = 255),
-                "MSC"=rgb(174,129,37, maxColorValue = 255),
-                "HPC"=rgb(212,143,75, maxColorValue = 255),
-                "Ki67+ CXCR4+ cell"=rgb(254,215,0, maxColorValue = 255))
- 
-pie(rep(1, length(col_clusters)), col=col_clusters, labels=names(col_clusters))
- 
-col_clusters
-
-```
-
-using BM and PT samples (IMC data) for label transfer
-```{r heatmap of transferred labels}
+```{r heatmap of transferred labels 1}
 library(viridis)
 library(RColorBrewer)
 set.seed(20230517)
@@ -903,13 +670,16 @@ n <- length(unique(predicted_label))
 table(predicted_label)
 
 
-
 ### downsample
 
+rna <- SetIdent(rna, value = "predicted_celltype")
 rna.small <- subset(rna, downsample = 500)
 rna_mat.small <- GetAssayData(rna.small, assay = "RNA", slot = "data")[common_genes_rna,]
 
-rna_mat_scaled <-  t(scale(t(rna_mat.small)))
+
+rna_mat_scaled <-  t(scale(rna_mat.small))
+
+rna_mat_scaled <- rna_mat_scaled %>% drop_na()
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -934,7 +704,6 @@ quantile(rna_mat_scaled, c(0.1, 0.95))
 col_fun = circlize::colorRamp2(c(-0.5, 0, 0.5, 1), 
                                c("purple", "white", "lightgreen", "darkgreen"))
 
-rna <- SetIdent(rna, value = "predicted_celltype")
 
 x <- Heatmap(rna_mat_scaled, name = "IMC markers gene expression",  
              column_split = factor(cluster_anno),
@@ -1031,7 +800,7 @@ bar_plot
 dev.off()
 
 
-## UMAP colored by cell type and expression - dittoDimPlot
+## UMAP colored by cell type and expression
 p1 <- DimPlot(rna, 
              reduction = "UMAP", 
              pt.size = 0.3, 
@@ -1060,7 +829,8 @@ write.table(compare_cell_types,
 
 ```
 
-using only BM samples (IMC data) for label transfer
+## __Label transfer: using BM samples only (IMC data)__
+
 ```{r heatmap of transferred labels 2}
 library(viridis)
 library(RColorBrewer)
@@ -1236,8 +1006,8 @@ rna$original_celltype
 
 compare_cell_types <- c(rna$orig.ident,rna$predicted_celltype)
 
+saveRDS(object = rna, file="/home/out/MapMet/Rds/Fetahu2023_AfterLabelTransfer.Rds")
 ```
-
 
 # __CCC analysis__
 
@@ -1250,7 +1020,6 @@ ligand-receptor interactions if either ligand or receptor are over-expressed.
 ```{r CellChat: sub-clusters}
 
 Idents(rna) <- rna@meta.data$predicted_celltype
-#nb_metadata$predicted_celltype <- Idents(rna)
 rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")
 
 # New analysis with CellChat v2.1.1
@@ -1332,24 +1101,8 @@ all_clusters <- c("other",
 treat_resist <- c("early SYM-like TC","CD44+ mes-like TC",
                   "CD14+ PDL1+ MO","CD4+ PD1+ T cell")
 
-# single LR dotplot data
-# only cells associated with treatment resistance and progression
-df_net_int <-
-  cellchat %>% 
-  subsetCommunication(thresh = NA) %>% 
-  as_tibble() %>% 
-  group_by(interaction_name_2) %>% 
-  mutate(prob.norm = prob / max(prob)) %>% 
-  ungroup() %>% 
-  mutate(
-    source = factor(source, treat_resist),
-    target = factor(target, treat_resist),
-  )
-
-
-df_net_int
-
 # all cells / clusters
+
 df_net_all <-
   cellchat %>% 
   subsetCommunication(thresh = NA) %>% 
@@ -1362,18 +1115,33 @@ df_net_all <-
     target = factor(target, all_clusters),
   )
 
-
 df_net_all
 
 cellchat %>% 
   saveRDS(paste0(params$out,"Rds/fetahu2023.cellchat.predictedCellTypes.fromIMC.rds"))
 df_net_all %>% 
   saveRDS(paste0(params$out,"Rds/fetahu2023.signaling.predictedCellTypes.fromIMC.rds"))
+
+# only cells associated with treatment resistance and progression
+
+df_net_int <-
+  cellchat %>% 
+  subsetCommunication(thresh = NA) %>% 
+  as_tibble() %>% 
+  group_by(interaction_name_2) %>% 
+  mutate(prob.norm = prob / max(prob)) %>% 
+  ungroup() %>% 
+  mutate(
+    source = factor(source, treat_resist),
+    target = factor(target, treat_resist),
+  )
+
+df_net_int
+
 df_net_int %>% 
   saveRDS(paste0(params$out,"Rds/fetahu2023.signaling.predictedCellTypes.fromIMC.TreatResistCellsOnly.rds"))
 
 ```
-
 
 ```{r CellChat figures: sub-clusters}
 library(latex2exp)
@@ -1894,10 +1662,17 @@ ggsave(paste0(params$out,"/figures/3c_dots.png"), height = 3.4, width = 7)
 ```
 
 
+
+-------------------------------------------------------------------------------
+
+PART II
+
+# __Load data__
+
 ```{r load previous analysis}
 metadata <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/metadata.rds")
 scrna_data <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/rna_decontaminated.rds")
-predicted_labels <- readRDS(file = paste0(params$out,"Rds/20240126_predicted_labels_IMCtoRNA.rds"))
+predicted_labels <- readRDS(file = paste0(params$out,"Rds/20240313_predicted_labels_IMC-BMtoRNA.rds"))
 
 rna <- as.Seurat(scrna_data, data=NULL)
 rna <- RenameAssays(object = rna, originalexp = 'RNA')
@@ -1915,7 +1690,426 @@ rna@meta.data
 ```
 
 
-# __PDL-1+ and PD-1+ immune cells__
+# __Tumor cells only__
+
+```{r sub-cluster the tumor cluster}
+# set cell type annotation to the original annotation
+Idents(rna) <- rna@meta.data$original_celltype
+
+# subset metadata
+filter <- nb_metadata$cellont_abbr == "NB"
+tumor.metadata <- nb_metadata[filter,]
+
+# subset scRNA-seq data 
+# tumor cells only
+
+tumor_cells <- "NB (8)"
+fetahu.NB <- subset(rna, idents = tumor_cells, invert = FALSE)
+fetahu.NB <- AddMetaData(fetahu.NB,metadata = tumor.metadata)
+fetahu.NB
+fetahu.NB[["percent.mt"]] <- PercentageFeatureSet(object = fetahu.NB, 
+                                                  pattern = "^MT-")
+
+DefaultAssay(fetahu.NB) <- "RNA"
+fetahu.NB <- fetahu.NB %>%
+    NormalizeData() %>%
+    FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
+    ScaleData() %>%
+    SCTransform(vars.to.regress = c("percent.mt"))
+
+# Calculate PCs using variable features determined by SCTransform
+fetahu.NB <- RunPCA(fetahu.NB, assay = "SCT", seed.use = 28, npcs = 50)
+PCAPlot(object = fetahu.NB)
+
+# the idea here is that top 2000 variable genes for the whole dataset, won't
+# reflect the heterpgeneity of the tumor cells (might be masked by the immune 
+# cell markers)
+
+top2000 <- head(VariableFeatures(fetahu.NB), 2000)
+fetahu.NB <- fetahu.NB[top2000]
+
+fetahu.NB <- RunPCA(fetahu.NB, assay = "SCT", npcs = 10)
+fetahu.NB <- FindNeighbors(fetahu.NB, reduction = "pca", 
+                           dims = 1:5,
+                           k.param = 50)
+
+# tested k nearest neighbors: 10, 50, 80
+# tested number fo dimensions: 5, 10, 20, 50
+
+# define neighbors based on gene expression rather than dimensionality reduction
+# Compute an SNN on the gene expression level
+
+fetahu.NB <- FindNeighbors(fetahu.NB, 
+                           features = VariableFeatures(object = fetahu.NB))
+
+fetahu.NB <- FindClusters(fetahu.NB, resolution = 0.2,
+                          random.seed = 28,
+                          group.singletons = FALSE) # 4 = Leiden, default = Louvain 
+
+fetahu.NB <- RunUMAP(fetahu.NB, 
+                     reduction = "pca", 
+                     dims = 1:5,
+                     n.epochs = 500,
+                     min.dist = 0.1,
+                     seed.use = 28)
+
+# Tested minimum distance 0.5, 0.1, 0.01, 0.001
+
+# set cell type annotation to the new seurat clusters
+Idents(fetahu.NB) <- fetahu.NB@meta.data$seurat_clusters
+
+# Visualization
+p1 <- DimPlot(fetahu.NB, reduction = "umap", 
+              group.by = "sample")
+p2 <- DimPlot(fetahu.NB, reduction = "umap",
+              group.by = "group")
+p3 <- DimPlot(fetahu.NB, reduction = "umap", 
+              label = TRUE, repel = TRUE)
+
+p1 + p2 + p3
+
+saveRDS(fetahu.NB, 
+        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters_2024-03-25.Rds"))
+```
+
+## __Tumor cluster markers__
+
+### __clustering from 08.03.2024__
+
+```{r markers 1}
+fetahu.NB <- readRDS(file = paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
+
+# set cell type annotation to the new seurat clusters
+Idents(fetahu.NB) <- fetahu.NB@meta.data$seurat_clusters
+
+#1. find cluster markers with Seurat
+fetahu.NB.markers <- FindAllMarkers(fetahu.NB, 
+                                      min.pct  = 0.1, 
+                                      logfc.threshold = 0.25,
+                                      min.cells.group = 50,
+                                      random.seed = 28)
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 10, order_by = avg_log2FC)
+
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+
+DoHeatmap(fetahu.NB, features = top10$gene) + NoLegend()
+
+#2. find cluster markers with DElegate 
+library(DElegate)
+
+de_results <- DElegate::findDE(object = fetahu.NB,
+                               group_column = "seurat_clusters")
+marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB,
+                                            group_column = "seurat_clusters")
+
+marker_results_top5 <- dplyr::filter(marker_results, feature_rank < 6)
+marker_results_top5
+
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 10, order_by = avg_log2FC)
+
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+
+DoHeatmap(fetahu.NB, features = top10$gene) + NoLegend()
+
+saveRDS(fetahu.NB, 
+        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters.Rds"))
+
+# Visualization
+p1 <- DimPlot(fetahu.NB, reduction = "umap", 
+              group.by = "sample")
+p2 <- DimPlot(fetahu.NB, reduction = "umap",
+              group.by = "group")
+p3 <- DimPlot(fetahu.NB, reduction = "umap", 
+              label = TRUE, repel = TRUE)
+
+p1 + p2 + p3
+
+```
+
+```{r tumor markers 1}
+NB.marker.genes <- c("NCAM1", "B4GALNT1", "L1CAM", "MYCN", "GATA2", 
+                     "DBH", "CHGB", "CHGA", "SYP", "TH", "PHOX2A", "PHOX2B")
+
+DoHeatmap(fetahu.NB, features = NB.marker.genes, assay = "RNA")
+
+top100 <- head(VariableFeatures(fetahu.NB), 100)
+top100
+DoHeatmap(fetahu.NB, features = top100) + NoLegend()
+
+var.genes <- as.data.frame(x =  VariableFeatures(fetahu.NB))
+colnames(var.genes) <- "var_genes"
+
+overlap = var.genes$var_genes[var.genes$var_genes %in% gene.list]
+overlap
+# I find 6 genes from the IMC markers to be among the 2000 most variable genes
+# in the tumor cluster
+```
+
+#### __Predicted cell types based on IMC data__
+
+```{r downstream analysis of treatment resistant cells 1}
+Idents(fetahu.NB) <- fetahu.NB@meta.data$predicted_celltype
+
+# Remove cell type labels with less than 100 cells
+filter <- table(fetahu.NB@meta.data$predicted_celltype) > 100
+filter <- subset(filter, filter == TRUE)
+TC_clusters <- rownames(filter)
+TC_clusters
+
+fetahu.NB.filt <- subset(fetahu.NB, 
+                    idents = TC_clusters, 
+                    invert = FALSE)
+
+fetahu.NB.filt
+
+treat_resist_TC <- c("early SYM-like TC", "CD44+ mes-like TC")
+
+treat_resist_TC_cells <- fetahu.NB.filt@meta.data %>%
+    filter(predicted_celltype == treat_resist_TC[1] | predicted_celltype == treat_resist_TC[2])
+treat_resist_TC_cells <- rownames(treat_resist_TC_cells)
+
+treat_resist_TC_early_SYM <- fetahu.NB.filt@meta.data %>%
+    filter(predicted_celltype == treat_resist_TC[1])
+treat_resist_TC_early_SYM <- rownames(treat_resist_TC_early_SYM)
+
+treat_resist_TC_MES_like <- fetahu.NB.filt@meta.data %>%
+    filter(predicted_celltype == treat_resist_TC[2])
+treat_resist_TC_MES_like <- rownames(treat_resist_TC_MES_like)
+
+treat_resist_TC_MES_like_col = rgb(27,158,119, maxColorValue = 255)
+treat_resist_TC_early_SYM_col = rgb(204,235,197, maxColorValue = 255)
+
+# Visualization of early SYM and + tumor cells
+
+DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "seurat_clusters")
+DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "sample")
+DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "group")
+DimPlot(fetahu.NB.filt, reduction = "umap",  label = TRUE, repel = TRUE)
+DimPlot(fetahu.NB.filt, reduction = "umap", repel = TRUE,
+        cells.highlight = list("early SYM-like TC" = treat_resist_TC_early_SYM, 
+                               "CD44+ MES-like TC" = treat_resist_TC_MES_like), 
+        cols.highlight = c(treat_resist_TC_early_SYM_col,
+                           treat_resist_TC_MES_like_col), 
+        cols= "grey")
+
+
+DimPlot(fetahu.NB.filt, reduction = "umap", repel = TRUE,
+        cells.highlight = list("early SYM-like TC" = treat_resist_TC_early_SYM), 
+        cols.highlight = "red", 
+        cols= "grey")
+
+#1. find cluster markers with Seurat
+
+fetahu.NB.filt.markers <- FindAllMarkers(fetahu.NB.filt, 
+                                      min.pct  = 0.1, 
+                                      logfc.threshold = 0.25,
+                                      min.cells.group = 50,
+                                      random.seed = 28)
+fetahu.NB.filt.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 5, order_by = avg_log2FC)
+
+fetahu.NB.filt.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 5, wt = avg_log2FC) -> top5
+DoHeatmap(fetahu.NB.filt, features = top5) + NoLegend()
+
+print(top5, n = 70)
+
+#2. find cluster markers with DElegate 
+
+library(DElegate)
+
+de_results <- DElegate::findDE(object = fetahu.NB.filt,
+                               group_column = "predicted_celltype")
+marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB.filt,
+                                            group_column = "predicted_celltype")
+marker_results_top5 <- dplyr::filter(marker_results, feature_rank < 6)
+marker_results_top5
+
+marker_results %>%
+    group_by("group1") %>%
+    top_n(n = 10, wt = log_fc) -> top10
+```
+
+##### __Original cell types__
+
+```{r}
+Idents(fetahu.NB.filt) <- fetahu.NB.filt@meta.data$seurat_clusters
+
+DoHeatmap(fetahu.NB.filt, features = NB.marker.genes, assay = "RNA")
+
+# find cluster markers with DElegate 
+de_results <- DElegate::findDE(object = fetahu.NB.filt,
+                               group_column = "seurat_clusters")
+marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB.filt,
+                                            group_column = "seurat_clusters")
+top_5 <- dplyr::filter(marker_results, feature_rank < 6)
+
+DoHeatmap(fetahu.NB.filt, features = top_5$feature, assay = "RNA")
+```
+
+
+### __clustering from 25.03.2024__
+
+using the new label transfer (BM samples only)
+
+```{r markers 2}
+fetahu.NB <- readRDS(file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters_2024-03-25.Rds"))
+
+# set cell type annotation to the new seurat clusters
+Idents(fetahu.NB) <- fetahu.NB@meta.data$seurat_clusters
+
+#1. find cluster markers with Seurat
+fetahu.NB.markers <- FindAllMarkers(fetahu.NB, 
+                                      min.pct  = 0.1, 
+                                      logfc.threshold = 0.25,
+                                      min.cells.group = 50,
+                                      random.seed = 28)
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 10, order_by = avg_log2FC)
+
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+
+DoHeatmap(fetahu.NB, features = fetahu.NB.markers$gene) + NoLegend()
+
+#2. find cluster markers with DElegate 
+library(DElegate)
+
+de_results <- DElegate::findDE(object = fetahu.NB,
+                               group_column = "seurat_clusters")
+marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB,
+                                            group_column = "seurat_clusters")
+marker_results_top5 <- dplyr::filter(marker_results, feature_rank < 6)
+
+DoHeatmap(fetahu.NB, feature = marker_results_top5$feature)
+
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 10, order_by = avg_log2FC)
+
+fetahu.NB.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+
+DoHeatmap(fetahu.NB, features = top10$gene) + NoLegend()
+
+saveRDS(fetahu.NB, 
+        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters_2024-03-25.Rds"))
+```
+
+```{r tumor markers 2}
+NB.marker.genes <- c("NCAM1", "B4GALNT1", "L1CAM", "MYCN", "GATA2", 
+                     "DBH", "CHGB", "CHGA", "SYP", "TH", "PHOX2A", "PHOX2B")
+
+DoHeatmap(fetahu.NB, features = NB.marker.genes, assay = "RNA")
+
+top100 <- head(VariableFeatures(fetahu.NB), 100)
+top100
+DoHeatmap(fetahu.NB, features = top100) + NoLegend()
+
+var.genes <- as.data.frame(x =  VariableFeatures(fetahu.NB))
+colnames(var.genes) <- "var_genes"
+```
+
+```{r downstream analysis of treatment resistant cells 2}
+# set cell type annotation to the predicted cell type from IMC data
+Idents(fetahu.NB) <- fetahu.NB@meta.data$predicted_celltype
+
+# Remove cell type labels with less than 100 cells
+filter <- table(fetahu.NB@meta.data$predicted_celltype) > 100
+filter <- subset(filter, filter == TRUE)
+TC_clusters <- rownames(filter)
+TC_clusters
+
+fetahu.NB.filt <- subset(fetahu.NB, 
+                    idents = TC_clusters, 
+                    invert = FALSE)
+
+fetahu.NB.filt
+
+treat_resist_TC <- c("early SYM-like TC", "CD44+ mes-like TC")
+
+treat_resist_TC_cells <- fetahu.NB.filt@meta.data %>%
+    filter(predicted_celltype == treat_resist_TC[1] | predicted_celltype == treat_resist_TC[2])
+treat_resist_TC_cells <- rownames(treat_resist_TC_cells)
+
+treat_resist_TC_early_SYM <- fetahu.NB.filt@meta.data %>%
+    filter(predicted_celltype == treat_resist_TC[1])
+treat_resist_TC_early_SYM <- rownames(treat_resist_TC_early_SYM)
+
+treat_resist_TC_MES_like <- fetahu.NB.filt@meta.data %>%
+    filter(predicted_celltype == treat_resist_TC[2])
+treat_resist_TC_MES_like <- rownames(treat_resist_TC_MES_like)
+
+treat_resist_TC_MES_like_col = rgb(27,158,119, maxColorValue = 255)
+treat_resist_TC_early_SYM_col = rgb(204,235,197, maxColorValue = 255)
+
+# Visualization of early SYM and + tumor cells
+
+DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "seurat_clusters")
+DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "sample")
+DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "group")
+DimPlot(fetahu.NB.filt, reduction = "umap",  label = TRUE, repel = TRUE)
+DimPlot(fetahu.NB.filt, reduction = "umap", repel = TRUE,
+        cells.highlight = list("early SYM-like TC" = treat_resist_TC_early_SYM, 
+                               "CD44+ MES-like TC" = treat_resist_TC_MES_like), 
+        cols.highlight = c(treat_resist_TC_early_SYM_col,
+                           treat_resist_TC_MES_like_col), 
+        cols= "grey")
+
+
+DimPlot(fetahu.NB.filt, reduction = "umap", repel = TRUE,
+        cells.highlight = list("early SYM-like TC" = treat_resist_TC_early_SYM), 
+        cols.highlight = "red", 
+        cols= "grey")
+
+#1. find cluster markers with Seurat
+
+fetahu.NB.filt.markers <- FindAllMarkers(fetahu.NB.filt, 
+                                      min.pct  = 0.1, 
+                                      logfc.threshold = 0.25,
+                                      min.cells.group = 50,
+                                      random.seed = 28)
+fetahu.NB.filt.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 5, order_by = avg_log2FC) -> top5
+
+DoHeatmap(fetahu.NB.filt, features = top5$gene) + NoLegend()
+
+#2. find cluster markers with DElegate 
+
+de_results <- DElegate::findDE(object = fetahu.NB.filt,
+                               group_column = "predicted_celltype")
+
+marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB.filt,
+                                            group_column = "predicted_celltype")
+
+marker_results_top5 <- dplyr::filter(marker_results, feature_rank < 6)
+
+DoHeatmap(fetahu.NB.filt, features = marker_results_top5$feature) + NoLegend()
+
+marker_results %>%
+    group_by("group1") %>%
+    top_n(n = 10, wt = log_fc) 
+
+#saveRDS(fetahu.NB, 
+#       file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters_2024-03-25.Rds"))
+```
+
+
+# __Identify PDL-1+ and PD-1+ immune cells__
 
 ```{r}
 library(viridis)
@@ -1941,56 +2135,8 @@ FeaturePlot(rna, label = TRUE,
 dev.off()
 ```
 
-Violin plot for PD1 expression in T cell clusters
 
-```{r Violin plot}
-features <- "PDCD1"
-tcells <- tcells_pd1 %>%
-  NormalizeData(normalization.method = "LogNormalize") %>%
-  ScaleData()
-
-VlnPlot(tcells,features,log = TRUE)
-DoHeatmap(tcells,features)
-
-
-# PD1+ T cells only
-tcells_pd1 <- tcells_pd1 %>%
-  NormalizeData(normalization.method = "LogNormalize") %>%
-  ScaleData()
-
-VlnPlot(tcells_pd1,features,log = TRUE)
-RidgePlot(tcells_pd1,features,log=TRUE)
-
-# Gene set enrichment score
-
-features <- c("PDCD1","CTLA4","BATF","VHL",
-              "LAG3","CD244","CD160","HAVCR2",
-              "IL10RA","PRDM1","GATA3","IKZF2","TBX21","EOMES")
-
-tcells <- AddModuleScore(tcells, features,
-                         name = "exhustion_markers_set", seed = 28)
-
-tcells_pd1 <- AddModuleScore(tcells_pd1, features,
-                         name = "exhustion_markers_set", seed = 28)
-
-# Plot scores
-FeaturePlot(tcells,
-            features = "exhustion_markers_set1", label = TRUE, repel = TRUE, 
-            order = TRUE, pt.size = 1) +
-            scale_colour_gradientn(colours = brewer.pal(n = 20, name = "RdPu"))
-
-
-VlnPlot(tcells,features = "exhustion_markers_set1", log = TRUE,pt.size = 0)
-
-VlnPlot(tcells_pd1,features = "exhustion_markers_set1", log = TRUE,pt.size = 0)
-
-RidgePlot(tcells_pd1, features = "exhustion_markers_set1", log = TRUE)
-
-```
-
-
-
-CD4, CD8 and GZMB expression in T-cells
+## __CD4, CD8 and GZMB expression in (exhausted) T-cells__
 
 The question here is, which T-cells express PD-1, are these CD8+ or CD4+ T-cells
 and are the cells also positive for GZNB?
@@ -2023,9 +2169,11 @@ FeaturePlot(rna, label = TRUE,
 
 Is PD1 co-expressed with CD8/CD4/GZMB/S100B?
 
+Here is gated for PD1 and S100B expressing T-cells and check the co-expression
+
 ```{r PD1+ T-cells}
 # T-cells
-tcells <- subset(x = rna, idents = c("T (6)","T (9)","T (5)")) # 19126 
+tcells <- subset(x = rna, idents = c("T (6)","T (9)","T (5)")) # 19126 cells
 # with "T (18)" -> 19428  cells
 
 # PD1+ T cells
@@ -2044,18 +2192,24 @@ DotPlot(tcells, features = features) + RotatedAxis()
 DotPlot(tcells_pd1, features = features) + RotatedAxis()
 ```
 
-CD69 - early T cell activation marker
-HLA-DR - late T cell activation marker
-CD4 - T helper cell marker (CD4+ T cells)
-CD8 - cytotoxic T cell marker (CD8+ T cells) 
+## __Expression of activated T-cell markers__
+
 CD3 - predominantly located on T cells
 
-T cell activation (HLA-DR and CD38), 
-senescence and exhaustion (CD57 and PD1), 
-CD57 = B3GAT1 
-CD25 = IL2RA
-differentiation (CD45RA, CCR7, CD28, and CD27), 
-regulatory T cells (Treg, considered as CD25high and CD127low), 
+CD4 - T helper cell marker (CD4+ T cells)
+CD8 - cytotoxic T cell marker (CD8+ T cells) 
+CD25high and CD127low - regulatory T cells (Treg)
+
+CD69 - early T cell activation marker
+HLA-DR - late T cell activation marker
+
+HLA-DR, CD25 (= IL2RA) and CD38 - general T cell activation markers
+CD57 - senescence marker (= B3GAT1)
+PD1 - exhausted T-cells marker
+
+CD45RA, CCR7, CD28, and CD27 - differentiation markers 
+
+Here i am testing if the S100B+ T-cells are activated or exhausted?
 
 ```{r S100B+ T-cells}
 features <- c("CD69","HLA-DRA", "CD38", "IL2RA","B3GAT1", 
@@ -2067,12 +2221,12 @@ DotPlot(tcells_s100b, features = features) + RotatedAxis()
 ```
 
 
-Co-expression of T-cell exhustion markers
+Co-expression of T-cell exhaustion markers
 
 Elevated co-expression of inhibitory checkpoint receptors such as PDCD1, CTLA4, 
 HAVCR2, and LAG3, TOX TFs, PRDM1, NR4A TFs, KLRG1, B3GAT1
 
-CXCL13 is a common marker of PD-1 high CD8+ and PD-1 high CD4+ T cells 
+CXCL13 is a common marker of PD-1 high CD8+ and CD4+ T cells 
 
 High levels of expression of GZMB and FASL but low levels of IFNG and TNF
 
@@ -2094,8 +2248,6 @@ x <- DotPlot(rna, features = features) + RotatedAxis()
 x
 
 DotPlot(tcells, features = features) + RotatedAxis()
-
-
 
 
 pdf(paste0(params$out,"figures/Tcell_exhustion_markers_dotPlot.pdf"))
@@ -2173,7 +2325,7 @@ dev.off()
 
 ```
 
-## T-cell exhustion markers from Sevgi and Christoph (CCRI)
+## __T-cell exhustion markers from Sevgi and Christoph (CCRI)__
 
 ```{r}
 sevgi_christoph_gene_set <- c("PDCD1","CTLA4","NFATC1","SPRY2","BATF","VHL",
@@ -2197,7 +2349,7 @@ dev.off()
 
 ```
 
-## T-cell exhustion markers from Mei et al., 2024
+## __T-cell exhustion markers from Mei et al., 2024__
 
 ```{r Mei et al., 2024}
 gene_list_mei2024 <- c("TOX", "NR4A1","NR4A2","NR4A3","PDCD1","CTLA4","TIGIT",
@@ -2220,9 +2372,57 @@ dev.off()
 
 ```
 
+## __Violin plot for PD1 and exhustion marker expression in T cell clusters__
+
+```{r Violin plot}
+features <- "PDCD1"
+tcells <- tcells_pd1 %>%
+  NormalizeData(normalization.method = "LogNormalize") %>%
+  ScaleData()
+
+VlnPlot(tcells,features,log = TRUE)
+DoHeatmap(tcells,features)
+
+
+# PD1+ T cells only
+tcells_pd1 <- tcells_pd1 %>%
+  NormalizeData(normalization.method = "LogNormalize") %>%
+  ScaleData()
+
+VlnPlot(tcells_pd1,features,log = TRUE)
+RidgePlot(tcells_pd1,features,log=TRUE)
+
+# Gene set enrichment score
+
+features <- c("PDCD1","CTLA4","BATF","VHL",
+              "LAG3","CD244","CD160","HAVCR2",
+              "IL10RA","PRDM1","GATA3","IKZF2","TBX21","EOMES")
+
+tcells <- AddModuleScore(tcells, features,
+                         name = "exhustion_markers_set", seed = 28)
+
+tcells_pd1 <- AddModuleScore(tcells_pd1, features,
+                         name = "exhustion_markers_set", seed = 28)
+
+# Plot scores
+FeaturePlot(tcells,
+            features = "exhustion_markers_set1", label = TRUE, repel = TRUE, 
+            order = TRUE, pt.size = 1) +
+            scale_colour_gradientn(colours = brewer.pal(n = 20, name = "RdPu"))
+
+
+VlnPlot(tcells,features = "exhustion_markers_set1", log = TRUE,pt.size = 0)
+
+VlnPlot(tcells_pd1,features = "exhustion_markers_set1", log = TRUE,pt.size = 0)
+
+RidgePlot(tcells_pd1, features = "exhustion_markers_set1", log = TRUE)
+```
+
+
 # ___CCC analysis___
 
-# Fetahu et al., 2023
+## __Cell type annotation based on: Fetahu et al., 2023__
+
 ```{r original labels}
 
 true_label <- rna@active.ident
@@ -2362,17 +2562,10 @@ df.path.fetahu <- subsetCommunication(cellchat,
 filt <- df.net.pathways$source == "T (9)"
 df.net.pathways[filt,]
 
-# Make sure the object@dr contains a low-dimensional space of the data such as 
-# “umap” and “tsne” in order to produce the feature plot of signaling genes. 
-# A new reduced space can be add via the function addReduction.
-
-library("shiny")
-library("bslib")
-runCellChatApp(cellchat)
-
 ```
 
-# Lazic et al., 2024
+## __Cell type annotation based on: Lazic et al., 2024__
+
 ```{r predicted labels}
 # Change the cell type annotation to predicted labels
 
@@ -2537,129 +2730,13 @@ df.path.lazic <- subsetCommunication(cellchat_predict,
 
 ```
 
-# __Tumor cluster downstream analysis__
-
-```{r}
-fetahu.NB <- readRDS(file = paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
 
 
-# Predicted cell types based on IMC data
-Idents(fetahu.NB) <- fetahu.NB@meta.data$predicted_celltype
+-------------------------------------------------------------------------------
 
-# Remove cell type labels with less than 100 cells
-filter <- table(fetahu.NB@meta.data$predicted_celltype) > 100
-filter <- subset(filter, filter == TRUE)
-TC_clusters <- rownames(filter)
-TC_clusters
+PART III
 
-fetahu.NB.filt <- subset(fetahu.NB, 
-                    idents = TC_clusters, 
-                    invert = FALSE)
-
-fetahu.NB.filt
-
-treat_resist_TC <- c("early SYM-like TC", "CD44+ mes-like TC")
-
-treat_resist_TC_cells <- fetahu.NB.filt@meta.data %>%
-    filter(predicted_celltype == treat_resist_TC[1] | predicted_celltype == treat_resist_TC[2])
-treat_resist_TC_cells <- rownames(treat_resist_TC_cells)
-
-treat_resist_TC_early_SYM <- fetahu.NB.filt@meta.data %>%
-    filter(predicted_celltype == treat_resist_TC[1])
-treat_resist_TC_early_SYM <- rownames(treat_resist_TC_early_SYM)
-
-treat_resist_TC_MES_like <- fetahu.NB.filt@meta.data %>%
-    filter(predicted_celltype == treat_resist_TC[2])
-treat_resist_TC_MES_like <- rownames(treat_resist_TC_MES_like)
-
-treat_resist_TC_MES_like_col = rgb(27,158,119, maxColorValue = 255)
-treat_resist_TC_early_SYM_col = rgb(204,235,197, maxColorValue = 255)
-
-# Visualization
-DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "seurat_clusters")
-DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "sample")
-DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "group")
-DimPlot(fetahu.NB.filt, reduction = "umap",  label = TRUE, repel = TRUE)
-DimPlot(fetahu.NB.filt, reduction = "umap", repel = TRUE,
-        cells.highlight = list("early SYM-like TC" = treat_resist_TC_early_SYM, 
-                               "CD44+ MES-like TC" = treat_resist_TC_MES_like), 
-        cols.highlight = c(treat_resist_TC_early_SYM_col,
-                           treat_resist_TC_MES_like_col), 
-        cols= "grey")
-
-
-
-# find cluster markers with Seurat
-fetahu.NB.filt.markers <- FindAllMarkers(fetahu.NB.filt, 
-                                      min.pct  = 0.1, 
-                                      logfc.threshold = 0.25,
-                                      min.cells.group = 50,
-                                      random.seed = 28)
-fetahu.NB.filt.markers %>%
-    group_by(cluster) %>%
-    slice_max(n = 5, order_by = avg_log2FC)
-
-fetahu.NB.filt.markers %>%
-    group_by(cluster) %>%
-    top_n(n = 5, wt = avg_log2FC) -> top5
-DoHeatmap(fetahu.NB.filt, features = top5) + NoLegend()
-
-print(top5, n = 70)
-
-
-library(DElegate)
-
-# find cluster markers with DElegate 
-de_results <- DElegate::findDE(object = fetahu.NB.filt,
-                               group_column = "predicted_celltype")
-marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB.filt,
-                                            group_column = "predicted_celltype")
-dplyr::filter(marker_results, feature_rank < 6)
-
-
-marker_results %>%
-    group_by("group1") %>%
-    top_n(n = 5, wt = log_fc) -> top5_predict
-
-
-print(top5_predict, n = 70)
-
-
-#####################################################################
-
-# Seurat clusters
-Idents(fetahu.NB.filt) <- fetahu.NB.filt@meta.data$seurat_clusters
-
-DoHeatmap(fetahu.NB.filt, features = NB.marker.genes, assay = "RNA")
-
-# find cluster markers with DElegate 
-de_results <- DElegate::findDE(object = fetahu.NB.filt,
-                               group_column = "seurat_clusters")
-marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB.filt,
-                                            group_column = "seurat_clusters")
-top_5 <- dplyr::filter(marker_results, feature_rank < 6)
-
-DoHeatmap(fetahu.NB.filt, features = top_5$feature, assay = "RNA")
-
-```
-
-```{r}
-DoHeatmap(fetahu.NB.filt,features = gene.list)
-
-NB.marker.genes <- c("NCAM1", "B4GALNT1", "L1CAM", "MYCN", "GATA2", 
-                     "DBH", "CHGB", "CHGA", "SYP", "TH", "PHOX2A", "PHOX2B")
-
-DoHeatmap(fetahu.NB, features = NB.marker.genes,assay = "RNA")
-
-top100 <- head(VariableFeatures(fetahu.NB), 100)
-top100
-DoHeatmap(fetahu.NB, features = top100) + NoLegend()
-
-
-saveRDS(fetahu.NB, file = paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
-
-```
-# Dong et al., 2021 dataset
+# __Dong et al., 2021 dataset__
 
 <br>
 
@@ -2669,6 +2746,8 @@ NB primary tumors at diagnosis
 dong <- readRDS(file="/home/out/CancReg/scRNA-seq_stage_M/results/published/data/tumor_data_dong.rds")
 ```
 
+
+# __Session Info__
 
 ```{r end}
 sessionInfo()

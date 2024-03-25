@@ -2141,37 +2141,53 @@ dev.off()
 The question here is, which T-cells express PD-1, are these CD8+ or CD4+ T-cells
 and are the cells also positive for GZNB?
 
-```{r CD4, CD8 and GZMB expression in T-cells}
+```{r CD4, CD8 and GZMB expression in T-cells, fig.height=5, fig.width=5}
+pdf(paste0(params$out,"figures/FeaturePlot_CD274.pdf"))
 FeaturePlot(rna, label = TRUE,
-            features = "CD274", 
-            order = T, cols = pal)
+            features = "CD274",  # PDL-1
+            order = T, cols = c("gray","red3"), pt.size = 2)
+dev.off()
 
+pdf(paste0(params$out,"figures/FeaturePlot_PDCD1.pdf"))
 FeaturePlot(rna, label = TRUE,
-            features = "PDCD1", 
-            order = T, cols = pal)
+            features = "PDCD1",  # PD-1
+            order = T, cols = c("gray","red"), pt.size = 1)
+dev.off()
 
+pdf(paste0(params$out,"figures/FeaturePlot_CD8A.pdf"))
 FeaturePlot(rna, label = TRUE,
-            features = "CD8A", 
-            order = T, cols = pal)
+            features = "CD8A", # CD8
+            order = T, cols = c("gray","red"), pt.size = 1)
+dev.off()
 
+pdf(paste0(params$out,"figures/FeaturePlot_CD4.pdf"))
 FeaturePlot(rna, label = TRUE,
             features = "CD4", 
-            order = T, cols = pal)
+            order = T, cols = c("gray","red"), pt.size = 1)
+dev.off()
 
+pdf(paste0(params$out,"figures/FeaturePlot_S100B.pdf"))
 FeaturePlot(rna, label = TRUE,
             features = "S100B", 
-            order = T, cols = pal)
- 
+            order = T, cols = c("gray","red"), pt.size = 1)
+dev.off()
+
+pdf(paste0(params$out,"figures/FeaturePlot_GZMB.pdf"))
 FeaturePlot(rna, label = TRUE,
             features = "GZMB", 
-            order = T, cols = pal)
+            order = T, cols = c("gray","red"), pt.size = 1)
+dev.off()
 ```
+
 
 Is PD1 co-expressed with CD8/CD4/GZMB/S100B?
 
 Here is gated for PD1 and S100B expressing T-cells and check the co-expression
 
 ```{r PD1+ T-cells}
+# Change cell type annotation to the original annotation
+Idents(rna) <- rna@meta.data$original_celltype
+
 # T-cells
 tcells <- subset(x = rna, idents = c("T (6)","T (9)","T (5)")) # 19126 cells
 # with "T (18)" -> 19428  cells
@@ -2190,6 +2206,43 @@ tcells_s100b <- subset(x = rna, idents = c("T (6)","T (9)","T (5)"),
 features <- c("CD8A","CD4","GZMB","S100B")
 DotPlot(tcells, features = features) + RotatedAxis()
 DotPlot(tcells_pd1, features = features) + RotatedAxis()
+```
+
+
+```{r scatter plots, fig.height=5, fig.width=5}
+tcells <- NormalizeData(tcells, 
+                        normalization.method = "LogNormalize", 
+                        scale.factor = 10000) # normalize and log transform the read counts
+
+pdf(paste0(params$out,"figures/ScatterPlot_PDCD1vsCD8A.pdf"))
+FeatureScatter(tcells, feature1 = "PDCD1", feature2 = "CD8A")
+dev.off()
+
+pdf(paste0(params$out,"figures/ScatterPlot_PDCD1vsCD4.pdf"))
+FeatureScatter(tcells, feature1 = "PDCD1", feature2 = "CD4")
+dev.off()
+
+pdf(paste0(params$out,"figures/ScatterPlot_PDCD1vsS100B.pdf"))
+FeatureScatter(tcells, feature1 = "PDCD1", feature2 = "S100B")
+dev.off()
+
+pdf(paste0(params$out,"figures/ScatterPlot_PDCD1vsGZMB.pdf"))
+FeatureScatter(tcells, feature1 = "PDCD1", feature2 = "GZMB")
+dev.off()
+
+
+
+pdf(paste0(params$out,"figures/ScatterPlot_S100BvsCD8A.pdf"))
+FeatureScatter(tcells, feature1 = "S100B", feature2 = "CD8A")
+dev.off()
+
+pdf(paste0(params$out,"figures/ScatterPlot_S100BvsCD4.pdf"))
+FeatureScatter(tcells, feature1 = "S100B", feature2 = "CD4")
+dev.off()
+
+pdf(paste0(params$out,"figures/ScatterPlot_S100BvsGZMB.pdf"))
+FeatureScatter(tcells, feature1 = "S100B", feature2 = "GZMB")
+dev.off()
 ```
 
 ## __Expression of activated T-cell markers__
@@ -2728,6 +2781,94 @@ df.path.lazic <- subsetCommunication(cellchat_predict,
 
 # runcellchat_predictApp(cellchat_predict)
 
+```
+
+# __Cell type abundance analysis__
+
+## __Cell type abundance per patient__
+
+```{r}
+pt <- table(rna$original_celltype,rna$sample)
+pt <- as.data.frame(pt)
+pt$Var1 <- as.character(pt$Var1)
+
+ggplot(pt, aes(x = Var2, y = Freq, fill = Var1)) +
+  theme_bw(base_size = 15) +
+  geom_col(position = "fill", width = 0.5) +
+  xlab("Sample") +
+  ylab("Proportion") +
+  
+  theme(legend.title = element_blank())
+```
+## __Cell type abundance per group__
+
+```{r miloR}
+# Subset to TME only
+tumor_cells <- "NB (8)"
+fetahu.NB <- subset(rna, idents = tumor_cells, invert = TRUE)
+
+library("miloR")
+
+# For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
+# This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
+
+rna_milo <- Milo(as.SingleCellExperiment(rna))
+rna_milo
+
+# We need to add the KNN graph to the Milo object. This is stored in the graph slot, in igraph format.
+rna_milo <- buildGraph(rna_milo, k = 30, d = 30, reduced.dim = "PCA")
+
+# Defining representative neighbourhoods on the KNN graph
+rna_milo <- makeNhoods(rna_milo, prop = 0.1, k = 30, d=30, 
+                       refined = TRUE, 
+                       reduced_dims = "PCA")
+
+# plot the distribution of neighbourhood sizes (i.e. how many cells form each neighbourhood) 
+# to evaluate whether the value of k used for graph building was appropriate
+plotNhoodSizeHist(rna_milo)
+
+# Counting cells in neighbourhoods
+rna_milo <- countCells(rna_milo, meta.data = as.data.frame(colData(rna_milo)), sample="sample")
+head(nhoodCounts(rna_milo))
+
+# Defining experimental design
+rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
+rna_design <- distinct(rna_design)
+rownames(rna_design) <- rna_design$sample
+rna_design
+
+# Computing neighbourhood connectivity
+rna_milo <- calcNhoodDistance(rna_milo, d=30, reduced.dim = "PCA")
+
+# DA testing
+da_results <- testNhoods(rna_milo, design = ~ group, 
+                         design.df = rna_design, 
+                         reduced.dim="PCA")
+head(da_results)
+
+da_results %>%
+  arrange(SpatialFDR) %>%
+  head() 
+
+rna_milo <- buildNhoodGraph(rna_milo)
+
+# QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
+
+# Plot single-cell UMAP
+umap_pl <- plotReducedDim(rna_milo, dimred = "umap", colour_by="group", 
+                          text_by = "original_celltype", 
+                          text_size = 3, point_size=0.5) +
+  guides(fill="none")
+
+# Plot neighbourhood graph
+nh_graph_pl <- plotNhoodGraphDA(rna_milo, da_results, layout="umap",alpha=0.1) 
+  
+umap_pl + nh_graph_pl +
+  plot_layout(guides="collect")
+
+da_results <- annotateNhoods(rna_milo, da_results, 
+                             coldata_col = "original_celltype")
+head(da_results)
 ```
 
 

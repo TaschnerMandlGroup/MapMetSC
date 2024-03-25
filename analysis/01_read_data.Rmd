@@ -1,0 +1,202 @@
+---
+title: "Read single-cell and meta-data"
+author: "LazDaria"
+date: "`r Sys.Date()`"
+output: 
+  workflowr::wflow_html
+editor_options:
+  chunk_output_type: inline
+params: 
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/test_data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/test_data/data"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      error=FALSE,
+                      messages=FALSE,
+                      warning=FALSE)
+```
+
+# Read in the data {#read-data}
+
+We  will first read in single-cell data, previously extracted from processed multi-modal (IMC,IF) images in [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP). For reading the data, we use the [imcRtools](https://github.com/BodenmillerGroup/imcRtools) package. This package uses the `read_steinbock` function to read data into a `SpatialExperiment`. The [SpatialExperiment](https://bioconductor.org/packages/release/bioc/html/SingleCellExperiment.html) class [@Righelli2021] is an extension of the `SingleCellExperiment` class. 
+For more information, please refer to `?read_steinbock`. 
+
+## Load libraries
+<details>
+   <summary>Load libraries</summary>
+   
+```{r load-libraries}
+library(imcRtools)
+library(stringr)
+library(RColorBrewer)
+library(circlize)
+library(paletteer)
+library(dittoSeq)
+```
+</details>
+
+## Read single-cell measurement
+
+Replace `path` with the path to the folder where you stored the single-cell data.
+In [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP), we exported single-cell marker measurements based on non-dilated and dilated (by 1px) segmentation masks to capture membrane signals. As both are required in the downstream analysis, we will read in both and combine them into one SPE object saving each expression matrix into one `assays`slot. Measurements based on non-dilated masks will be in the `assays`slot `counts` and the measurements based on dilated masks will be stored in `counts_1px`.
+
+
+```{r read-steinbock, cache=TRUE, dependson=character(0)}
+
+path <- params$input
+
+spe_0px <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'), intensities_folder = "intensities-0px",regionprops_folder = "regionprops", graphs_folder=NULL) 
+spe_1px <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'), intensities_folder = "intensities-1px",regionprops_folder = "regionprops", graphs_folder=NULL) 
+
+#Combine SPE objects into one object
+spe <- spe_0px
+assay(spe, "counts_1px") <- assay(spe_1px, "counts")
+
+#Rename third IF channel (CD45 for PT, CD56 for BM)
+rownames(spe)[44] <- "IF3_CD45/56_mean"
+rownames(spe)[88] <- "IF3_CD45/56_mean-80"
+```
+
+## Read single-cell metadata
+
+We set the `colnames` of the object to generate unique identifiers per cell.
+
+```{r set-colnames}
+colnames(spe) <- paste0(spe$sample_id, "_", spe$ObjectNumber)
+```
+
+When then read sample and patient-specific metadata from an external file. 
+
+```{r read-metadata}
+
+spe$sample <- gsub(spe$sample_id, pattern="([UM]).*", replacement="\\1")
+spe$fm_id <- str_match(spe$sample, "_.*_(.*)_")[,2]  
+spe$tissue <- str_match(spe$sample, "^.*_.*_(.*)")[,2] 
+spe$tissue[spe$tissue=="TU"] = "PT"
+
+meta <- read.csv(file.path(path, 'metadata_complete_anon.csv'))
+
+spe$puncture_side <- meta$Puncture_side[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$infiltration_right <- meta$Infiltration_right[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$infiltration_left <- meta$Infiltration_left[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$exclude <- meta$exclude[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$imc_score <- meta$IMC_score[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$staining_date <- meta$Staining_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$stainer <- meta$Stainer[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$imc_date <- meta$IMC_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$DE_date <- meta$DE_date[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$DE_year <- sub("-.*", "", spe$DE_date)
+spe$control <- meta$control[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$study_id <- meta$Study_ID[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$timepoint <- meta$Timepoint[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$stage <- meta$stage4[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$progression <- meta$efs[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$tod <- meta$tod[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$efs_dur <- meta$efs_dur[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$tod_date <- meta$tod_dat1[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$tod_dur <- meta$tod_dur[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$rez_date <- meta$rez_dat[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$prog_date <- meta$prog_dat[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$event_date <- meta$event_dat[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X1p_loss <- meta$X1p_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X1q_gain <- meta$X1q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X1q_loss <- meta$X1q_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X2p_gain <- meta$X2p_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X3p_loss <- meta$X3p_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X3q_loss <- meta$X3q_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X4p_loss <- meta$X4p_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X6q_loss <- meta$X6q_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X7q_gain <- meta$X7q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$PTPRD_del <- meta$PTPRD_del[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$CDKN2AB_del <- meta$CDKN2AB_del[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X11q_loss <- meta$X11q_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X12q_gain <- meta$X12q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X14q_loss <- meta$X14q_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X17p_loss <- meta$X17p_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X17q_gain <- meta$X17q_gain[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X19p_loss <- meta$X19p_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X19q_loss <- meta$X19q_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$X22q_loss <- meta$X22q_loss[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$MYCN_amp <- meta$MYCN_amp[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$TERT_rear <- meta$TERT_rear[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$ATRX_del <- meta$ATRX_del[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$ALK_amp <- meta$ALK_amp[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$ALK_mut <- meta$ALK_mut[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+
+spe$age_diag <- meta$age_at_diag[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$therapy <- meta$therapy[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+
+spe$ROI <- str_match(spe$sample_id, "^.*_.*_.*_.*_(.*)")[,2]
+spe$year <- gsub(spe$sample_id, pattern="^.*_.*_(.*)-.*", replacement="\\1")
+
+```
+
+We assign color codes to all metadata variables for later visualizations.
+
+```{r define-color-code, message=FALSE}
+
+#Get a named vector a different colors
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+
+#Assign colors to metavariables
+meta_all <- meta
+meta_all <- meta_all[order(meta_all$Study_ID),] #order by study-id
+
+exclude <- replace(x = meta_all$exclude, list =  !meta_all$exclude %in% c('no', 'maybe'), values =  'partially')
+
+DE_year <- sub("-.*", "", meta_all$DE_date)
+
+metadata(spe)$color_vectors$col_sample = setNames(sample(col_vector_433, length(unique(meta_all$Sample))), unique(meta_all$Sample))
+metadata(spe)$color_vectors$col_puncture_side = setNames(brewer.pal(length(unique(meta_all$Puncture_side)), 'Set3'), unique(meta_all$Puncture_side))
+metadata(spe)$color_vectors$col_staining_batch = setNames(sample(col_vector_74, length(unique(meta_all$Staining_date))), unique(meta_all$Staining_date))
+metadata(spe)$color_vectors$col_stainer = setNames(c('#a6611a', '#dfc27d', '#80cdc1', '#018571'), unique(meta_all$Stainer))
+metadata(spe)$color_vectors$col_imc_batch = setNames(sample(col_vector_74, length(unique(meta_all$IMC_date))), unique(meta_all$IMC_date))
+metadata(spe)$color_vectors$col_imc_score = colorRamp2(c(min(meta_all$IMC_score, na.rm = TRUE), max(meta_all$IMC_score, na.rm = TRUE)/2, max(meta_all$IMC_score, na.rm = TRUE)), c("red", "white", "blue")) 
+metadata(spe)$color_vectors$col_study_id = setNames(sample(col_vector_433, length(unique(meta_all$Study_ID))), unique(meta_all$Study_ID))
+metadata(spe)$color_vectors$col_DE_year = setNames(sample(col_vector_74, length(unique(DE_year))), unique(DE_year))
+metadata(spe)$color_vectors$col_timepoint = setNames(c('#7fc97f', '#beaed4', '#fdc086' , '#ffff99', '#386cb0'), unique(meta_all$Timepoint))
+metadata(spe)$color_vectors$col_aberrations = setNames(c('#018571','#a6611a','#80cdc1','#f5f5f5'), c(0,1,3,9))
+metadata(spe)$color_vectors$col_stages = setNames(c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c'), unique(meta_all$stage4))
+metadata(spe)$color_vectors$col_efs_dur = colorRamp2(c(min(meta_all$efs_dur, na.rm = TRUE), max(meta_all$efs_dur, na.rm = TRUE)/2, max(meta_all$efs_dur, na.rm = TRUE)), paletteer_c("ggthemes::Red-Green Diverging", 3))
+metadata(spe)$color_vectors$col_tissue = setNames(c('aquamarine4','brown'), unique(meta_all$Tissue))
+metadata(spe)$color_vectors$col_control = setNames(c('mediumseagreen', 'gray77'), unique(meta_all$control))
+metadata(spe)$color_vectors$col_exclude = setNames(c('#018571','#a6611a','#80cdc1'), unique(exclude))
+metadata(spe)$color_vectors$col_progress = setNames(c('gray77', 'palegreen3', 'firebrick1'), c('n.a.', 0, 1))
+```
+
+Before we save the spatial experiment object, we check the distribution of markers.
+
+```{r plot by staining date}
+
+marker <- 'CD3_Sm152_mean'
+tissue <- unique(spe$tissue)
+
+dittoRidgePlot(spe[,spe$tissue%in%tissue], var = marker, group.by = "tissue", assay = "counts") +
+    ggtitle(paste(marker,  "- per tissue"))
+
+```
+
+## Save object
+
+Finally, the generated data objects can be saved for further downstream processing and analysis.
+
+```{r save-objects-read-data}
+
+assay(spe, "exprs") <- assay(spe, "counts")
+
+saveRDS(spe, file.path(params$output, "spe.rds"))
+```
+
+## Session Info
+
+<details>
+   <summary>SessionInfo</summary>
+   
+```{r, echo = FALSE}
+sessionInfo()
+```
+</details>

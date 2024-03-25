@@ -1,0 +1,16 @@
+.main-container {
+    width: 100%;
+}
+
+.content {
+    width: 100%;
+}
+
+pre {
+  overflow-x: auto; /* Use horizontal scrollbar if needed */
+  max-width: 100%; /* Set a max-width to ensure it doesn't overflow the parent container */
+}
+
+pre code {
+  white-space: pre; /* Preserves whitespace and line breaks as they are in your code */
+}

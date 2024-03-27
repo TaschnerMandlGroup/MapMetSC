@@ -11,7 +11,7 @@
 
 <meta name="author" content="LazDaria" />
 
-<meta name="date" content="2024-03-26" />
+<meta name="date" content="2024-03-27" />
 
 <title>Quality control - Part 2</title>
 
@@ -354,7 +354,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">Quality control - Part 2</h1>
 <h4 class="author">LazDaria</h4>
-<h4 class="date">2024-03-26</h4>
+<h4 class="date">2024-03-27</h4>
 
 </div>
 
@@ -362,7 +362,7 @@ div.tocify {
 <p>
 <button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
 <span class="glyphicon glyphicon-list" aria-hidden="true"></span>
-workflowr <span class="glyphicon glyphicon-exclamation-sign text-danger"
+workflowr <span class="glyphicon glyphicon-ok text-success"
 aria-hidden="true"></span>
 </button>
 </p>
@@ -373,8 +373,8 @@ aria-hidden="true"></span>
 </li>
 <li>
 <a data-toggle="tab" href="#checks"> Checks <span
-class="glyphicon glyphicon-exclamation-sign text-danger"
-aria-hidden="true"></span> </a>
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
+</a>
 </li>
 <li>
 <a data-toggle="tab" href="#versions">Past versions</a>
@@ -383,13 +383,13 @@ aria-hidden="true"></span> </a>
 <div class="tab-content">
 <div id="summary" class="tab-pane fade in active">
 <p>
-<strong>Last updated:</strong> 2024-03-26
+<strong>Last updated:</strong> 2024-03-27
 </p>
 <p>
 <strong>Checks:</strong> <span
-class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 6
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 7
 <span class="glyphicon glyphicon-exclamation-sign text-danger"
-aria-hidden="true"></span> 1
+aria-hidden="true"></span> 0
 </p>
 <p>
 <strong>Knit directory:</strong> <code>MapMetSC/</code> <span
@@ -412,21 +412,18 @@ versions</em> tab lists the development history.
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguncommittedchanges">
-<span class="glyphicon glyphicon-exclamation-sign text-danger"
-aria-hidden="true"></span> <strong>R Markdown file:</strong> uncommitted
-changes </a>
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguptodate">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>R Markdown file:</strong> up-to-date
+</a>
 </p>
 </div>
-<div id="strongRMarkdownfilestronguncommittedchanges"
+<div id="strongRMarkdownfilestronguptodate"
 class="panel-collapse collapse">
 <div class="panel-body">
-<p>The R Markdown is untracked by Git. To know which version of the R
-Markdown file created these results, you’ll want to first commit it to
-the Git repo. If you’re still working on the analysis, you can ignore
-this warning. When you’re finished, you can run
-<code>wflow_publish</code> to commit the R Markdown file and build the
-HTML.</p>
+<p>Great! Since the R Markdown file has been committed to the Git
+repository, you know the exact version of the code that produced these
+results.</p>
 </div>
 </div>
 </div>
@@ -517,15 +514,15 @@ project makes it easier to run your code on other machines.</p>
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettree1d25af4dd1578bc679230ee6f515532d4dd3672etargetblank1d25af4a">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettreeb1b42ebeb24eb9cb0b628f746f029e3e474bac7ctargetblankb1b42eba">
 <span class="glyphicon glyphicon-ok text-success"
 aria-hidden="true"></span> <strong>Repository version:</strong>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/1d25af4dd1578bc679230ee6f515532d4dd3672e" target="_blank">1d25af4</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/b1b42ebeb24eb9cb0b628f746f029e3e474bac7c" target="_blank">b1b42eb</a>
 </a>
 </p>
 </div>
 <div
-id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettree1d25af4dd1578bc679230ee6f515532d4dd3672etargetblank1d25af4a"
+id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettreeb1b42ebeb24eb9cb0b628f746f029e3e474bac7ctargetblankb1b42eba"
 class="panel-collapse collapse">
 <div class="panel-body">
 <p>
@@ -535,7 +532,7 @@ reproducibility.
 </p>
 <p>
 The results in this page were generated with repository version
-<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/1d25af4dd1578bc679230ee6f515532d4dd3672e" target="_blank">1d25af4</a>.
+<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/b1b42ebeb24eb9cb0b628f746f029e3e474bac7c" target="_blank">b1b42eb</a>.
 See the <em>Past versions</em> tab to see a history of the changes made
 to the R Markdown and HTML files.
 </p>
@@ -550,11 +547,7 @@ were generated:
 </p>
 <pre><code>
 Untracked files:
-    Untracked:  analysis/03_QC_2.Rmd
-
-Unstaged changes:
-    Modified:   analysis/01_read_data.Rmd
-    Modified:   analysis/02_QC_1.Rmd
+    Untracked:  analysis/04_phenotyping.Rmd
 
 </code></pre>
 <p>
@@ -569,10 +562,74 @@ have uncommitted changes.
 <hr>
 </div>
 <div id="versions" class="tab-pane fade">
+
 <p>
-There are no past versions. Publish this analysis with
-<code>wflow_publish()</code> to start tracking its development.
+These are the previous versions of the repository in which changes were
+made to the R Markdown (<code>analysis/03_QC_2.Rmd</code>) and HTML
+(<code>docs/03_QC_2.html</code>) files. If you’ve configured a remote
+Git repository (see <code>?wflow_git_remote</code>), click on the
+hyperlinks in the table below to view the files as they were in that
+past version.
 </p>
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+File
+</th>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+<th>
+Message
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/analysis/03_QC_2.Rmd" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+<td>
+03_QC_2.Rmd
+</td>
+</tr>
+<tr>
+<td>
+html
+</td>
+<td>
+<a href="https://rawcdn.githack.com/TaschnerMandlGroup/MapMet/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/03_QC_2.html" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+<td>
+03_QC_2.Rmd
+</td>
+</tr>
+</tbody>
+</table>
+</div>
 <hr>
 </div>
 </div>
@@ -719,6 +776,43 @@ plot &lt;- plot_grid(plotlist = plot_list, nrow=ceiling(ncol(df)/3), ncol=3) #ch
 
 plot</code></pre>
 <p><img src="figure/03_QC_2.Rmd/plot-histograms-bm-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-plot-histograms-bm-1">
+Past versions of plot-histograms-bm-1.png
+</button>
+</p>
+<div id="fig-plot-histograms-bm-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/03_QC_2.Rmd/plot-histograms-bm-1.png" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <p>In the plots above, the distributions are skewed indicating the
 presence of outliers. Let’s examine these outliers cells. We will
 identify their cell ID and check their morphology in images and
@@ -764,6 +858,43 @@ p2 &lt;- ggdraw(mask_plot$plot, clip = &quot;on&quot;)
 
 plot_grid(p1, p2)</code></pre>
 <p><img src="figure/03_QC_2.Rmd/plot-grid-1-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-plot-grid-1-1">
+Past versions of plot-grid-1-1.png
+</button>
+</p>
+<div id="fig-plot-grid-1-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/03_QC_2.Rmd/plot-grid-1-1.png" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <p>In the images above, we can see that segmentation artifacts occur,
 where no clear cell borders can be identified. For BM, we determined an
 upper threshold of <strong>15,600</strong> and a lower threshold of
@@ -795,6 +926,43 @@ plot &lt;- plot_grid(plotlist = plot_list, nrow=ceiling(ncol(df)/3), ncol=3) #ch
 
 plot</code></pre>
 <p><img src="figure/03_QC_2.Rmd/plot-histograms-pt-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-plot-histograms-pt-1">
+Past versions of plot-histograms-pt-1.png
+</button>
+</p>
+<div id="fig-plot-histograms-pt-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/03_QC_2.Rmd/plot-histograms-pt-1.png" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <p>As described, PT-derived nuclei have an inherently different
 morphology. In the histograms above we can see that they are smaller and
 less round than BM-derived nuclei. Again, we explore outlier cells to
@@ -822,8 +990,7 @@ spe &lt;- spe[,!outliers]
 #Rebuild the matrix of morphological features of the remaining cells
 morph_mat &lt;- as.matrix(t(colData(spe)[,morph_names]))
 rownames(morph_mat) &lt;- gsub(&#39;-0&#39;,&#39;&#39;,rownames(morph_mat))</code></pre>
-<p>We excluded <code>r</code> sum(outliers)` cells based on these
-thresholds.</p>
+<p>We excluded 8847 cells based on these thresholds.</p>
 </div>
 <div id="clipping-and-scaling-of-morphological-features"
 class="section level2">
@@ -871,8 +1038,45 @@ for(i in 1: ncol(df)){
 plot &lt;- plot_grid(plotlist = plot_list, nrow=ceiling(ncol(df)/3), ncol=3) #change this to the number of morphological features
 
 plot</code></pre>
-<p><img src="figure/03_QC_2.Rmd/histograms-separate-x-axis-1.png" width="672" style="display: block; margin: auto;" />
-…and visualize the masks in one PT and one BM sample.</p>
+<p><img src="figure/03_QC_2.Rmd/histograms-separate-x-axis-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-histograms-separate-x-axis-1">
+Past versions of histograms-separate-x-axis-1.png
+</button>
+</p>
+<div id="fig-histograms-separate-x-axis-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/03_QC_2.Rmd/histograms-separate-x-axis-1.png" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>…and visualize the masks in one PT and one BM sample.</p>
 <pre class="r"><code>morph_names_clipped &lt;- c(&quot;area_clipped&quot;, &quot;solidity_clipped&quot;, &quot;aspect_ratio_clipped&quot;)
 
 masks &lt;- loadImages(c(file.path(params$input, &quot;masks/20220525_20220223_06-070_BM_003.tif&quot;),
@@ -897,10 +1101,121 @@ for (m in 1:length(morph_names_clipped)){
 }</code></pre>
 <pre><code>[1] &quot;Plotting: area_clipped&quot;</code></pre>
 <p><img src="figure/03_QC_2.Rmd/visualize-clipped-morph-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-visualize-clipped-morph-1">
+Past versions of visualize-clipped-morph-1.png
+</button>
+</p>
+<div id="fig-visualize-clipped-morph-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/03_QC_2.Rmd/visualize-clipped-morph-1.png" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <pre><code>[1] &quot;Plotting: solidity_clipped&quot;</code></pre>
 <p><img src="figure/03_QC_2.Rmd/visualize-clipped-morph-2.png" width="672" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-visualize-clipped-morph-2">
+Past versions of visualize-clipped-morph-2.png
+</button>
+</p>
+<div id="fig-visualize-clipped-morph-2" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/03_QC_2.Rmd/visualize-clipped-morph-2.png" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <pre><code>[1] &quot;Plotting: aspect_ratio_clipped&quot;</code></pre>
 <p><img src="figure/03_QC_2.Rmd/visualize-clipped-morph-3.png" width="672" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-visualize-clipped-morph-3">
+Past versions of visualize-clipped-morph-3.png
+</button>
+</p>
+<div id="fig-visualize-clipped-morph-3" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/03_QC_2.Rmd/visualize-clipped-morph-3.png" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 </div>
 <div id="save-object" class="section level2">
 <h2>Save object</h2>

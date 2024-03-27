@@ -11,7 +11,7 @@
 
 <meta name="author" content="LazDaria" />
 
-<meta name="date" content="2024-03-26" />
+<meta name="date" content="2024-03-27" />
 
 <title>Quality control - Part 1</title>
 
@@ -354,7 +354,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">Quality control - Part 1</h1>
 <h4 class="author">LazDaria</h4>
-<h4 class="date">2024-03-26</h4>
+<h4 class="date">2024-03-27</h4>
 
 </div>
 
@@ -362,7 +362,7 @@ div.tocify {
 <p>
 <button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
 <span class="glyphicon glyphicon-list" aria-hidden="true"></span>
-workflowr <span class="glyphicon glyphicon-exclamation-sign text-danger"
+workflowr <span class="glyphicon glyphicon-ok text-success"
 aria-hidden="true"></span>
 </button>
 </p>
@@ -373,8 +373,8 @@ aria-hidden="true"></span>
 </li>
 <li>
 <a data-toggle="tab" href="#checks"> Checks <span
-class="glyphicon glyphicon-exclamation-sign text-danger"
-aria-hidden="true"></span> </a>
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
+</a>
 </li>
 <li>
 <a data-toggle="tab" href="#versions">Past versions</a>
@@ -383,13 +383,13 @@ aria-hidden="true"></span> </a>
 <div class="tab-content">
 <div id="summary" class="tab-pane fade in active">
 <p>
-<strong>Last updated:</strong> 2024-03-26
+<strong>Last updated:</strong> 2024-03-27
 </p>
 <p>
 <strong>Checks:</strong> <span
-class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 6
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 7
 <span class="glyphicon glyphicon-exclamation-sign text-danger"
-aria-hidden="true"></span> 1
+aria-hidden="true"></span> 0
 </p>
 <p>
 <strong>Knit directory:</strong> <code>MapMetSC/</code> <span
@@ -412,21 +412,18 @@ versions</em> tab lists the development history.
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguncommittedchanges">
-<span class="glyphicon glyphicon-exclamation-sign text-danger"
-aria-hidden="true"></span> <strong>R Markdown file:</strong> uncommitted
-changes </a>
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguptodate">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>R Markdown file:</strong> up-to-date
+</a>
 </p>
 </div>
-<div id="strongRMarkdownfilestronguncommittedchanges"
+<div id="strongRMarkdownfilestronguptodate"
 class="panel-collapse collapse">
 <div class="panel-body">
-<p>The R Markdown file has unstaged changes. To know which version of
-the R Markdown file created these results, you’ll want to first commit
-it to the Git repo. If you’re still working on the analysis, you can
-ignore this warning. When you’re finished, you can run
-<code>wflow_publish</code> to commit the R Markdown file and build the
-HTML.</p>
+<p>Great! Since the R Markdown file has been committed to the Git
+repository, you know the exact version of the code that produced these
+results.</p>
 </div>
 </div>
 </div>
@@ -517,15 +514,15 @@ project makes it easier to run your code on other machines.</p>
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettree1d25af4dd1578bc679230ee6f515532d4dd3672etargetblank1d25af4a">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettreeb1b42ebeb24eb9cb0b628f746f029e3e474bac7ctargetblankb1b42eba">
 <span class="glyphicon glyphicon-ok text-success"
 aria-hidden="true"></span> <strong>Repository version:</strong>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/1d25af4dd1578bc679230ee6f515532d4dd3672e" target="_blank">1d25af4</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/b1b42ebeb24eb9cb0b628f746f029e3e474bac7c" target="_blank">b1b42eb</a>
 </a>
 </p>
 </div>
 <div
-id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettree1d25af4dd1578bc679230ee6f515532d4dd3672etargetblank1d25af4a"
+id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettreeb1b42ebeb24eb9cb0b628f746f029e3e474bac7ctargetblankb1b42eba"
 class="panel-collapse collapse">
 <div class="panel-body">
 <p>
@@ -535,7 +532,7 @@ reproducibility.
 </p>
 <p>
 The results in this page were generated with repository version
-<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/1d25af4dd1578bc679230ee6f515532d4dd3672e" target="_blank">1d25af4</a>.
+<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/b1b42ebeb24eb9cb0b628f746f029e3e474bac7c" target="_blank">b1b42eb</a>.
 See the <em>Past versions</em> tab to see a history of the changes made
 to the R Markdown and HTML files.
 </p>
@@ -549,9 +546,8 @@ depends on. Below is the status of the Git repository when the results
 were generated:
 </p>
 <pre><code>
-Unstaged changes:
-    Modified:   analysis/01_read_data.Rmd
-    Modified:   analysis/02_QC_1.Rmd
+Ignored files:
+    Ignored:    analysis/figure/
 
 </code></pre>
 <p>
@@ -597,6 +593,57 @@ Message
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/b1b42ebeb24eb9cb0b628f746f029e3e474bac7c/analysis/02_QC_1.Rmd" target="_blank">b1b42eb</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+<td>
+02_QC_1.Rmd
+</td>
+</tr>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/analysis/02_QC_1.Rmd" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+<td>
+03_QC_2.Rmd
+</td>
+</tr>
+<tr>
+<td>
+html
+</td>
+<td>
+<a href="https://rawcdn.githack.com/TaschnerMandlGroup/MapMet/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/02_QC_1.html" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+<td>
+03_QC_2.Rmd
+</td>
+</tr>
 <tr>
 <td>
 Rmd
@@ -955,6 +1002,17 @@ Date
 <tbody>
 <tr>
 <td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/02_QC_1.Rmd/data-visualization-1.png" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+</tr>
+<tr>
+<td>
 <a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/02_QC_1.Rmd/data-visualization-1.png" target="_blank">1d25af4</a>
 </td>
 <td>
@@ -976,15 +1034,15 @@ Rphenograph_out &lt;- Rphenoannoy(mat, k = 45)</code></pre>
 <pre><code>Run Rphenograph starts:
   -Input data of 2033550 rows and 42 columns
   -k is set to 45</code></pre>
-<pre><code>  Finding nearest neighbors...DONE ~ 883.547 s
+<pre><code>  Finding nearest neighbors...DONE ~ 881.98 s
   Compute jaccard coefficient between nearest-neighbor sets...</code></pre>
 <pre><code>Presorting knn...</code></pre>
-<pre><code>presorting DONE ~ 154.034 s
+<pre><code>presorting DONE ~ 151.725 s
   Start jaccard
-DONE ~ 8.335 s
-  Build undirected graph from the weighted links...DONE ~ 65.166 s
-  Run louvain clustering on the graph ...DONE ~ 2110.57 s</code></pre>
-<pre><code>Run Rphenograph DONE, totally takes 3067.618s.</code></pre>
+DONE ~ 8.247 s
+  Build undirected graph from the weighted links...DONE ~ 67.224 s
+  Run louvain clustering on the graph ...DONE ~ 2115.043 s</code></pre>
+<pre><code>Run Rphenograph DONE, totally takes 3072.494s.</code></pre>
 <pre><code>  Return a community class
   -Modularity value: 0.8756466 
   -Number of clusters: 46</code></pre>
@@ -1040,6 +1098,17 @@ Date
 <tbody>
 <tr>
 <td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/02_QC_1.Rmd/data-visualization-2-1.png" target="_blank">89a6198</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+</tr>
+<tr>
+<td>
 <a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/02_QC_1.Rmd/data-visualization-2-1.png" target="_blank">1d25af4</a>
 </td>
 <td>
@@ -1087,185 +1156,35 @@ mcols(img) &lt;- DataFrame(sample_id = names(img))
 channelNames(img) &lt;- rownames(spe)[1:44]
 
 c = 11
-celltype &lt;- spe[,spe$pg_clusters_lostcells == c &amp; spe$sample_id == max_sample]
+tmp &lt;- spe[,spe$sample_id == max_sample]
+tmp$lost_cell &lt;- &quot;no&quot;
+tmp[,tmp$pg_clusters_lostcells==c]$lost_cell &lt;- &quot;yes&quot;
 
 dapi_plot &lt;- plotPixels(img, 
                        colour_by = &quot;IF1_DAPI_mean&quot;,
                        bcg = list(IF1_DAPI_mean = c(0, 1, 1)),
                        legend=NULL,
                        return_plot = TRUE)</code></pre>
-<p><img src="figure/02_QC_1.Rmd/sanity-check-2-1.png" width="672" style="display: block; margin: auto;" /></p>
-<p>
-<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-sanity-check-2-1">
-Past versions of sanity-check-2-1.png
-</button>
-</p>
-<div id="fig-sanity-check-2-1" class="collapse">
-<div class="table-responsive">
-<table class="table table-condensed table-hover">
-<thead>
-<tr>
-<th>
-Version
-</th>
-<th>
-Author
-</th>
-<th>
-Date
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/02_QC_1.Rmd/sanity-check-2-1.png" target="_blank">1d25af4</a>
-</td>
-<td>
-LazDaria
-</td>
-<td>
-2024-03-25
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
 <pre class="r"><code>iridium_plot &lt;- plotPixels(img, 
                        colour_by = &quot;DNA1_Ir193_mean&quot;,
                        bcg = list(DNA1_Ir193_mean = c(0, 1, 1)),
                        legend=NULL,
                        return_plot = TRUE)</code></pre>
-<p><img src="figure/02_QC_1.Rmd/sanity-check-2-2.png" width="672" style="display: block; margin: auto;" /></p>
-<p>
-<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-sanity-check-2-2">
-Past versions of sanity-check-2-2.png
-</button>
-</p>
-<div id="fig-sanity-check-2-2" class="collapse">
-<div class="table-responsive">
-<table class="table table-condensed table-hover">
-<thead>
-<tr>
-<th>
-Version
-</th>
-<th>
-Author
-</th>
-<th>
-Date
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/02_QC_1.Rmd/sanity-check-2-2.png" target="_blank">1d25af4</a>
-</td>
-<td>
-LazDaria
-</td>
-<td>
-2024-03-25
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
 <pre class="r"><code>mask_plot &lt;- plotCells(masks,
-                       object = celltype, 
+                       object = tmp, 
                        cell_id = &quot;ObjectNumber&quot;, 
                        img_id = &quot;sample_id&quot;,
-                       colour_by = &quot;pg_clusters_lostcells&quot;,
-                       colour = list(celltype = c(celltype = &quot;red&quot;)),
+                       colour_by = &quot;lost_cell&quot;,
+                       colour = list(lost_cell = c(&quot;no&quot; = &quot;gray&quot;, &quot;yes&quot; = &quot;red&quot;)),
                        missing_colour = &quot;white&quot;,
-                       #save_plot = list(filename = file.path(params$output, paste0(max_sample, &quot;_&quot;, c, &quot;.png&quot;))),
                        legend=NULL,
                        return_plot = TRUE)</code></pre>
-<p><img src="figure/02_QC_1.Rmd/sanity-check-2-3.png" width="672" style="display: block; margin: auto;" /></p>
-<p>
-<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-sanity-check-2-3">
-Past versions of sanity-check-2-3.png
-</button>
-</p>
-<div id="fig-sanity-check-2-3" class="collapse">
-<div class="table-responsive">
-<table class="table table-condensed table-hover">
-<thead>
-<tr>
-<th>
-Version
-</th>
-<th>
-Author
-</th>
-<th>
-Date
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/02_QC_1.Rmd/sanity-check-2-3.png" target="_blank">1d25af4</a>
-</td>
-<td>
-LazDaria
-</td>
-<td>
-2024-03-25
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
 <pre class="r"><code>p1 &lt;- ggdraw(dapi_plot$plot, clip = &quot;on&quot;)
 p2 &lt;- ggdraw(iridium_plot$plot, clip = &quot;on&quot;)
 p3 &lt;- ggdraw(mask_plot$plot, clip = &quot;on&quot;)
 
 plot_grid(p1, p2, p3)</code></pre>
-<p><img src="figure/02_QC_1.Rmd/sanity-check-2-4.png" width="672" style="display: block; margin: auto;" /></p>
-<p>
-<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-sanity-check-2-4">
-Past versions of sanity-check-2-4.png
-</button>
-</p>
-<div id="fig-sanity-check-2-4" class="collapse">
-<div class="table-responsive">
-<table class="table table-condensed table-hover">
-<thead>
-<tr>
-<th>
-Version
-</th>
-<th>
-Author
-</th>
-<th>
-Date
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/02_QC_1.Rmd/sanity-check-2-4.png" target="_blank">1d25af4</a>
-</td>
-<td>
-LazDaria
-</td>
-<td>
-2024-03-25
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
+<p><img src="figure/02_QC_1.Rmd/plot-grid-1.png" width="672" style="display: block; margin: auto;" /></p>
 <p>By comparing the DAPI image, the Iridium image and the binary mask
 (highlighting cells from cluster 11 in blue), we see that cluster 11
 definitely represents the cluster of lost cells. We excluded 30285 cells

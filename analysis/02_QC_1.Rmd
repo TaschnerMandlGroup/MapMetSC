@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/test_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/test_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
 ---
 
 ```{r setup, include=FALSE}
@@ -46,7 +46,8 @@ library(gridGraphics)
 We will first read the spatial experiment object (SPE) generated in the [read data section](#read-data). Please make sure, `path` points to the folder where you stored the SPE object.
 
 
-```{r read-steinbock, cache=TRUE, dependson=character(0)}
+```{r read-steinbock}
+
 path <- params$output
 spe <- readRDS(file.path(path,"spe.rds"))
 ```
@@ -69,14 +70,10 @@ intensity_mat_mean_80 <- intensity_mat[grepl("mean-80", rownames(intensity_mat))
 intensity_mat_imc <- intensity_mat_mean_80[!grepl("IF2_GD2|IF3_CD45/56|DAPI", rownames(intensity_mat_mean_80)),]
 non_zeros <- as.logical(colSums(intensity_mat_imc)!=0)
 
-length(non_zeros[non_zeros==FALSE])
-
 spe <- spe[, non_zeros]
 mat <- intensity_mat_mean_80[, non_zeros]
-
-n <- length(non_zeros[non_zeros==FALSE])
 ```
-We excluded `r n` cells in this first quality control step.
+We excluded `r length(non_zeros[non_zeros==FALSE])` cells in this first quality control step.
 
 For the next quality control step, we will only consider IMC and nuclear IF channels. 
 ```{r cell-exclusion-2}
@@ -88,15 +85,16 @@ Although, we excluded all cells with zero mean intensities in all IMC channels, 
 
 ```{r data-visualization, fig.width=11, fig.height=9}
 #named color vectors
-qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
-col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+qual_col_pals <- brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector_433 <- colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 
-col_sample = setNames(sample(col_vector_433, length(unique(colnames(mat)))), unique(colnames(mat)))
+sample_names <- sub("_[^_]+$", "", colnames(mat))
+col_sample <- setNames(sample(col_vector_433, length(unique(sample_names))), unique(sample_names))
 
 set.seed(221228)
 rand_cells <- sample(seq_len(ncol(mat)), 2000)
 
-column_ha = HeatmapAnnotation(sample = colnames(mat[,rand_cells]), 
+column_ha <- HeatmapAnnotation(sample = sample_names[rand_cells], 
                               col=list(sample=col_sample), 
                               show_legend=F)
 
@@ -160,7 +158,7 @@ data_wide <- data %>% pivot_wider(names_from = c("clusters"), values_from = "fre
 data_long <- data_wide %>% pivot_longer(cols = !sample, names_to = "cluster", values_to = "count") 
 
 clust <- data_long[data_long$cluster==c,]
-cells_per_sample <- table(spe$sample)[clust$sample]
+cells_per_sample <- table(spe$sample_id)[clust$sample]
 lost_cells_perc <- clust$count/cells_per_sample
 clust$percentage <- lost_cells_perc
 clust <- clust[order(clust$percentage, decreasing=T), ]
@@ -171,7 +169,7 @@ write.csv(clust, file.path(params$output,"lost_cells.csv"))
 
 Sample `r max_sample` has the highest number of cells from cluster 11. For a last sanity check, we will color the lost cells in the segmentation mask of that sample and save the colored mask for a more thorough check in napari. 
 
-```{r sanity-check-2}
+```{r sanity-check-2, fig.show='hide'}
 
 masks <- loadImages(file.path(params$input, "masks", paste0(max_sample, ".tif")), as.is = TRUE)
 img <- loadImages(file.path(params$input, "img", paste0(max_sample, ".tif")))
@@ -181,7 +179,9 @@ mcols(img) <- DataFrame(sample_id = names(img))
 channelNames(img) <- rownames(spe)[1:44]
 
 c = 11
-celltype <- spe[,spe$pg_clusters_lostcells == c & spe$sample_id == max_sample]
+tmp <- spe[,spe$sample_id == max_sample]
+tmp$lost_cell <- "no"
+tmp[,tmp$pg_clusters_lostcells==c]$lost_cell <- "yes"
 
 dapi_plot <- plotPixels(img, 
                        colour_by = "IF1_DAPI_mean",
@@ -196,24 +196,24 @@ iridium_plot <- plotPixels(img,
                        return_plot = TRUE)
 
 mask_plot <- plotCells(masks,
-                       object = celltype, 
+                       object = tmp, 
                        cell_id = "ObjectNumber", 
                        img_id = "sample_id",
                        colour_by = "pg_clusters_lostcells",
-                       colour = list(celltype = c(celltype = "red")),
+                       colour = list(pg_clusters_lostcells = c("no" = "gray", "yes" = "red")),
                        missing_colour = "white",
-                       #save_plot = list(filename = file.path(params$output, paste0(max_sample, "_", c, ".png"))),
                        legend=NULL,
                        return_plot = TRUE)
-
+```
+```{r plot-grid}
 p1 <- ggdraw(dapi_plot$plot, clip = "on")
 p2 <- ggdraw(iridium_plot$plot, clip = "on")
 p3 <- ggdraw(mask_plot$plot, clip = "on")
 
 plot_grid(p1, p2, p3)
-
 ```
-By comparing the DAPI image, the Iridium image and the binary mask (highlighting cells from cluster 11 in blue), we see that cluster 11 definitely represents the cluster of lost cells. We excluded `r dim(spe[, spe$pg_clusters_lostcells==11])[2]` cells in total or `r dim(spe[, spe$pg_clusters_lostcells==11])[2]/648` cells per image (n=648).
+
+By comparing the DAPI image, the Iridium image and the binary mask (highlighting cells from cluster 11 in blue), we see that cluster 11 definitely represents the cluster of lost cells. We excluded `r dim(spe[, spe$pg_clusters_lostcells==11])[2]` cells in total or `r dim(spe[, spe$pg_clusters_lostcells==11])[2]/649` cells per image (n=649).
 
 ## Save object
 

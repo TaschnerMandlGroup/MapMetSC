@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/test_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/test_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
 ---
 
 ```{r setup, include=FALSE}
@@ -43,8 +43,7 @@ Replace `path` with the path to the folder where you stored the single-cell data
 In [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP), we exported single-cell marker measurements based on non-dilated and dilated (by 1px) segmentation masks to capture membrane signals. As both are required in the downstream analysis, we will read in both and combine them into one SPE object saving each expression matrix into one `assays`slot. Measurements based on non-dilated masks will be in the `assays`slot `counts` and the measurements based on dilated masks will be stored in `counts_1px`.
 
 
-```{r read-steinbock, cache=TRUE, dependson=character(0)}
-
+```{r read-steinbock}
 path <- params$input
 
 spe_0px <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'), intensities_folder = "intensities-0px",regionprops_folder = "regionprops", graphs_folder=NULL) 
@@ -53,6 +52,10 @@ spe_1px <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(pat
 #Combine SPE objects into one object
 spe <- spe_0px
 assay(spe, "counts_1px") <- assay(spe_1px, "counts")
+
+#remove single SPE objects
+rm(spe_0px)
+rm(spe_1px)
 
 #Rename third IF channel (CD45 for PT, CD56 for BM)
 rownames(spe)[44] <- "IF3_CD45/56_mean"
@@ -185,8 +188,6 @@ dittoRidgePlot(spe[,spe$tissue%in%tissue], var = marker, group.by = "tissue", as
 Finally, the generated data objects can be saved for further downstream processing and analysis.
 
 ```{r save-objects-read-data}
-
-assay(spe, "exprs") <- assay(spe, "counts")
 
 saveRDS(spe, file.path(params$output, "spe.rds"))
 ```

@@ -11,7 +11,7 @@
 
 <meta name="author" content="LazDaria" />
 
-<meta name="date" content="2024-03-25" />
+<meta name="date" content="2024-03-26" />
 
 <title>Read single-cell and meta-data</title>
 
@@ -354,7 +354,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">Read single-cell and meta-data</h1>
 <h4 class="author">LazDaria</h4>
-<h4 class="date">2024-03-25</h4>
+<h4 class="date">2024-03-26</h4>
 
 </div>
 
@@ -383,13 +383,13 @@ aria-hidden="true"></span> </a>
 <div class="tab-content">
 <div id="summary" class="tab-pane fade in active">
 <p>
-<strong>Last updated:</strong> 2024-03-25
+<strong>Last updated:</strong> 2024-03-26
 </p>
 <p>
 <strong>Checks:</strong> <span
-class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 5
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 6
 <span class="glyphicon glyphicon-exclamation-sign text-danger"
-aria-hidden="true"></span> 2
+aria-hidden="true"></span> 1
 </p>
 <p>
 <strong>Knit directory:</strong> <code>MapMetSC/</code> <span
@@ -421,10 +421,10 @@ changes </a>
 <div id="strongRMarkdownfilestronguncommittedchanges"
 class="panel-collapse collapse">
 <div class="panel-body">
-<p>The R Markdown is untracked by Git. To know which version of the R
-Markdown file created these results, you’ll want to first commit it to
-the Git repo. If you’re still working on the analysis, you can ignore
-this warning. When you’re finished, you can run
+<p>The R Markdown file has unstaged changes. To know which version of
+the R Markdown file created these results, you’ll want to first commit
+it to the Git repo. If you’re still working on the analysis, you can
+ignore this warning. When you’re finished, you can run
 <code>wflow_publish</code> to commit the R Markdown file and build the
 HTML.</p>
 </div>
@@ -486,24 +486,16 @@ versions is critical for reproducibility.</p>
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongCachestrongdetected">
-<span class="glyphicon glyphicon-exclamation-sign text-danger"
-aria-hidden="true"></span> <strong>Cache:</strong> detected </a>
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongCachestrongnone">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Cache:</strong> none </a>
 </p>
 </div>
-<div id="strongCachestrongdetected" class="panel-collapse collapse">
+<div id="strongCachestrongnone" class="panel-collapse collapse">
 <div class="panel-body">
-The following chunks had caches available:
-<ul>
-<li>
-read-steinbock
-</li>
-</ul>
-<p>To ensure reproducibility of the results, delete the cache directory
-<code>01_read_data_cache</code> and re-run the analysis. To have
-workflowr automatically delete the cache directory prior to building the
-file, set <code>delete_cache = TRUE</code> when running
-<code>wflow_build()</code> or <code>wflow_publish()</code>.</p>
+<p>Nice! There were no cached chunks for this analysis, so you can be
+confident that you successfully produced the results during this
+run.</p>
 </div>
 </div>
 </div>
@@ -525,15 +517,15 @@ project makes it easier to run your code on other machines.</p>
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettreec2d11767240409e6b8384dbc6b6bef78127f3e2dtargetblankc2d1176a">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettree1d25af4dd1578bc679230ee6f515532d4dd3672etargetblank1d25af4a">
 <span class="glyphicon glyphicon-ok text-success"
 aria-hidden="true"></span> <strong>Repository version:</strong>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/c2d11767240409e6b8384dbc6b6bef78127f3e2d" target="_blank">c2d1176</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/1d25af4dd1578bc679230ee6f515532d4dd3672e" target="_blank">1d25af4</a>
 </a>
 </p>
 </div>
 <div
-id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettreec2d11767240409e6b8384dbc6b6bef78127f3e2dtargetblankc2d1176a"
+id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettree1d25af4dd1578bc679230ee6f515532d4dd3672etargetblank1d25af4a"
 class="panel-collapse collapse">
 <div class="panel-body">
 <p>
@@ -543,7 +535,7 @@ reproducibility.
 </p>
 <p>
 The results in this page were generated with repository version
-<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/c2d11767240409e6b8384dbc6b6bef78127f3e2d" target="_blank">c2d1176</a>.
+<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/1d25af4dd1578bc679230ee6f515532d4dd3672e" target="_blank">1d25af4</a>.
 See the <em>Past versions</em> tab to see a history of the changes made
 to the R Markdown and HTML files.
 </p>
@@ -557,113 +549,12 @@ depends on. Below is the status of the Git repository when the results
 were generated:
 </p>
 <pre><code>
-Ignored files:
-    Ignored:    analysis/01_read_data_cache/
-
 Untracked files:
-    Untracked:  analysis/01_read_data.Rmd
-    Untracked:  analysis/02_QC_1.Rmd
-    Untracked:  analysis/style.css
+    Untracked:  analysis/03_QC_2.Rmd
 
 Unstaged changes:
-    Deleted:    R/20231214_Manuscript/1_Ext_Figure/01_batcheffect.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/01_read_single-cell-data_0px.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/02_read_single-cell-data_1px.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/03_removal_lost_cells.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/04_integration_morph-features.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/05_cell_phenotyping.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/06_vis_annotated_celltype.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/07_visualization_2.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/08_singleR_Fetahu.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/09_cohort_overview.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/Suppl_Table1.Rmd
-    Deleted:    R/20231214_Manuscript/1_Figure/Suppl_Table2.Rmd
-    Deleted:    R/20231214_Manuscript/2_Ext_Figure/01_bubble_plots.Rmd
-    Deleted:    R/20231214_Manuscript/2_Figure/08_singleR_Fetahu.Rmd
-    Deleted:    R/20231214_Manuscript/2_Figure/08_singleR_Jansky.Rmd
-    Deleted:    R/20231214_Manuscript/2_Figure/08_singleR_Lee.Rmd
-    Deleted:    R/20231214_Manuscript/3_Figure/09_DA_limma.Rmd
-    Deleted:    R/20231214_Manuscript/3_Figure/9_DA_cellular_communities.Rmd
-    Deleted:    R/20231214_Manuscript/4_Figure/09_DA_limma_PTvsBM.Rmd
-    Deleted:    R/20231214_Manuscript/4_Figure/09_DA_limma_crtlvsinf.Rmd
-    Deleted:    R/20231214_Manuscript/5_Figure/09_DA_cellular_communities_BM-DE.Rmd
-    Deleted:    R/20231214_Manuscript/5_Figure/09_DA_limma_BM_DE.Rmd
-    Deleted:    R/20231214_Manuscript/6_Figure/09_DA_cellular_communities_BM_timepoint.Rmd
-    Deleted:    R/20231214_Manuscript/6_Figure/09_DA_cellular_communities_BM_timepoint_sepclustering.Rmd
-    Deleted:    R/20231214_Manuscript/6_Figure/09_DA_limma_BM_timepoint.Rmd
-    Deleted:    R/IMCData_analysis/01_read_transform_data.Rmd
-    Deleted:    R/IMCData_analysis/01_read_transform_data.html
-    Deleted:    R/IMCData_analysis/02_generate_spillovermatrix.Rmd
-    Deleted:    R/IMCData_analysis/02_spillover_compensation.Rmd
-    Deleted:    R/IMCData_analysis/02_spillover_correction.Rmd
-    Deleted:    R/IMCData_analysis/02_spillover_correction.html
-    Deleted:    R/IMCData_analysis/02_spillover_correction_imagebased.Rmd
-    Deleted:    R/IMCData_analysis/03_quality_control.Rmd
-    Deleted:    R/IMCData_analysis/03_quality_control.html
-    Deleted:    R/IMCData_analysis/04_batch_correction_fullDataset.Rmd
-    Deleted:    R/IMCData_analysis/04_batch_correction_fullDataset.html
-    Deleted:    R/IMCData_analysis/05_clustering_fullDataset.Rmd
-    Deleted:    R/IMCData_analysis/05_clustering_fullDataset.html
-    Deleted:    R/IMCData_analysis/06_data_curation.Rmd
-    Deleted:    R/IMCData_analysis/07_batch_correction_curatedDataset.Rmd
-    Deleted:    R/IMCData_analysis/08_clustering_curatedDataset.Rmd
-    Deleted:    R/IMCData_analysis/08_compare_clustering_methods.Rmd
-    Deleted:    R/IMCData_analysis/09_image_visualization.Rmd
-    Deleted:    R/IMCData_analysis/10_sc_visualization.Rmd
-    Deleted:    R/IMCData_analysis/11_pseudobulk_analysis.Rmd
-    Deleted:    R/IMCData_analysis/cluster_post-curation.Rmd
-    Deleted:    R/IMCData_analysis/phenotyping_old.html
-    Deleted:    R/IMCData_analysis/removal_lost_cells.Rmd
-    Deleted:    R/IMCData_analysis/visualize_metadata.Rmd
-    Deleted:    R/IMCData_analysis/visualize_metadata.html
-    Deleted:    R/IMCData_analysis_2/01_read_transform_data.Rmd
-    Deleted:    R/IMCData_analysis_2/02_removal_lost_cells.Rmd
-    Deleted:    R/IMCData_analysis_2/03_integration_morph-features.Rmd
-    Deleted:    R/IMCData_analysis_2/04_cell_phenotyping.Rmd
-    Deleted:    R/IMCData_analysis_2/05_vis_annotated_celltype.Rmd
-    Deleted:    R/IMCData_analysis_2/06_visualization_2.Rmd
-    Deleted:    R/IMCData_analysis_2/07_visualize_metadata.Rmd
-    Deleted:    R/IMCData_analysis_2/old_versions/04_cell_phenotyping.Rmd
-    Deleted:    R/IMData_analysis_3/01_read_single-cell-data_0px.Rmd
-    Deleted:    R/IMData_analysis_3/02_read_single-cell-data_1px.Rmd
-    Deleted:    R/IMData_analysis_3/03_removal_lost_cells.Rmd
-    Deleted:    R/IMData_analysis_3/04_integration_morph-features.Rmd
-    Deleted:    R/IMData_analysis_3/05_02_cell_phenotyping.Rmd
-    Deleted:    R/IMData_analysis_3/05_cell_phenotyping.Rmd
-    Deleted:    R/IMData_analysis_3/06_metacluster_subphenotyping.Rmd
-    Deleted:    R/IMData_analysis_3/06_vis_annotated_celltype.Rmd
-    Deleted:    R/IMData_analysis_3/07_visualization_2.Rmd
-    Deleted:    R/IMData_analysis_3/08_visualize_metadata.Rmd
-    Deleted:    R/IMData_analysis_3/09_mm_mapping.Rmd
-    Deleted:    R/IMData_analysis_3/09_mm_mapping2.Rmd
-    Deleted:    R/IMData_analysis_3/09_mm_mapping_vignette.Rmd
-    Deleted:    R/IMData_analysis_3/09_singleR_RNA.Rmd
-    Deleted:    R/IMData_analysis_3/09_singleR_protein.Rmd
-    Deleted:    R/IMData_analysis_3/10_visualize_predicted_clusters_per_metadata.Rmd
-    Deleted:    R/IMData_analysis_3/11_DESeq2.Rmd
-    Deleted:    R/IMData_analysis_3/11_cyto_diffcyt.Rmd
-    Deleted:    R/IMData_analysis_3/11_cytofworkflow_DME.Rmd
-    Deleted:    R/IMData_analysis_3/11_cytofworkflow_diffcyt.Rmd
-    Deleted:    R/IMData_analysis_3/11_diffcyt.Rmd
-    Deleted:    R/IMData_analysis_3/11_diffcyt_limma-voom.Rmd
-    Deleted:    R/IMData_analysis_3/11_edgeR.Rmd
-    Deleted:    R/IMData_analysis_3/11_miloR.Rmd
-    Deleted:    R/IMData_analysis_3/11_miloR_longitudinal.Rmd
-    Deleted:    R/IMData_analysis_3/11_milo_DA.Rmd
-    Deleted:    R/IMData_analysis_3/12_pseudotime_scorpion_in-house.Rmd
-    Deleted:    R/IMData_analysis_3/12_pseudotime_scorpion_vignette.Rmd
-    Deleted:    R/IMData_analysis_3/CytoGLMM.Rmd
-    Deleted:    R/IMData_analysis_3/PBMC8_cluster_merging1.xlsx
-    Deleted:    R/IMData_analysis_3/PBMC8_cluster_merging2_v3.xlsx
-    Deleted:    R/IMData_analysis_3/PBMC8_metadata.xlsx
-    Deleted:    R/IMData_analysis_3/PBMC8_panel_v3.xlsx
-    Deleted:    R/IMData_analysis_3/diffcyt.Rmd
-    Deleted:    R/workflowR.Rmd
-    Modified:   analysis/_site.yml
-    Deleted:    analysis/first-analysis.Rmd
-
-Staged changes:
-    New:        code/R/20231214_Manuscript/1_Figure/01_read_single-cell-data_0px.Rmd
+    Modified:   analysis/01_read_data.Rmd
+    Modified:   analysis/02_QC_1.Rmd
 
 </code></pre>
 <p>
@@ -678,10 +569,74 @@ have uncommitted changes.
 <hr>
 </div>
 <div id="versions" class="tab-pane fade">
+
 <p>
-There are no past versions. Publish this analysis with
-<code>wflow_publish()</code> to start tracking its development.
+These are the previous versions of the repository in which changes were
+made to the R Markdown (<code>analysis/01_read_data.Rmd</code>) and HTML
+(<code>docs/01_read_data.html</code>) files. If you’ve configured a
+remote Git repository (see <code>?wflow_git_remote</code>), click on the
+hyperlinks in the table below to view the files as they were in that
+past version.
 </p>
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+File
+</th>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+<th>
+Message
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/analysis/01_read_data.Rmd" target="_blank">1d25af4</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-25
+</td>
+<td>
+worfklowR part1
+</td>
+</tr>
+<tr>
+<td>
+html
+</td>
+<td>
+<a href="https://rawcdn.githack.com/TaschnerMandlGroup/MapMet/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/01_read_data.html" target="_blank">1d25af4</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-25
+</td>
+<td>
+worfklowR part1
+</td>
+</tr>
+</tbody>
+</table>
+</div>
 <hr>
 </div>
 </div>
@@ -810,23 +765,13 @@ spe_1px &lt;- read_steinbock(path=path, image_file=NULL, panel_file = file.path(
 spe &lt;- spe_0px
 assay(spe, &quot;counts_1px&quot;) &lt;- assay(spe_1px, &quot;counts&quot;)
 
+#remove single SPE objects
+rm(spe_0px)
+rm(spe_1px)
+
 #Rename third IF channel (CD45 for PT, CD56 for BM)
 rownames(spe)[44] &lt;- &quot;IF3_CD45/56_mean&quot;
 rownames(spe)[88] &lt;- &quot;IF3_CD45/56_mean-80&quot;</code></pre>
-<div class="alert alert-warning">
-<p>
-<strong>Warning:</strong> The above code chunk cached its results, but
-it won’t be re-run if previous chunks it depends on are updated. If you
-need to use caching, it is highly recommended to also set
-<code>knitr::opts_chunk$set(autodep = TRUE)</code> at the top of the
-file (in a chunk that is not cached). Alternatively, you can customize
-the option <code>dependson</code> for each individual chunk that is
-cached. Using either <code>autodep</code> or <code>dependson</code> will
-remove this warning. See the
-<a href="https://yihui.name/knitr/options/#cache"
->knitr cache options</a> for more details.
-</p>
-</div>
 </div>
 <div id="read-single-cell-metadata" class="section level2">
 <h2>Read single-cell metadata</h2>
@@ -932,16 +877,51 @@ tissue &lt;- unique(spe$tissue)
 
 dittoRidgePlot(spe[,spe$tissue%in%tissue], var = marker, group.by = &quot;tissue&quot;, assay = &quot;counts&quot;) +
     ggtitle(paste(marker,  &quot;- per tissue&quot;))</code></pre>
-<pre><code>Picking joint bandwidth of 0.0173</code></pre>
+<pre><code>Picking joint bandwidth of 0.00421</code></pre>
 <p><img src="figure/01_read_data.Rmd/plot%20by%20staining%20date-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-no-spaces-plot-by-staining-date-1">
+Past versions of "plot by staining date-1.png"
+</button>
+</p>
+<div id="fig-no-spaces-plot-by-staining-date-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/01_read_data.Rmd/plot by staining date-1.png" target="_blank">1d25af4</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-25
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 </div>
 <div id="save-object" class="section level2">
 <h2>Save object</h2>
 <p>Finally, the generated data objects can be saved for further
 downstream processing and analysis.</p>
-<pre class="r"><code>assay(spe, &quot;exprs&quot;) &lt;- assay(spe, &quot;counts&quot;)
-
-saveRDS(spe, file.path(params$output, &quot;spe.rds&quot;))</code></pre>
+<pre class="r"><code>saveRDS(spe, file.path(params$output, &quot;spe.rds&quot;))</code></pre>
 </div>
 <div id="session-info" class="section level2">
 <h2>Session Info</h2>

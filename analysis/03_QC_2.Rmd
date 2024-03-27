@@ -258,7 +258,7 @@ for (m in 1:length(morph_names_clipped)){
 }
 ```
 
-## Save object
+## Save object {#qc2-save}
 
 From now on, we will use intensity measurements computed based on the dilated mask (by 1px). To reduce the size of the SPE object, we remove intensity measurements obtained based on non-dilated masks and set those based on dilated masks as default. 
 

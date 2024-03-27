@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="LazDaria" />
+
+<meta name="date" content="2024-03-27" />
+
+<title>Cell phenotyping</title>
+
+<script src="site_libs/header-attrs-2.25/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/paper.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/textmate.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<link rel="icon" href="https://github.com/workflowr/workflowr-assets/raw/main/img/reproducible.png">
+<!-- Add a small amount of space between sections. -->
+<style type="text/css">
+div.section {
+  padding-top: 12px;
+}
+</style>
+
+
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+<link rel="stylesheet" href="style.css" type="text/css" />
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">MapMetSC</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Home</a>
+</li>
+<li>
+  <a href="about.html">About</a>
+</li>
+<li>
+  <a href="license.html">License</a>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Cell phenotyping</h1>
+<h4 class="author">LazDaria</h4>
+<h4 class="date">2024-03-27</h4>
+
+</div>
+
+
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
+<span class="glyphicon glyphicon-list" aria-hidden="true"></span>
+workflowr <span class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span>
+</button>
+</p>
+<div id="workflowr-report" class="collapse">
+<ul class="nav nav-tabs">
+<li class="active">
+<a data-toggle="tab" href="#summary">Summary</a>
+</li>
+<li>
+<a data-toggle="tab" href="#checks"> Checks <span
+class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> </a>
+</li>
+<li>
+<a data-toggle="tab" href="#versions">Past versions</a>
+</li>
+</ul>
+<div class="tab-content">
+<div id="summary" class="tab-pane fade in active">
+<p>
+<strong>Last updated:</strong> 2024-03-27
+</p>
+<p>
+<strong>Checks:</strong> <span
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 6
+<span class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> 1
+</p>
+<p>
+<strong>Knit directory:</strong> <code>MapMetSC/</code> <span
+class="glyphicon glyphicon-question-sign" aria-hidden="true"
+title="This is the local directory in which the code in this file was executed.">
+</span>
+</p>
+<p>
+This reproducible <a href="https://rmarkdown.rstudio.com">R Markdown</a>
+analysis was created with <a
+  href="https://github.com/workflowr/workflowr">workflowr</a> (version
+1.7.1). The <em>Checks</em> tab describes the reproducibility checks
+that were applied when the results were created. The <em>Past
+versions</em> tab lists the development history.
+</p>
+<hr>
+</div>
+<div id="checks" class="tab-pane fade">
+<div id="workflowr-checks" class="panel-group">
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguncommittedchanges">
+<span class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> <strong>R Markdown file:</strong> uncommitted
+changes </a>
+</p>
+</div>
+<div id="strongRMarkdownfilestronguncommittedchanges"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>The R Markdown file has unstaged changes. To know which version of
+the R Markdown file created these results, you’ll want to first commit
+it to the Git repo. If you’re still working on the analysis, you can
+ignore this warning. When you’re finished, you can run
+<code>wflow_publish</code> to commit the R Markdown file and build the
+HTML.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongEnvironmentstrongempty">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Environment:</strong> empty </a>
+</p>
+</div>
+<div id="strongEnvironmentstrongempty" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! The global environment was empty. Objects defined in the
+global environment can affect the analysis in your R Markdown file in
+unknown ways. For reproduciblity it’s best to always run the code in an
+empty environment.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSeedstrongcodesetseed20240314code">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Seed:</strong>
+<code>set.seed(20240314)</code> </a>
+</p>
+</div>
+<div id="strongSeedstrongcodesetseed20240314code"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>The command <code>set.seed(20240314)</code> was run prior to running
+the code in the R Markdown file. Setting a seed ensures that any results
+that rely on randomness, e.g. subsampling or permutations, are
+reproducible.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSessioninformationstrongrecorded">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Session information:</strong>
+recorded </a>
+</p>
+</div>
+<div id="strongSessioninformationstrongrecorded"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Recording the operating system, R version, and package
+versions is critical for reproducibility.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongCachestrongnone">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Cache:</strong> none </a>
+</p>
+</div>
+<div id="strongCachestrongnone" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Nice! There were no cached chunks for this analysis, so you can be
+confident that you successfully produced the results during this
+run.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongFilepathsstrongrelative">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>File paths:</strong> relative </a>
+</p>
+</div>
+<div id="strongFilepathsstrongrelative" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Using relative paths to the files within your workflowr
+project makes it easier to run your code on other machines.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettreed39588864568a8a5205f757827f606fe12e935b8targetblankd395888a">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Repository version:</strong>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/d39588864568a8a5205f757827f606fe12e935b8" target="_blank">d395888</a>
+</a>
+</p>
+</div>
+<div
+id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettreed39588864568a8a5205f757827f606fe12e935b8targetblankd395888a"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>
+Great! You are using Git for version control. Tracking code development
+and connecting the code version to the results is critical for
+reproducibility.
+</p>
+<p>
+The results in this page were generated with repository version
+<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/d39588864568a8a5205f757827f606fe12e935b8" target="_blank">d395888</a>.
+See the <em>Past versions</em> tab to see a history of the changes made
+to the R Markdown and HTML files.
+</p>
+<p>
+Note that you need to be careful to ensure that all relevant files for
+the analysis have been committed to Git prior to generating the results
+(you can use <code>wflow_publish</code> or
+<code>wflow_git_commit</code>). workflowr only checks the R Markdown
+file, but you know if there are other scripts or data files that it
+depends on. Below is the status of the Git repository when the results
+were generated:
+</p>
+<pre><code>
+Unstaged changes:
+    Modified:   analysis/04_phenotyping.Rmd
+
+</code></pre>
+<p>
+Note that any generated files, e.g. HTML, png, CSS, etc., are not
+included in this status report because it is ok for generated content to
+have uncommitted changes.
+</p>
+</div>
+</div>
+</div>
+</div>
+<hr>
+</div>
+<div id="versions" class="tab-pane fade">
+
+<p>
+These are the previous versions of the repository in which changes were
+made to the R Markdown (<code>analysis/04_phenotyping.Rmd</code>) and
+HTML (<code>docs/04_phenotyping.html</code>) files. If you’ve configured
+a remote Git repository (see <code>?wflow_git_remote</code>), click on
+the hyperlinks in the table below to view the files as they were in that
+past version.
+</p>
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+File
+</th>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+<th>
+Message
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/d39588864568a8a5205f757827f606fe12e935b8/analysis/04_phenotyping.Rmd" target="_blank">d395888</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+<td>
+04_phenotyping.Rmd
+</td>
+</tr>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/4ba0e1a0876e66b584b99361416eaceb6dfe00e6/analysis/04_phenotyping.Rmd" target="_blank">4ba0e1a</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+<td>
+update
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+</div>
+</div>
+</div>
+<div id="phenotyping" class="section level1">
+<h1>Cell phenotyping</h1>
+<p>In this Rmd file, we will perform 1. dimensionality reduction 2.
+phenograph clustering 3. annotate and merge clusters &amp; metaclusters
+externally 4. retrieve tumor cells from GD2-MPO double positive cells
+(caused by spillover) 5. re-classify granulocyte metaclusters into
+maturity states based on morphology 6. define color codes for all
+celltypes and metaclusters</p>
+<div id="load-libraries" class="section level2">
+<h2>Load libraries</h2>
+<details>
+<summary>
+Load libraries
+</summary>
+<pre class="r"><code>library(ComplexHeatmap)</code></pre>
+<pre><code>Loading required package: grid</code></pre>
+<pre><code>========================================
+ComplexHeatmap version 2.12.1
+Bioconductor page: http://bioconductor.org/packages/ComplexHeatmap/
+Github page: https://github.com/jokergoo/ComplexHeatmap
+Documentation: http://jokergoo.github.io/ComplexHeatmap-reference
+
+If you use it in published research, please cite either one:
+- Gu, Z. Complex heatmaps reveal patterns and correlations in multidimensional 
+    genomic data. Bioinformatics 2016.
+- Gu, Z. Complex Heatmap Visualization. iMeta 2022.
+
+
+The new InteractiveComplexHeatmap package can directly export static 
+complex heatmaps into an interactive Shiny app with zero effort. Have a try!
+
+This message can be suppressed by:
+  suppressPackageStartupMessages(library(ComplexHeatmap))
+========================================</code></pre>
+<pre class="r"><code>library(RColorBrewer)
+library(viridis)</code></pre>
+<pre><code>Loading required package: viridisLite</code></pre>
+<pre class="r"><code>library(scater)</code></pre>
+<pre><code>Loading required package: SingleCellExperiment</code></pre>
+<pre><code>Loading required package: SummarizedExperiment</code></pre>
+<pre><code>Loading required package: MatrixGenerics</code></pre>
+<pre><code>Loading required package: matrixStats</code></pre>
+<pre><code>
+Attaching package: &#39;MatrixGenerics&#39;</code></pre>
+<pre><code>The following objects are masked from &#39;package:matrixStats&#39;:
+
+    colAlls, colAnyNAs, colAnys, colAvgsPerRowSet, colCollapse,
+    colCounts, colCummaxs, colCummins, colCumprods, colCumsums,
+    colDiffs, colIQRDiffs, colIQRs, colLogSumExps, colMadDiffs,
+    colMads, colMaxs, colMeans2, colMedians, colMins, colOrderStats,
+    colProds, colQuantiles, colRanges, colRanks, colSdDiffs, colSds,
+    colSums2, colTabulates, colVarDiffs, colVars, colWeightedMads,
+    colWeightedMeans, colWeightedMedians, colWeightedSds,
+    colWeightedVars, rowAlls, rowAnyNAs, rowAnys, rowAvgsPerColSet,
+    rowCollapse, rowCounts, rowCummaxs, rowCummins, rowCumprods,
+    rowCumsums, rowDiffs, rowIQRDiffs, rowIQRs, rowLogSumExps,
+    rowMadDiffs, rowMads, rowMaxs, rowMeans2, rowMedians, rowMins,
+    rowOrderStats, rowProds, rowQuantiles, rowRanges, rowRanks,
+    rowSdDiffs, rowSds, rowSums2, rowTabulates, rowVarDiffs, rowVars,
+    rowWeightedMads, rowWeightedMeans, rowWeightedMedians,
+    rowWeightedSds, rowWeightedVars</code></pre>
+<pre><code>Loading required package: GenomicRanges</code></pre>
+<pre><code>Loading required package: stats4</code></pre>
+<pre><code>Loading required package: BiocGenerics</code></pre>
+<pre><code>
+Attaching package: &#39;BiocGenerics&#39;</code></pre>
+<pre><code>The following objects are masked from &#39;package:stats&#39;:
+
+    IQR, mad, sd, var, xtabs</code></pre>
+<pre><code>The following objects are masked from &#39;package:base&#39;:
+
+    anyDuplicated, append, as.data.frame, basename, cbind, colnames,
+    dirname, do.call, duplicated, eval, evalq, Filter, Find, get, grep,
+    grepl, intersect, is.unsorted, lapply, Map, mapply, match, mget,
+    order, paste, pmax, pmax.int, pmin, pmin.int, Position, rank,
+    rbind, Reduce, rownames, sapply, setdiff, sort, table, tapply,
+    union, unique, unsplit, which.max, which.min</code></pre>
+<pre><code>Loading required package: S4Vectors</code></pre>
+<pre><code>
+Attaching package: &#39;S4Vectors&#39;</code></pre>
+<pre><code>The following objects are masked from &#39;package:base&#39;:
+
+    expand.grid, I, unname</code></pre>
+<pre><code>Loading required package: IRanges</code></pre>
+<pre><code>Loading required package: GenomeInfoDb</code></pre>
+<pre><code>Loading required package: Biobase</code></pre>
+<pre><code>Welcome to Bioconductor
+
+    Vignettes contain introductory material; view with
+    &#39;browseVignettes()&#39;. To cite Bioconductor, see
+    &#39;citation(&quot;Biobase&quot;)&#39;, and for packages &#39;citation(&quot;pkgname&quot;)&#39;.</code></pre>
+<pre><code>
+Attaching package: &#39;Biobase&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:MatrixGenerics&#39;:
+
+    rowMedians</code></pre>
+<pre><code>The following objects are masked from &#39;package:matrixStats&#39;:
+
+    anyMissing, rowMedians</code></pre>
+<pre><code>Loading required package: scuttle</code></pre>
+<pre><code>Loading required package: ggplot2</code></pre>
+<pre class="r"><code>library(BiocParallel)
+library(Rphenoannoy)</code></pre>
+<pre><code>Loading required package: igraph</code></pre>
+<pre><code>
+Attaching package: &#39;igraph&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:scater&#39;:
+
+    normalize</code></pre>
+<pre><code>The following object is masked from &#39;package:GenomicRanges&#39;:
+
+    union</code></pre>
+<pre><code>The following object is masked from &#39;package:IRanges&#39;:
+
+    union</code></pre>
+<pre><code>The following object is masked from &#39;package:S4Vectors&#39;:
+
+    union</code></pre>
+<pre><code>The following objects are masked from &#39;package:BiocGenerics&#39;:
+
+    normalize, path, union</code></pre>
+<pre><code>The following objects are masked from &#39;package:stats&#39;:
+
+    decompose, spectrum</code></pre>
+<pre><code>The following object is masked from &#39;package:base&#39;:
+
+    union</code></pre>
+<pre><code>Loading required package: Matrix</code></pre>
+<pre><code>
+Attaching package: &#39;Matrix&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:S4Vectors&#39;:
+
+    expand</code></pre>
+<pre class="r"><code>library(tidyr)</code></pre>
+<pre><code>
+Attaching package: &#39;tidyr&#39;</code></pre>
+<pre><code>The following objects are masked from &#39;package:Matrix&#39;:
+
+    expand, pack, unpack</code></pre>
+<pre><code>The following object is masked from &#39;package:igraph&#39;:
+
+    crossing</code></pre>
+<pre><code>The following object is masked from &#39;package:S4Vectors&#39;:
+
+    expand</code></pre>
+<pre class="r"><code>library(tidyHeatmap)</code></pre>
+<pre><code>========================================
+tidyHeatmap version 1.8.1
+If you use tidyHeatmap in published research, please cite:
+1) Mangiola et al. tidyHeatmap: an R package for modular heatmap production 
+  based on tidy principles. JOSS 2020.
+2) Gu, Z. Complex heatmaps reveal patterns and correlations in multidimensional 
+  genomic data. Bioinformatics 2016.
+This message can be suppressed by:
+  suppressPackageStartupMessages(library(tidyHeatmap))
+========================================</code></pre>
+<pre><code>
+Attaching package: &#39;tidyHeatmap&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:stats&#39;:
+
+    heatmap</code></pre>
+<pre class="r"><code>library(bruceR)</code></pre>
+<pre><code>
+bruceR (v2023.9)
+Broadly Useful Convenient and Efficient R functions
+
+Packages also loaded:
+✔ data.table    ✔ emmeans
+✔ dplyr         ✔ lmerTest
+✔ tidyr         ✔ effectsize
+✔ stringr       ✔ performance
+✔ ggplot2       ✔ interactions
+
+Main functions of `bruceR`:
+cc()            Describe()  TTEST()
+add()           Freq()      MANOVA()
+.mean()         Corr()      EMMEANS()
+set.wd()        Alpha()     PROCESS()
+import()        EFA()       model_summary()
+print_table()   CFA()       lavaan_summary()
+
+For full functionality, please install all dependencies:
+install.packages(&quot;bruceR&quot;, dep=TRUE)
+
+Online documentation:
+https://psychbruce.github.io/bruceR
+
+To use this package in publications, please cite:
+Bao, H.-W.-S. (2023). bruceR: Broadly useful convenient and efficient R functions (Version 2023.9) [Computer software]. https://CRAN.R-project.org/package=bruceR</code></pre>
+<pre class="r"><code>library(dittoSeq)
+library(dplyr)
+library(mclust)</code></pre>
+<pre><code>Package &#39;mclust&#39; version 6.0.1
+Type &#39;citation(&quot;mclust&quot;)&#39; for citing this R package in publications.</code></pre>
+<pre class="r"><code>library(SingleR)
+library(circlize)</code></pre>
+<pre><code>========================================
+circlize version 0.4.15
+CRAN page: https://cran.r-project.org/package=circlize
+Github page: https://github.com/jokergoo/circlize
+Documentation: https://jokergoo.github.io/circlize_book/book/
+
+If you use it in published research, please cite:
+Gu, Z. circlize implements and enhances circular visualization
+  in R. Bioinformatics 2014.
+
+This message can be suppressed by:
+  suppressPackageStartupMessages(library(circlize))
+========================================</code></pre>
+<pre><code>
+Attaching package: &#39;circlize&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:igraph&#39;:
+
+    degree</code></pre>
+</details>
+</div>
+<div id="read-data" class="section level2">
+<h2>Read data</h2>
+<p>We will first read the data that passed the <a href="#qc-2">second
+quality control step</a> and save the count data as a matrix.
+Low-quality markers (low SNR in a lot of samples) as well as all IF and
+nuclear IMC markers will be excluded for clustering. Moreover, mean
+intensity will be used to represent marker expression, to average out
+the signals arising from lateral spillover or artifacts. As explained in
+<a href="#qc2-save">the previous chapter</a>, we are using counts
+measured with respect to dilated masks in downstream analysis do capture
+membrane signal.</p>
+<pre class="r"><code>spe &lt;- readRDS(file.path(params$output,&quot;spe_qc2.rds&quot;))
+
+intensity_mat &lt;- assay(spe, &quot;counts&quot;)</code></pre>
+<pre><code>Loading required package: SpatialExperiment</code></pre>
+<pre class="r"><code>colnames(intensity_mat) &lt;- colnames(spe)
+
+#use mean intensity
+intensity_mat &lt;- intensity_mat[!grepl(&quot;mean-80&quot;, rownames(intensity_mat)),]
+
+#exclude low-quality markers and functional marker cl.PARP
+intensity_mat_hq &lt;- intensity_mat[!grepl(&quot;PARP|IDO|DAPI|IF2_GD2|IF3_CD45/56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro&quot;, rownames(intensity_mat)),]
+intensity_mat_lq &lt;- intensity_mat[grepl(&quot;PARP|IDO|DAPI|IF2_GD2|IF3_CD45/56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro&quot;, rownames(intensity_mat)),]
+
+non_zeros &lt;- as.logical(colSums(intensity_mat_hq)!=0)
+
+intensity_mat_hq_wo_zeros &lt;- intensity_mat_hq[,non_zeros]
+intensity_mat_lq_wo_zeros &lt;- intensity_mat_lq[,non_zeros]
+
+#Apply changes to SPE object
+spe &lt;- spe[,non_zeros]
+rowData(spe)$use_channel &lt;- !grepl(&quot;mean-80|PARP|IDO|DAPI|IF2_GD2|IF3_CD45/56|DNA1|H4K12Ac|H3K9Ac|CXCR2|PNMT|Fibro&quot;, rownames(spe))
+
+##Matrix with morph. features
+morph_mat_clipped &lt;- (cbind(&quot;area&quot;=spe$area_clipped, &quot;solidity&quot;=spe$solidity_clipped, &quot;aspect_ratio&quot;=spe$aspect_ratio_clipped))
+
+tissue &lt;- spe$tissue
+cell_id &lt;- colnames(spe)</code></pre>
+<p>We are excluding 1997 more cells here, as they are negative for all
+markers used in downstream analysis. To get a first grasp of the
+single-cell data and potential clusters, we will plot it in a
+single-cell heatmap.</p>
+<pre class="r"><code>set.seed(221228)
+
+mat &lt;- intensity_mat_hq_wo_zeros
+
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == &#39;qual&#39;,]
+col_vector_433 = colors()[grep(&#39;gr(a|e)y&#39;, grDevices::colors(), invert = T)]
+
+col_sample = setNames(sample(col_vector_433, length(unique(spe$sample))), unique(spe$sample))
+
+rand_cells &lt;- sample(seq_len(ncol(mat)), 2000)
+
+Heatmap(mat[,rand_cells], 
+        column_title = &quot;Single-cell heatmap&quot;,
+        show_column_dend = F,
+        show_column_names=F,
+        col=viridis(100)
+        )</code></pre>
+<p><img src="figure/04_phenotyping.Rmd/vis-scdata-1.png" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="dimensionality-reduction-prior-to-clustering"
+class="section level2">
+<h2>Dimensionality reduction prior to clustering</h2>
+<p>We will then reduce dimensionality of the data to five dimensions as
+described <a
+href="https://umap-learn.readthedocs.io/en/latest/clustering.html">here</a>.</p>
+<pre class="r"><code>#mat_red_clustering &lt;- calculateUMAP(mat, ncomponents=5, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam(RNGseed = 221228))
+mat_red_clustering &lt;- readRDS(file.path(params$output, &quot;20230628_mat_red_clustering.rds&quot;)) #discrepancies due to package update
+rownames(mat_red_clustering) &lt;- colnames(spe)
+
+#saveRDS(mat_red_clustering, file.path(params$output, &quot;mat_red_clustering.rds&quot;))
+
+reducedDim(spe, &quot;UMAP_clustering&quot;) &lt;- mat_red_clustering</code></pre>
+</div>
+<div id="phenograph-clustering" class="section level2">
+<h2>Phenograph clustering</h2>
+<p>Next, we perform phenograph clustering on these five dimensions.</p>
+<pre class="r"><code>set.seed(221228)
+
+Rphenograph_out &lt;- Rphenoannoy(mat_red_clustering, k = 45)</code></pre>
+<pre><code>Run Rphenograph starts:
+  -Input data of 1992421 rows and 5 columns
+  -k is set to 45</code></pre>
+<pre><code>  Finding nearest neighbors...DONE ~ 839.436 s
+  Compute jaccard coefficient between nearest-neighbor sets...</code></pre>
+<pre><code>Presorting knn...</code></pre>
+<pre><code>presorting DONE ~ 148.581 s
+  Start jaccard
+DONE ~ 8.273 s
+  Build undirected graph from the weighted links...DONE ~ 64.506 s
+  Run louvain clustering on the graph ...DONE ~ 420.824 s</code></pre>
+<pre><code>Run Rphenograph DONE, totally takes 1333.039s.</code></pre>
+<pre><code>  Return a community class
+  -Modularity value: 0.9465125 
+  -Number of clusters: 78</code></pre>
+<pre class="r"><code>clusters &lt;- factor(membership(Rphenograph_out[[2]]))
+
+saveRDS(clusters, file.path(params$output, &quot;pg_clusters.rds&quot;))
+
+spe$pg_clusters &lt;- clusters</code></pre>
+<p>Let’s plot the mean marker expressions per cluster in a bubble
+plot.</p>
+<pre class="r"><code>#Mean expression per cluster
+exp_mat_ &lt;- aggregate(t(mat), list(spe$pg_clusters), mean)
+exp_mat &lt;- exp_mat_[,2:ncol(exp_mat_)]
+exp_mat &lt;- apply(exp_mat, 2, RESCALE, to=0:1)
+rownames(exp_mat) &lt;- exp_mat_[,&quot;Group.1&quot;]
+exp_mat &lt;- t(exp_mat)
+
+#Percentage of cells per cluster expressing a marker (&gt;20th percentile)
+tmp &lt;- mat
+tmp[tmp &gt; unname(quantile(exp_mat[exp_mat&gt;0], c(0.2)))] &lt;- 1
+tmp[tmp &lt;= unname(quantile(exp_mat[exp_mat&gt;0], c(0.2)))] &lt;- 0
+tmp &lt;- aggregate(t(tmp), list(spe$pg_clusters), sum)
+tmp2 &lt;- tmp[,2:ncol(tmp)]
+rownames(tmp2) &lt;- tmp[,&quot;Group.1&quot;]
+percent_mat &lt;- tmp2 / unname(table(droplevels(spe$pg_clusters)))
+percent_mat &lt;- t(percent_mat)
+percent_mat[percent_mat &lt; 0.1] &lt;- 0.1 #to make dots visible
+
+#Annotation bars
+bm_count &lt;- table(spe[,spe$tissue==&quot;BM&quot;]$pg_clusters)
+bm_count[setdiff(colnames(exp_mat), names(bm_count))] &lt;- 0
+bm_count &lt;- bm_count[colnames(exp_mat)]
+pt_count &lt;- table(spe[,spe$tissue==&quot;PT&quot;]$pg_clusters)
+pt_count[setdiff(colnames(exp_mat), names(pt_count))] &lt;- 0
+pt_count &lt;- pt_count[colnames(exp_mat)]
+
+mean_morph &lt;- aggregate(morph_mat_clipped, list(spe$pg_clusters), mean)
+area_mean = mean_morph[,&quot;area&quot;]
+solidity_mean = mean_morph[,&quot;solidity&quot;]
+col_mean_area = colorRamp2(c(min(area_mean),min(area_mean)+(max(area_mean)-min(area_mean))/2, max(area_mean)), c(&quot;blue&quot;, &quot;white&quot;, &quot;red&quot;))
+col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c(&quot;blue&quot;, &quot;white&quot;, &quot;red&quot;))
+
+col_vector_433 = colors()[grep(&#39;gr(a|e)y&#39;, grDevices::colors(), invert = T)]
+col_clusters = setNames(sample(col_vector_433, length(unique(spe$pg_clusters))), unique(spe$pg_clusters))
+
+column_ha = HeatmapAnnotation(pg_clusters = colnames(exp_mat),
+                              roundness = solidity_mean,
+                              ncells_PT=anno_barplot(unname(pt_count), add_numbers=F, height = unit(0.7, &quot;cm&quot;), gp = gpar(fill = &quot;brown&quot;)),
+                              ncells_bm=anno_barplot(unname(bm_count), add_numbers=F, height = unit(0.7, &quot;cm&quot;), gp = gpar(fill = &quot;aquamarine4&quot;)),
+                              col=list(pg_clusters=col_clusters,
+                                       roundness = col_mean_solidity,
+                                       area = col_mean_area), 
+                              show_legend=T)
+
+#Function to set dot size based on percentage expressed
+cell_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= percent_mat[i, j]/2 * min(unit.c(w, h)),
+                      gp = gpar(fill = col_fun(exp_mat[i, j]), col = NA))}
+
+#Function to set dot color based on mean expression
+col_fun = circlize::colorRamp2(c(min(exp_mat),(max(exp_mat)-min(exp_mat))/2, max(exp_mat)), viridis(100)[c(1,50,100)])
+
+#Function to set legend size according to percentage expressed
+layer_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= pindex(percent_mat, i, j)/1 * unit(1.5, &quot;mm&quot;),
+                      gp = gpar(fill = col_fun(pindex(exp_mat, i, j)), col = NA))}
+
+#Generate legend for percentage expressed
+lgd_list = list(
+    Legend( labels = c(0,0.25,0.5,0.75,1), title = &quot;percentage expressed&quot;,
+            graphics = list(
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0 * unit(2, &quot;mm&quot;),
+                                               gp = gpar(fill = &quot;black&quot;)),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.25 * unit(2, &quot;mm&quot;),
+                                               gp = gpar(fill = &quot;black&quot;)),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.5 * unit(2, &quot;mm&quot;),
+                                               gp = gpar(fill = &quot;black&quot;)),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.75 * unit(2, &quot;mm&quot;),
+                                               gp = gpar(fill = &quot;black&quot;)),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 1 * unit(2, &quot;mm&quot;),
+                                               gp = gpar(fill = &quot;black&quot;)))
+            ))
+
+#Heatmap
+hp &lt;- Heatmap(exp_mat,
+        heatmap_legend_param=list(title=&quot;expression&quot;),
+        column_title = &quot;Bubble plot - normalized mean expression and %expressed&quot;, 
+        top_annotation = column_ha, 
+        col=col_fun,
+        rect_gp = gpar(type = &quot;none&quot;),
+        clustering_distance_columns=&quot;pearson&quot;, 
+        clustering_method_columns=&quot;average&quot;, 
+        layer_fun = layer_fun,
+        row_labels=sapply(strsplit(rownames(exp_mat), &quot;_&quot;), &quot;[[&quot;, 1),
+        cell_fun = cell_fun,
+        show_row_dend = F,
+        column_dend_height = unit(1.5, &quot;cm&quot;),
+        row_names_gp = gpar(fontsize = 10),
+        column_names_gp = gpar(fontsize = 10),
+        column_names_rot = 45,
+        border = &quot;black&quot;)
+
+d1 &lt;- draw( hp, annotation_legend_list = lgd_list)</code></pre>
+<p><img src="figure/04_phenotyping.Rmd/vis-data-bubbleplot-1.png" width="1536" style="display: block; margin: auto;" /></p>
+<p>For visualization purpose we will use different UMAP parameters.</p>
+<pre class="r"><code>#mat_red &lt;- calculateUMAP(mat, n_neighbors=30, BPPARAM = MulticoreParam(RNGseed = 221228))
+mat_red &lt;- readRDS(file.path(params$output, &quot;20230628_mat_red.rds&quot;)) #discrepancies due to package update
+rownames(mat_red) &lt;- colnames(spe)
+
+#saveRDS(mat_red, file.path(params$output, &quot;mat_red.rds&quot;))
+
+reducedDim(spe, &quot;UMAP&quot;) &lt;- mat_red</code></pre>
+<p>Let’s visualize phenograph clusters and tissue types in UMAP space.
+Here <code>dittoDimPlot</code> can be used directly on the SPE
+object.</p>
+<pre class="r"><code>p1 &lt;- dittoDimPlot(spe, var = &quot;pg_clusters&quot;, 
+             reduction.use = &quot;UMAP&quot;, size = 1,
+             do.label = TRUE,
+             legend.show=F) +
+  scale_color_manual(values = col_clusters) + 
+  theme(legend.title = element_blank()) +
+  ggtitle(&quot;PG clusters on UMAP&quot;)</code></pre>
+<pre><code>Scale for colour is already present.
+Adding another scale for colour, which will replace the existing scale.</code></pre>
+<pre class="r"><code>p1</code></pre>
+<p><img src="figure/04_phenotyping.Rmd/UMAP-vis-clusters-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>p1 &lt;- dittoDimPlot(spe, var = &quot;GD2_Gd155_mean&quot;, assay = &quot;counts&quot;,
+             reduction.use = &quot;UMAP&quot;, size = 0.2, 
+             colors = viridis(100), do.label = TRUE) +
+    scale_color_viridis()</code></pre>
+<pre><code>do.label was/were ignored for non-discrete data.</code></pre>
+<pre><code>Scale for colour is already present.
+Adding another scale for colour, which will replace the existing scale.</code></pre>
+<pre class="r"><code>p2 &lt;- dittoDimPlot(spe, var = &quot;CD15_Bi209_mean&quot;, assay = &quot;counts&quot;,
+             reduction.use = &quot;UMAP&quot;, size = 0.2, 
+             colors = viridis(100), do.label = TRUE) +
+    scale_color_viridis()</code></pre>
+<pre><code>do.label was/were ignored for non-discrete data.
+Scale for colour is already present.
+Adding another scale for colour, which will replace the existing scale.</code></pre>
+<p>Next, we will plot the tissue type separately in the dim-red
+space.</p>
+<pre class="r"><code>var &lt;- &quot;tissue&quot;
+
+rownames(mat_red) &lt;- spe$sample_id
+meta &lt;- colData(spe)[match(rownames(mat_red), spe$sample_id),var]
+
+tissue_types &lt;- unique(meta)
+bin_col &lt;- setNames(c(adjustcolor(&quot;gray90&quot;,alpha.f=1), &quot;palegreen4&quot;), c(FALSE,TRUE))
+
+plot_list &lt;- list()
+
+for(i in 1: length(tissue_types)){
+
+  sample_binary &lt;- meta == tissue_types[i] 
+  
+  background &lt;- as.data.frame(mat_red[!sample_binary,])
+  foreground &lt;- as.data.frame(mat_red[sample_binary,])
+  plot_list[[i]] &lt;- ggplot(background, aes(x=V1, y=V2) ) +
+    geom_point(color=&quot;gray90&quot;, size=0.02) +
+    geom_point(data=foreground, color=&quot;palegreen4&quot;, show.legend=F, size=0.02, alpha=0.25) +
+    ggtitle(tissue_types[i]) +
+    theme(plot.title = element_text(size = 5), 
+          axis.title = element_text(size=5), 
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(), 
+          axis.line = element_line(colour = &quot;black&quot;))
+}
+
+
+plot_list[[1]]</code></pre>
+<p><img src="figure/04_phenotyping.Rmd/UMAP-vis-tissue-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>plot_list[[2]]</code></pre>
+<p><img src="figure/04_phenotyping.Rmd/UMAP-vis-tissue-2.png" width="672" style="display: block; margin: auto;" /></p>
+<p>We can see that PT samples are primarily comprised of tumor cells
+(GD2+) and bone marrow samples include a large proprotion of
+granulocytes (CD15+).</p>
+</div>
+<div id="annotation-and-merging-of-clusters" class="section level2">
+<h2>Annotation and merging of clusters</h2>
+<p>Next, we read celltype and metacluster-labels for clusters. These
+have been assigned based on thorough examination of images and
+co-expressions and using literature. Let’s start with celltype
+assignments…</p>
+<pre class="r"><code>annotation &lt;- read.csv(file.path(params$input, &quot;annotation_pub.csv&quot;), sep=&quot;;&quot;)
+
+BM_cluster_names &lt;- setNames(annotation$BM.annotation, annotation$cluster)
+PT_cluster_names &lt;- setNames(annotation$PT.annotation, annotation$cluster)
+
+BM_celltypes &lt;- recode(spe[,spe$tissue==&quot;BM&quot;]$pg_clusters, !!!BM_cluster_names)
+PT_celltypes &lt;- recode(spe[,spe$tissue==&quot;PT&quot;]$pg_clusters, !!!PT_cluster_names)
+
+spe$celltype &lt;- &quot;na&quot;
+spe[,spe$tissue==&quot;BM&quot;]$celltype&lt;- as.vector(BM_celltypes)
+spe[,spe$tissue==&quot;PT&quot;]$celltype&lt;- as.vector(PT_celltypes)</code></pre>
+<p>…and then to the same for metaclusters:</p>
+<pre class="r"><code>BM_metacluster_names &lt;- setNames(annotation$BM.metacluster, annotation$cluster)
+PT_metacluster_names &lt;- setNames(annotation$PT.metacluster, annotation$cluster)
+
+BM_metacelltypes &lt;- recode(spe[,spe$tissue==&quot;BM&quot;]$pg_clusters, !!!BM_metacluster_names)
+PT_metacelltypes &lt;- recode(spe[,spe$tissue==&quot;PT&quot;]$pg_clusters, !!!PT_metacluster_names)
+
+spe$metacluster &lt;- &quot;na&quot;
+spe[,spe$tissue==&quot;BM&quot;]$metacluster&lt;- as.vector(BM_metacelltypes)
+spe[,spe$tissue==&quot;PT&quot;]$metacluster&lt;- as.vector(PT_metacelltypes)</code></pre>
+</div>
+<div id="retrieve-tumor-cells-from-gd2mpo-double-positive-cells"
+class="section level2">
+<h2>Retrieve tumor cells from GD2/MPO double positive cells</h2>
+<p>There is one cluster in BM samples, which expresses both GD2 and MPO.
+This is caused by lateral spillover in samples densely populated with
+either tumor cells (GD2+) or granulocytes (MPO+). We will retrieve
+disseminated tumor cells (DTCs) from this cluster using GMMs.</p>
+<pre class="r"><code>set.seed(20231201)
+
+markers &lt;- grepl(&quot;GD2|CD45|MPO|CD15|CD11b&quot;, rownames(spe)) &amp; !grepl(&quot;mean-80|IF&quot;, rownames(spe))
+
+tmp &lt;- t(assay(spe[,spe$celltype==&quot;GD2+MPO+&quot;], &quot;counts&quot;)[markers,])
+
+gmm &lt;- Mclust(tmp, G = 2)
+clusters &lt;- gmm$classification
+
+column_ha = HeatmapAnnotation(cluster = clusters, 
+                              show_legend=T)
+
+tmp2 &lt;- t(assay(spe[,spe$celltype==&quot;GD2+MPO+&quot;], &quot;counts&quot;)[rowData(spe)$use_channel,])
+
+ht&lt;- Heatmap(t(tmp2), 
+        column_title = &quot;Single-cell heatmap&quot;,
+        cluster_columns=F,
+        show_row_dend = F,
+        row_labels=sapply(strsplit(colnames(tmp2), &quot;_&quot;), &quot;[[&quot;, 1),
+        top_annotation=column_ha,
+        column_order= order(unname(clusters), decreasing=F),
+        show_column_dend = T,
+        show_column_names=F,
+        col=viridis(100)
+        )</code></pre>
+<pre><code>`use_raster` is automatically set to TRUE for a matrix with more than
+2000 columns You can control `use_raster` argument by explicitly
+setting TRUE/FALSE to it.
+
+Set `ht_opt$message = FALSE` to turn off this message.</code></pre>
+<pre class="r"><code>draw(ht)</code></pre>
+<p><img src="figure/04_phenotyping.Rmd/GD2+MPO+%20subclustering-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>In the heatmap above, we can see a clear separation of GD2+ CD45-
+MPOlow CD15- CD11b- (cluster 1) from GD2+ CD45+ MPO+ CD15+ CD11b+
+(cluster 2) cells. After thorough investigation on the image-level,
+cluster 1 was assigned to DTCs and cluster 2, a mix of DTCs and
+granulocytes, to “other”.</p>
+<p>Finally, the tumor subphenotypes of DTCs within GMM cluster 1 is
+determined based on similarity in expression profiles to the identified
+tumor subtypes from above, using singleR.</p>
+<pre class="r"><code>markers &lt;- rowData(spe)$use_channel
+
+query &lt;- t(tmp2[clusters==2,colnames(tmp2)%in%rownames(spe)[markers]])
+ref &lt;- assay(spe[markers,spe$metacluster==&quot;tumor&quot;], &quot;counts&quot;)
+ref_clusters &lt;- spe[markers,spe$metacluster==&quot;tumor&quot;]$celltype
+
+predicted_labels &lt;- SingleR(test = query, ref = ref, labels = ref_clusters, BPPARAM = MulticoreParam(workers=10, RNGseed=20231030))
+
+col_clusters &lt;- c(&quot;CD24+ marker-lo TC&quot;=rgb(230,245,201, maxColorValue = 255),
+                &quot;early SYM-like TC&quot;=rgb(204,235,197, maxColorValue = 255),
+                &quot;bridge-like TC&quot;=rgb(198,255,72, maxColorValue = 255),
+                &quot;GATA3hi TC&quot;=rgb(65,208,57, maxColorValue = 255),
+                &quot;CD24- marker-lo TC&quot;=rgb(60,119,97, maxColorValue = 255),
+                &quot;CHGAhi TC&quot;=rgb(102,166,30, maxColorValue = 255),
+                &quot;Ki67hi TC&quot;=rgb(149,144,89, maxColorValue = 255),
+                &quot;CXCR4hi TC&quot;=rgb(210,205,126, maxColorValue = 255),
+                &quot;CD44+ mes-like TC&quot;=rgb(27,158,119, maxColorValue = 255),
+                &quot;GD2lo TC&quot;=rgb(102,194,165, maxColorValue = 255))
+
+plotScoreHeatmap(predicted_labels, annotation_colors=list(Labels = col_clusters), annotation_legend=F, treeheight_row=0) #define the colors first </code></pre>
+<p><img src="figure/04_phenotyping.Rmd/singleR-tumor-cell-assignment-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>labels &lt;- predicted_labels$labels
+
+#Assign predicted labels
+dtc &lt;- rownames(tmp2[clusters==2,])
+no_dtc &lt;- rownames(tmp2[clusters==1,])
+spe[,colnames(spe)%in%dtc]$celltype &lt;- labels
+spe[,colnames(spe)%in%no_dtc]$celltype &lt;- &quot;other&quot;
+spe[,colnames(spe)%in%dtc]$metacluster &lt;- &quot;tumor&quot;</code></pre>
+<p>We can see that most cells were assigned to either CD24+ or CD24-
+marker-lo TCs, which is reasonable based on their expression.</p>
+</div>
+<div id="granulocyte-re-classification" class="section level2">
+<h2>Granulocyte re-classification</h2>
+<p>For BM samples, granulocytes are re-classified into four maturation
+states based on the morphological feature solidity.</p>
+<pre class="r"><code>spe_gran &lt;- spe[,spe$celltype==&quot;granulocyte&quot; &amp; spe$tissue==&quot;BM&quot;]
+
+spe_gran$gran_type &lt;- &#39;neutrophil&#39;
+spe_gran[,spe_gran$solidity&gt;=0.83 &amp; spe_gran$solidity&lt;0.93]$gran_type &lt;- &#39;band cell&#39;
+spe_gran[,spe_gran$solidity&gt;=0.93 &amp; spe_gran$solidity&lt;0.97]$gran_type &lt;- &#39;myelocyte&#39;
+spe_gran[,spe_gran$solidity&gt;=0.97]$gran_type &lt;- &#39;myeloblast&#39;
+
+#assign new granulocyte celltypes
+spe[,colnames(spe_gran)]$celltype &lt;- spe_gran$gran_type
+spe[,spe$tissue==&quot;PT&quot; &amp; spe$celltype==&quot;granulocyte&quot;]$celltype &lt;- &quot;neutrophil&quot;</code></pre>
+</div>
+<div id="assign-colors" class="section level2">
+<h2>Assign colors</h2>
+<p>Finally, we assign colors to all celltypes and metaclusters.</p>
+<pre class="r"><code>col_clusters &lt;- c(&quot;other&quot;=rgb(255,255,209, maxColorValue = 255),
+                &quot;LIN- Ki67+&quot;=rgb(254,217,166, maxColorValue = 255),
+                &quot;HSPC&quot;=rgb(253,180,98, maxColorValue = 255),
+                &quot;GZMB+ S100B- DC/NK&quot;=rgb(28,146,255, maxColorValue = 255),
+                &quot;B cell&quot;=rgb(168,128,250, maxColorValue = 255),
+                &quot;GZMB+ S100B+ DC/NK&quot;=rgb(0,255,255, maxColorValue = 255),
+                &quot;CD8+ naive T cell&quot;=rgb(188,128,189, maxColorValue = 255),
+                &quot;DN GZMB+ T cell&quot;=rgb(190,174,212, maxColorValue = 255),
+                &quot;CD8+ S100B+ T cell&quot;=rgb(253,218,236, maxColorValue = 255),
+                &quot;CD8+ GZMB+ PD1lo T cell&quot;=rgb(251,154,153, maxColorValue = 255),
+                &quot;CD4+ naive T cell&quot;=rgb(242,3,137, maxColorValue = 255),
+                &quot;DN T cell&quot;=rgb(251,128,114, maxColorValue = 255),
+                &quot;CD4+ PD1+ T cell&quot;=rgb(254,142,175, maxColorValue = 255),
+                &quot;CD8+ PDL1lo T cell&quot;=rgb(240,0,240, maxColorValue = 255),
+                &quot;CD4+ S100B+ T cell&quot;=rgb(227,26,28, maxColorValue = 255),
+                &quot;dense T cell region&quot;=rgb(145,2,144, maxColorValue = 255),
+                &quot;CD24+ marker-lo TC&quot;=rgb(230,245,201, maxColorValue = 255),
+                &quot;early SYM-like TC&quot;=rgb(204,235,197, maxColorValue = 255),
+                &quot;neural progenitor&quot;=rgb(238,118,0, maxColorValue = 255),
+                &quot;bridge-like TC&quot;=rgb(198,255,72, maxColorValue = 255),
+                &quot;GATA3hi TC&quot;=rgb(65,208,57, maxColorValue = 255),
+                &quot;CD24- marker-lo TC&quot;=rgb(60,119,97, maxColorValue = 255),
+                &quot;CD14+ PDL1- MO&quot;=rgb(104,180,238, maxColorValue = 255),
+                &quot;monoblast-like&quot;=rgb(128,177,211, maxColorValue = 255),
+                &quot;CD14+ PDL1+ MO&quot;=rgb(51,180,180, maxColorValue = 255),
+                &quot;CHGAhi TC&quot;=rgb(102,166,30, maxColorValue = 255),
+                &quot;Ki67hi TC&quot;=rgb(149,144,89, maxColorValue = 255),
+                &quot;CXCR4hi TC&quot;=rgb(210,205,126, maxColorValue = 255),
+                &quot;CD44+ mes-like TC&quot;=rgb(27,158,119, maxColorValue = 255),
+                &quot;GD2lo TC&quot;=rgb(102,194,165, maxColorValue = 255),
+                &quot;CD14- PDL1- MO/DC&quot;=rgb(39,130,187, maxColorValue = 255),
+                &quot;CD14- PDL1+ MO/DC&quot;=rgb(166,206,227, maxColorValue = 255),
+                &quot;pDC&quot;=rgb(212,241,240, maxColorValue = 255),
+                &quot;band cell&quot;=rgb(169,189,210, maxColorValue = 255),
+                &quot;myelocyte&quot;=rgb(217,217,217, maxColorValue = 255),          
+                &quot;myeloblast&quot;=rgb(2,0,138, maxColorValue = 255),
+                &quot;neutrophil&quot;=rgb(113,113,113, maxColorValue = 255),
+                &quot;fibroblast/endothel&quot;=rgb(212,89,67, maxColorValue = 255),
+                &quot;schwann cell&quot;=rgb(156,76,24, maxColorValue = 255),
+                &quot;MSC&quot;=rgb(174,129,37, maxColorValue = 255),
+                &quot;HPC&quot;=rgb(212,143,75, maxColorValue = 255),
+                &quot;Ki67+ CXCR4+ cell&quot;=rgb(254,215,0, maxColorValue = 255))
+
+metadata(spe)$color_vectors$col_celltype &lt;- col_clusters</code></pre>
+<pre class="r"><code>col_metacluster &lt;- c(&quot;tumor&quot;=&quot;palegreen4&quot;,
+                  &quot;T cell&quot;=&quot;indianred&quot;,
+                  &quot;granulocyte&quot;=&quot;#80B1D3&quot;,
+                  &quot;MO/DC/NK&quot;=&quot;#8DD3C7&quot;,
+                  &quot;B cell&quot;=&quot;#BC80BD&quot;,
+                  &quot;other&quot;=&quot;goldenrod1&quot;,
+                  &quot;progenitor&quot;=&quot;tan2&quot;,
+                  &quot;mesenchymal&quot;=&quot;tan4&quot;)
+                
+metadata(spe)$color_vectors$col_metacluster &lt;- col_metacluster</code></pre>
+</div>
+<div id="visualizations" class="section level2">
+<h2>Visualizations</h2>
+<p>For visualization purpose, we will give the celltypes a meaningful
+order.</p>
+<pre class="r"><code>clusternames_ordered &lt;- read.csv(file.path(params$input, &quot;celltypes_ordered_2.csv&quot;), sep=&quot;;&quot;, colClasses = c(&quot;order&quot; = &quot;character&quot;))
+codes &lt;- setNames(paste0(clusternames_ordered$order, &quot;_&quot;, clusternames_ordered$celltype), clusternames_ordered$celltype)
+spe$celltype_ordered &lt;- recode(spe$celltype, !!!codes)
+
+metadata(spe)$color_vectors$col_celltype_ordered &lt;- metadata(spe)$color_vectors$col_celltype
+names(metadata(spe)$color_vectors$col_celltype_ordered) &lt;- recode(names(metadata(spe)$color_vectors$col_celltype), !!!codes)</code></pre>
+<p>As a last step, we generate UMAP and bubble plots for the final
+celltypes/metaclusters.</p>
+<pre class="r"><code>p1 &lt;- dittoDimPlot(spe, var = &quot;celltype_ordered&quot;, 
+             reduction.use = &quot;UMAP&quot;, size = 1, 
+             do.label = F,
+             legend.show=T) +
+  scale_color_manual(values = metadata(spe)$color_vectors$col_celltype_ordered) +
+  theme(legend.title = element_blank()) +
+  ggtitle(&quot;Celltypes on UMAP&quot;)</code></pre>
+<pre><code>Scale for colour is already present.
+Adding another scale for colour, which will replace the existing scale.</code></pre>
+<pre class="r"><code>p2 &lt;- dittoDimPlot(spe, var = &quot;metacluster&quot;, 
+             reduction.use = &quot;UMAP&quot;, size = 1, labels.size=4,
+             do.label = T,
+             legend.show=F) +
+  scale_color_manual(values = metadata(spe)$color_vectors$col_metacluster) +
+  theme(legend.title = element_blank()) +
+  ggtitle(&quot;Metaclusters on UMAP&quot;)</code></pre>
+<pre><code>Scale for colour is already present.
+Adding another scale for colour, which will replace the existing scale.</code></pre>
+<pre class="r"><code>p1</code></pre>
+<p><img src="figure/04_phenotyping.Rmd/umap-final-celltypes-1.png" width="960" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>p2</code></pre>
+<p><img src="figure/04_phenotyping.Rmd/vis-metacluster-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>exp_mat_ &lt;- aggregate(t(mat), list(spe$celltype), mean)
+exp_mat &lt;- exp_mat_[,2:ncol(exp_mat_)]
+exp_mat &lt;- apply(exp_mat, 2, RESCALE, to=0:1)
+rownames(exp_mat) &lt;- exp_mat_[,&quot;Group.1&quot;]
+exp_mat &lt;- t(exp_mat)
+
+#Percentage of cells per cluster expressing a marker (&gt;0)
+tmp &lt;- mat
+tmp[tmp &gt; unname(quantile(exp_mat[exp_mat&gt;0], c(0.2)))] &lt;- 1
+tmp[tmp &lt;= unname(quantile(exp_mat[exp_mat&gt;0], c(0.2)))] &lt;- 0
+tmp &lt;- aggregate(t(tmp), list(spe$celltype), sum)
+tmp2 &lt;- tmp[,2:ncol(tmp)]
+rownames(tmp2) &lt;- tmp[,&quot;Group.1&quot;]
+percent_mat &lt;- tmp2 / unname(table(spe$celltype))
+percent_mat &lt;- t(percent_mat)
+percent_mat[percent_mat &lt; 0.1] &lt;- 0.1 #for visualization
+
+#Annotation bars
+bm_count &lt;- table(spe[,spe$tissue==&quot;BM&quot;]$celltype)
+bm_count[setdiff(colnames(exp_mat), names(bm_count))] &lt;- 0
+bm_count &lt;- bm_count[colnames(exp_mat)]
+pt_count &lt;- table(spe[,spe$tissue==&quot;PT&quot;]$celltype)
+pt_count[setdiff(colnames(exp_mat), names(pt_count))] &lt;- 0
+pt_count &lt;- pt_count[colnames(exp_mat)]
+
+mean_metaclust &lt;-aggregate(spe$metacluster, list(spe$celltype), max)
+
+mean_morph &lt;- aggregate(morph_mat_clipped, list(spe$celltype), mean)
+solidity_mean = mean_morph[,&quot;solidity&quot;]
+col_mean_solidity = colorRamp2(c(min(solidity_mean),min(solidity_mean)+(max(solidity_mean)-min(solidity_mean))/2, max(solidity_mean)), c(&quot;blue&quot;, &quot;white&quot;, &quot;red&quot;))
+
+column_ha = HeatmapAnnotation(metacluster=mean_metaclust$x,
+                              roundness = solidity_mean,
+                              ncells_PT=anno_barplot(unname(pt_count), add_numbers=F, height = unit(0.7, &quot;cm&quot;), gp = gpar(fill = &quot;brown&quot;)),
+                              ncells_bm=anno_barplot(unname(bm_count), add_numbers=F, height = unit(0.7, &quot;cm&quot;), gp = gpar(fill = &quot;aquamarine4&quot;)),
+                              col=list(metacluster=metadata(spe)$color_vectors$col_metacluster, 
+                                       roundness = col_mean_solidity
+                                       ), 
+                              show_legend=T)
+
+#Function to set dot size based on percentage expressed
+cell_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= percent_mat[i, j]/2 * min(unit.c(w, h)),
+                      gp = gpar(fill = col_fun(exp_mat[i, j]), col = NA))}
+
+#Function to set dot color based on mean expression
+col_fun = circlize::colorRamp2(c(min(exp_mat),(max(exp_mat)-min(exp_mat))/2, max(exp_mat)), viridis(100)[c(1,50,100)])
+
+#Function to set legend size according to percentage expressed
+layer_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= pindex(percent_mat, i, j)/1 * unit(1.5, &quot;mm&quot;),
+                      gp = gpar(fill = col_fun(pindex(exp_mat, i, j)), col = NA))}
+
+#Generate legend for percentage expressed
+lgd_list = list(
+    Legend( labels = c(0,0.25,0.5,0.75,1), title = &quot;percentage expressed&quot;,
+            graphics = list(
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0 * unit(2, &quot;mm&quot;),
+                                               gp = gpar(fill = &quot;black&quot;)),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.25 * unit(2, &quot;mm&quot;),
+                                               gp = gpar(fill = &quot;black&quot;)),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.5 * unit(2, &quot;mm&quot;),
+                                               gp = gpar(fill = &quot;black&quot;)),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.75 * unit(2, &quot;mm&quot;),
+                                               gp = gpar(fill = &quot;black&quot;)),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 1 * unit(2, &quot;mm&quot;),
+                                               gp = gpar(fill = &quot;black&quot;)))
+            ))
+
+#Heatmap
+hp &lt;- Heatmap(exp_mat,
+        heatmap_legend_param=list(title=&quot;expression&quot;),
+        column_title = &quot;Bubble plot - normalized mean expression and %expressed&quot;, 
+        top_annotation = column_ha, 
+        col=col_fun,
+        rect_gp = gpar(type = &quot;none&quot;),
+        clustering_distance_columns=&quot;pearson&quot;, 
+        clustering_method_columns=&quot;average&quot;, 
+        layer_fun = layer_fun,
+        row_labels=sapply(strsplit(rownames(exp_mat), &quot;_&quot;), &quot;[[&quot;, 1),
+        cell_fun = cell_fun,
+        show_row_dend = F,
+        column_dend_height = unit(1.5, &quot;cm&quot;),
+        row_names_gp = gpar(fontsize = 10),
+        column_names_gp = gpar(fontsize = 10),
+        column_names_rot = 45,
+        border = &quot;black&quot;)
+
+d1 &lt;- draw( hp, annotation_legend_list = lgd_list)</code></pre>
+<p><img src="figure/04_phenotyping.Rmd/bubbleplot-final-celltypes-1.png" width="1152" style="display: block; margin: auto;" /></p>
+</div>
+<div id="save-object" class="section level2">
+<h2>Save object</h2>
+<pre class="r"><code>saveRDS(spe, file.path(params$output, &quot;spe_final.rds&quot;))</code></pre>
+</div>
+<div id="session-info" class="section level2">
+<h2>Session Info</h2>
+<details>
+<summary>
+SessionInfo
+</summary>
+<pre><code>R version 4.2.0 (2022-04-22)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 20.04.4 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+attached base packages:
+[1] stats4    grid      stats     graphics  grDevices utils     datasets 
+[8] methods   base     
+
+other attached packages:
+ [1] SpatialExperiment_1.6.1     circlize_0.4.15            
+ [3] SingleR_1.10.0              mclust_6.0.1               
+ [5] dittoSeq_1.8.1              interactions_1.1.5         
+ [7] lmerTest_3.1-3              lme4_1.1-35.1              
+ [9] performance_0.10.8          effectsize_0.8.6           
+[11] emmeans_1.9.0               data.table_1.14.10         
+[13] stringr_1.5.1               dplyr_1.1.4                
+[15] bruceR_2023.9               tidyHeatmap_1.8.1          
+[17] tidyr_1.3.0                 Rphenoannoy_0.1.0          
+[19] Matrix_1.6-5                igraph_1.6.0               
+[21] BiocParallel_1.30.4         scater_1.24.0              
+[23] ggplot2_3.4.4               scuttle_1.6.3              
+[25] SingleCellExperiment_1.20.1 SummarizedExperiment_1.26.1
+[27] Biobase_2.56.0              GenomicRanges_1.48.0       
+[29] GenomeInfoDb_1.32.4         IRanges_2.30.1             
+[31] S4Vectors_0.34.0            BiocGenerics_0.42.0        
+[33] MatrixGenerics_1.8.1        matrixStats_1.1.0          
+[35] viridis_0.6.4               viridisLite_0.4.2          
+[37] RColorBrewer_1.1-3          ComplexHeatmap_2.12.1      
+[39] workflowr_1.7.1            
+
+loaded via a namespace (and not attached):
+  [1] utf8_1.2.4                R.utils_2.12.3           
+  [3] tidyselect_1.2.0          DropletUtils_1.16.0      
+  [5] jtools_2.2.2              munsell_0.5.0            
+  [7] ScaledMatrix_1.4.1        codetools_0.2-18         
+  [9] withr_3.0.0               colorspace_2.1-0         
+ [11] highr_0.10                knitr_1.45               
+ [13] rstudioapi_0.15.0         labeling_0.4.3           
+ [15] git2r_0.33.0              GenomeInfoDbData_1.2.8   
+ [17] farver_2.1.1              datawizard_0.9.1         
+ [19] pheatmap_1.0.12           rhdf5_2.40.0             
+ [21] rprojroot_2.0.4           coda_0.19-4              
+ [23] vctrs_0.6.5               generics_0.1.3           
+ [25] TH.data_1.1-2             xfun_0.41                
+ [27] R6_2.5.1                  doParallel_1.0.17        
+ [29] ggbeeswarm_0.7.2          clue_0.3-65              
+ [31] rsvd_1.0.5                locfit_1.5-9.8           
+ [33] bitops_1.0-7              rhdf5filters_1.8.0       
+ [35] cachem_1.0.8              DelayedArray_0.22.0      
+ [37] promises_1.2.1            scales_1.3.0             
+ [39] multcomp_1.4-25           beeswarm_0.4.0           
+ [41] gtable_0.3.4              beachmat_2.12.0          
+ [43] Cairo_1.6-2               processx_3.8.3           
+ [45] sandwich_3.1-0            rlang_1.1.3              
+ [47] GlobalOptions_0.1.2       splines_4.2.0            
+ [49] yaml_2.3.8                httpuv_1.6.13            
+ [51] tools_4.2.0               jquerylib_0.1.4          
+ [53] ggridges_0.5.5            Rcpp_1.0.12              
+ [55] sparseMatrixStats_1.8.0   zlibbioc_1.42.0          
+ [57] purrr_1.0.2               RCurl_1.98-1.14          
+ [59] ps_1.7.6                  GetoptLong_1.0.5         
+ [61] cowplot_1.1.2             zoo_1.8-12               
+ [63] ggrepel_0.9.5             cluster_2.1.3            
+ [65] fs_1.6.3                  magrittr_2.0.3           
+ [67] magick_2.8.2              RANN_2.6.1               
+ [69] mvtnorm_1.2-4             whisker_0.4.1            
+ [71] patchwork_1.2.0           evaluate_0.23            
+ [73] xtable_1.8-4              gridExtra_2.3            
+ [75] shape_1.4.6               compiler_4.2.0           
+ [77] tibble_3.2.1              crayon_1.5.2             
+ [79] minqa_1.2.6               R.oo_1.25.0              
+ [81] htmltools_0.5.7           later_1.3.2              
+ [83] MASS_7.3-56               boot_1.3-28              
+ [85] cli_3.6.2                 R.methodsS3_1.8.2        
+ [87] parallel_4.2.0            insight_0.19.7           
+ [89] pkgconfig_2.0.3           getPass_0.2-4            
+ [91] numDeriv_2016.8-1.1       foreach_1.5.2            
+ [93] vipor_0.4.7               bslib_0.6.1              
+ [95] dqrng_0.3.2               XVector_0.36.0           
+ [97] estimability_1.4.1        callr_3.7.3              
+ [99] digest_0.6.34             parameters_0.21.3        
+[101] rmarkdown_2.25            dendextend_1.17.1        
+[103] edgeR_3.38.4              DelayedMatrixStats_1.18.2
+[105] rjson_0.2.21              nloptr_2.0.3             
+[107] lifecycle_1.0.4           nlme_3.1-157             
+[109] jsonlite_1.8.8            Rhdf5lib_1.18.2          
+[111] BiocNeighbors_1.14.0      limma_3.52.4             
+[113] fansi_1.0.6               pillar_1.9.0             
+[115] lattice_0.20-45           fastmap_1.1.1            
+[117] httr_1.4.7                survival_3.3-1           
+[119] glue_1.7.0                bayestestR_0.13.1        
+[121] png_0.1-8                 iterators_1.0.14         
+[123] pander_0.6.5              stringi_1.8.3            
+[125] sass_0.4.8                HDF5Array_1.24.2         
+[127] BiocSingular_1.12.0       irlba_2.3.5.1            </code></pre>
+</details>
+<br>
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-sessioninfo" data-toggle="collapse" data-target="#workflowr-sessioninfo" style="display: block;">
+<span class="glyphicon glyphicon-wrench" aria-hidden="true"></span>
+Session information
+</button>
+</p>
+<div id="workflowr-sessioninfo" class="collapse">
+<pre class="r"><code>sessionInfo()</code></pre>
+<pre><code>R version 4.2.0 (2022-04-22)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 20.04.4 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+attached base packages:
+[1] stats4    grid      stats     graphics  grDevices utils     datasets 
+[8] methods   base     
+
+other attached packages:
+ [1] SpatialExperiment_1.6.1     circlize_0.4.15            
+ [3] SingleR_1.10.0              mclust_6.0.1               
+ [5] dittoSeq_1.8.1              interactions_1.1.5         
+ [7] lmerTest_3.1-3              lme4_1.1-35.1              
+ [9] performance_0.10.8          effectsize_0.8.6           
+[11] emmeans_1.9.0               data.table_1.14.10         
+[13] stringr_1.5.1               dplyr_1.1.4                
+[15] bruceR_2023.9               tidyHeatmap_1.8.1          
+[17] tidyr_1.3.0                 Rphenoannoy_0.1.0          
+[19] Matrix_1.6-5                igraph_1.6.0               
+[21] BiocParallel_1.30.4         scater_1.24.0              
+[23] ggplot2_3.4.4               scuttle_1.6.3              
+[25] SingleCellExperiment_1.20.1 SummarizedExperiment_1.26.1
+[27] Biobase_2.56.0              GenomicRanges_1.48.0       
+[29] GenomeInfoDb_1.32.4         IRanges_2.30.1             
+[31] S4Vectors_0.34.0            BiocGenerics_0.42.0        
+[33] MatrixGenerics_1.8.1        matrixStats_1.1.0          
+[35] viridis_0.6.4               viridisLite_0.4.2          
+[37] RColorBrewer_1.1-3          ComplexHeatmap_2.12.1      
+[39] workflowr_1.7.1            
+
+loaded via a namespace (and not attached):
+  [1] utf8_1.2.4                R.utils_2.12.3           
+  [3] tidyselect_1.2.0          DropletUtils_1.16.0      
+  [5] jtools_2.2.2              munsell_0.5.0            
+  [7] ScaledMatrix_1.4.1        codetools_0.2-18         
+  [9] withr_3.0.0               colorspace_2.1-0         
+ [11] highr_0.10                knitr_1.45               
+ [13] rstudioapi_0.15.0         labeling_0.4.3           
+ [15] git2r_0.33.0              GenomeInfoDbData_1.2.8   
+ [17] farver_2.1.1              datawizard_0.9.1         
+ [19] pheatmap_1.0.12           rhdf5_2.40.0             
+ [21] rprojroot_2.0.4           coda_0.19-4              
+ [23] vctrs_0.6.5               generics_0.1.3           
+ [25] TH.data_1.1-2             xfun_0.41                
+ [27] R6_2.5.1                  doParallel_1.0.17        
+ [29] ggbeeswarm_0.7.2          clue_0.3-65              
+ [31] rsvd_1.0.5                locfit_1.5-9.8           
+ [33] bitops_1.0-7              rhdf5filters_1.8.0       
+ [35] cachem_1.0.8              DelayedArray_0.22.0      
+ [37] promises_1.2.1            scales_1.3.0             
+ [39] multcomp_1.4-25           beeswarm_0.4.0           
+ [41] gtable_0.3.4              beachmat_2.12.0          
+ [43] Cairo_1.6-2               processx_3.8.3           
+ [45] sandwich_3.1-0            rlang_1.1.3              
+ [47] GlobalOptions_0.1.2       splines_4.2.0            
+ [49] yaml_2.3.8                httpuv_1.6.13            
+ [51] tools_4.2.0               jquerylib_0.1.4          
+ [53] ggridges_0.5.5            Rcpp_1.0.12              
+ [55] sparseMatrixStats_1.8.0   zlibbioc_1.42.0          
+ [57] purrr_1.0.2               RCurl_1.98-1.14          
+ [59] ps_1.7.6                  GetoptLong_1.0.5         
+ [61] cowplot_1.1.2             zoo_1.8-12               
+ [63] ggrepel_0.9.5             cluster_2.1.3            
+ [65] fs_1.6.3                  magrittr_2.0.3           
+ [67] magick_2.8.2              RANN_2.6.1               
+ [69] mvtnorm_1.2-4             whisker_0.4.1            
+ [71] patchwork_1.2.0           evaluate_0.23            
+ [73] xtable_1.8-4              gridExtra_2.3            
+ [75] shape_1.4.6               compiler_4.2.0           
+ [77] tibble_3.2.1              crayon_1.5.2             
+ [79] minqa_1.2.6               R.oo_1.25.0              
+ [81] htmltools_0.5.7           later_1.3.2              
+ [83] MASS_7.3-56               boot_1.3-28              
+ [85] cli_3.6.2                 R.methodsS3_1.8.2        
+ [87] parallel_4.2.0            insight_0.19.7           
+ [89] pkgconfig_2.0.3           getPass_0.2-4            
+ [91] numDeriv_2016.8-1.1       foreach_1.5.2            
+ [93] vipor_0.4.7               bslib_0.6.1              
+ [95] dqrng_0.3.2               XVector_0.36.0           
+ [97] estimability_1.4.1        callr_3.7.3              
+ [99] digest_0.6.34             parameters_0.21.3        
+[101] rmarkdown_2.25            dendextend_1.17.1        
+[103] edgeR_3.38.4              DelayedMatrixStats_1.18.2
+[105] rjson_0.2.21              nloptr_2.0.3             
+[107] lifecycle_1.0.4           nlme_3.1-157             
+[109] jsonlite_1.8.8            Rhdf5lib_1.18.2          
+[111] BiocNeighbors_1.14.0      limma_3.52.4             
+[113] fansi_1.0.6               pillar_1.9.0             
+[115] lattice_0.20-45           fastmap_1.1.1            
+[117] httr_1.4.7                survival_3.3-1           
+[119] glue_1.7.0                bayestestR_0.13.1        
+[121] png_0.1-8                 iterators_1.0.14         
+[123] pander_0.6.5              stringi_1.8.3            
+[125] sass_0.4.8                HDF5Array_1.24.2         
+[127] BiocSingular_1.12.0       irlba_2.3.5.1            </code></pre>
+</div>
+</div>
+</div>
+
+
+<!-- Adjust MathJax settings so that all math formulae are shown using
+TeX fonts only; see
+https://docs.mathjax.org/en/latest/web/configuration.html. This will make
+the presentation more consistent at the cost of the webpage sometimes
+taking slightly longer to load. Note that this only works because the
+footer is added to webpages before the MathJax javascript. -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

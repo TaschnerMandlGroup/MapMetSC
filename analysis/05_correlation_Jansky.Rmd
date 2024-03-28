@@ -1,0 +1,245 @@
+---
+title: "Validation of tumor celltypes using scRNA-seq data by Jansky et al."
+author: "LazDaria"
+date: "`r Sys.Date()`"
+output: 
+  workflowr::wflow_html
+editor_options:
+  chunk_output_type: inline
+params: 
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  public: "/mnt/Multimodal_Imaging_Daria/Publication/public_datasets"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      error=FALSE,
+                      messages=FALSE,
+                      warning=FALSE)
+```
+
+# Validation using scRNA-seq data by Jansky et al. {#jansky}
+To evaluate the validity of tumor cell phenotype annotations, we compare the cell expression profiles to a previously generated scRNA-seq dataset of healthy developing adrenal medullas ([Jansky et al.](https://doi.org/10.1038/s41588-021-00806-1)). 
+
+## Load libraries
+<details>
+   <summary>Load libraries</summary>
+   
+```{r load-libraries}
+library(Seurat)
+library(dplyr)
+library(FactoMineR)
+library(factoextra)
+library(ComplexHeatmap)
+library(viridis)
+library(bruceR)
+```
+</details>
+
+## Read data
+First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping) and the published Seurat object containing the scRNA-seq data. Please make sure to replace `params$public`with the path to the scRNA-seq data.
+
+```{r read-data}
+# IMC data
+protein <- readRDS(file.path(params$output,"spe_final.rds"))
+protein <- protein[rowData(protein)$use_channel,]
+col_celltype <- metadata(protein)$color_vectors$col_celltype
+protein <- protein[,protein$metacluster=="tumor"]
+
+#scRNA-seq data
+rna <- readRDS(file.path(params$public,"Jansky/adrenal_medulla_Seurat.RDS"))
+DefaultAssay(rna) <- "RNA"
+rna <- UpdateSeuratObject(object = rna)
+```
+
+## Set common tumor markers 
+Next, we will set common markers between the reference and query dataset. Therefore, we have to rename the features in the imaging dataset to the names of the corresponding genes. 
+```{r set-common-tumormarkers}
+protein2gene <- read.csv(file.path(params$public,"protein2gene.csv"), sep=";")
+
+code <- setNames(protein2gene$genes, protein2gene$protein)
+rownames(protein) <- recode(rownames(protein), !!!code)
+rowData(protein)$name <- rownames(protein)
+rowData(protein)$channel <- rownames(protein)
+
+#reduce metadata
+metadata <- c("sample_id", "ObjectNumber", "sample", "tissue", "celltype", "metacluster")
+colData(protein)[, metadata]
+colData(protein) <- colData(protein)[, metadata]
+
+common_features <- intersect(rownames(rna@assays$RNA@data), row.names(protein))
+tumor_markers <- c("ELAVL4", "CXCR4", "HLA-A", "CD24", "CD44", "NCAM1", "GATA3", "VIM", "MKI67", "ST8SIA1", "PRPH", "LUM", "CHGA", "SOX10", "S100B")
+common_features <- common_features[common_features%in%tumor_markers]
+```
+## Visualize celltype similarity
+
+We will first look at cluster similarity to evaluate which clusters are similar. 
+
+### scRNA-seq data
+```{r mean-per-cluster-rna, fig.width=8, fig.height=8}
+rna_clusters <- rna@active.ident
+rna_data <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
+rna_mean <- aggregate(t(rna_data), list(rna_clusters), mean)
+
+rna_mean_t <- t(rna_mean[,2:ncol(rna_mean)])
+colnames(rna_mean_t) <- rna_mean[,"Group.1"]
+rna_mean_scaled <- t(apply(rna_mean_t, 1, RESCALE, to=0:1))
+
+column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(rna_clusters))[,"Freq"], height = unit(1, "cm")),
+                              show_legend=F)
+
+Heatmap(rna_mean_scaled, 
+        column_title = "Mean per cluster (scRNA-seq data)",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+```
+
+```{r umap-rna}
+set.seed(230712)
+
+col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
+col_rna_clusters = setNames(sample(col_vector_433, length(unique(rna@active.ident))), unique(rna@active.ident))
+
+DimPlot(rna, reduction="umap", cols=col_rna_clusters)
+```
+
+### Combined visualizations
+We will next plot the two together to look at similarity.
+```{r mean-per-cluster-combined, fig.height=8, fig.width=10}
+#Mean expression per cluster
+protein_clusters <- protein$celltype
+protein_data <- assay(protein, "counts")[common_features, ]
+protein_mean <- aggregate(t(protein_data), list(protein_clusters), mean)
+protein_mean_t <- t(protein_mean[,2:ncol(protein_mean)])
+colnames(protein_mean_t) <- protein_mean[,"Group.1"]
+protein_exp_mat <- t(apply(protein_mean_t, 1, RESCALE, to=0:1))
+
+rna_clusters <- droplevels(rna@active.ident)
+rna_data <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
+rna_mean <- aggregate(t(rna_data), list(rna_clusters), mean)
+rna_mean_t <- t(rna_mean[,2:ncol(rna_mean)])
+colnames(rna_mean_t) <- rna_mean[,"Group.1"]
+rna_exp_mat <- t(apply(rna_mean_t, 1, RESCALE, to=0:1))
+
+#Percentage of cells per cluster expressing a marker (>0)
+tmp <- protein_data
+tmp[tmp > unname(quantile(protein_exp_mat[protein_exp_mat>0], c(0.2)))] <- 1
+tmp[tmp <= unname(quantile(protein_exp_mat[protein_exp_mat>0], c(0.2)))] <- 0
+tmp <- aggregate(t(tmp), list(protein_clusters), sum)
+tmp2 <- tmp[,2:ncol(tmp)]
+rownames(tmp2) <- tmp[,"Group.1"]
+protein_percent_mat <- tmp2 / unname(table(protein_clusters))
+protein_percent_mat <- t(protein_percent_mat)
+protein_percent_mat[protein_percent_mat < 0.1] <- 0.1 #for visualization purposes
+head(protein_percent_mat)
+
+tmp <- rna_data
+tmp[tmp > unname(quantile(rna_exp_mat[rna_exp_mat>0], c(0.2)))] <- 1
+tmp[tmp <= unname(quantile(rna_exp_mat[rna_exp_mat>0], c(0.2)))] <- 0
+tmp <- aggregate(t(tmp), list(rna_clusters), sum)
+tmp2 <- tmp[,2:ncol(tmp)]
+rownames(tmp2) <- tmp[,"Group.1"]
+rna_percent_mat <- tmp2 / unname(table(rna_clusters))
+rna_percent_mat <- t(rna_percent_mat)
+rna_percent_mat[rna_percent_mat < 0.1] <- 0.1 #for visualization purposes
+head(rna_percent_mat)
+
+#Annotation bars
+clusters <- c(rna_clusters, protein_clusters)
+cell_count <- c(as.data.frame(table(rna_clusters))[,"Freq"], as.data.frame(table(protein_clusters))[,"Freq"])
+modality <- c(rep(c("RNA"), ncol(rna_exp_mat)), rep(c("protein"), ncol(protein_exp_mat)))
+exp_mat <- cbind(rna_exp_mat, protein_exp_mat)
+percent_mat <- cbind(rna_percent_mat, protein_percent_mat)
+
+modality_col <- setNames(c("ivory4", "lightcoral"), c("RNA", "protein"))
+
+column_ha = HeatmapAnnotation(modality=modality,
+                              ncells=anno_barplot(cell_count, height = unit(0.5, "cm")),
+                              col=list(modality=modality_col),
+                              show_legend=T)
+
+#Function to set dot size based on percentage expressed
+cell_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= percent_mat[i, j]/2 * min(unit.c(w, h)),
+                      gp = gpar(fill = col_fun(exp_mat[i, j]), col = NA))}
+
+#Function to set dot color based on mean expression
+col_fun = circlize::colorRamp2(c(min(exp_mat),(max(exp_mat)-min(exp_mat))/2, max(exp_mat)), viridis(100)[c(1,50,100)])
+
+#Function to set legend size according to percentage expressed
+layer_fun = function(j, i, x, y, w, h, fill){
+          grid.rect(x = x, y = y, width = w, height = h, 
+                    gp = gpar(col = NA, fill = NA))
+          grid.circle(x=x,y=y,r= pindex(percent_mat, i, j)/1 * unit(1.5, "mm"),
+                      gp = gpar(fill = col_fun(pindex(exp_mat, i, j)), col = NA))}
+
+#Generate legend for percentage expressed
+lgd_list = list(
+    Legend( labels = c(0,0.25,0.5,0.75,1), title = "percentage expressed",
+            graphics = list(
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.25 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.5 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 0.75 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")),
+              function(x, y, w, h) grid.circle(x = x, y = y, r = 1 * unit(2, "mm"),
+                                               gp = gpar(fill = "black")))
+            ))
+
+#Heatmap
+set.seed(20231215)
+hp <- Heatmap(exp_mat,
+        heatmap_legend_param=list(title="expression"),
+        column_title = "Dotplot - normalized mean expression and %expressed", 
+        top_annotation = column_ha, 
+        col=col_fun,
+        rect_gp = gpar(type = "none"),
+        clustering_distance_columns="pearson",
+        clustering_method_columns="average", 
+        layer_fun = layer_fun,
+        row_labels=sapply(strsplit(rownames(exp_mat), "_"), "[[", 1),
+        cell_fun = cell_fun,
+        show_row_dend = F,
+        column_dend_height = unit(2, "cm"),
+        row_names_gp = gpar(fontsize = 10),
+        column_names_gp = gpar(fontsize = 10),
+        column_names_rot = 45,
+        border = "black")
+
+d1 <- draw( hp, annotation_legend_list = lgd_list)
+```
+...and plot mean expression profiles per clusters (IMC & scRNA-seq) in a PCA plot.
+```{r pca-plot, fig.width=10}
+mean_scaled <- cbind(rna_exp_mat, protein_exp_mat)
+data <- as.data.frame(mean_scaled)
+
+data <- t(data)
+data.pca <- FactoMineR::PCA(data, graph=F)
+data$modality <- as.factor(modality)
+
+set.seed(20231215)
+pca <- fviz_pca_ind(data.pca, repel=T, habillage=data$modality) + scale_color_manual(values=c("lightcoral", "ivory4"))
+
+pca
+```
+
+## Session Info
+
+<details>
+   <summary>SessionInfo</summary>
+   
+```{r, echo = FALSE}
+sessionInfo()
+```
+</details>

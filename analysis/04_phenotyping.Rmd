@@ -103,15 +103,14 @@ Heatmap(mat[,rand_cells],
         )
 ```
 
-## Dimensionality reduction prior to clustering
-We will then reduce dimensionality of the data to five dimensions as described [here](https://umap-learn.readthedocs.io/en/latest/clustering.html).
+## Dimensionality reduction prior to clustering {#umap1}
+We reduce dimensionality of the data to five dimensions prior to clustering as described [here](https://umap-learn.readthedocs.io/en/latest/clustering.html). `calculateUMAP` is a wrapper function using the package `uwot`. `uwot` relies on the underlying compiler and C++ standard library on your machine and this can result in minor differences in output even with the same input data, arguments, packages and R version, as described [here](https://rdrr.io/github/jlmelville/uwot/f/vignettes/articles/reproducibility.Rmd). To ensure reproducibility of the exact same results between machines, we provide the dimensionality reduced count data, used for figure generation, as R object. 
+
 ```{r UMAP-pre-clustering}
 #mat_red_clustering <- calculateUMAP(mat, ncomponents=5, n_neighbors=30, min_dist= 0, BPPARAM = MulticoreParam(RNGseed = 221228))
-mat_red_clustering <- readRDS(file.path(params$output, "20230628_mat_red_clustering.rds")) #discrepancies due to package update
+mat_red_clustering <- readRDS(file.path(params$output, "20230628_mat_red_clustering.rds")) 
+
 rownames(mat_red_clustering) <- colnames(spe)
-
-#saveRDS(mat_red_clustering, file.path(params$output, "mat_red_clustering.rds"))
-
 reducedDim(spe, "UMAP_clustering") <- mat_red_clustering
 ```
 
@@ -229,14 +228,12 @@ hp <- Heatmap(exp_mat,
 d1 <- draw( hp, annotation_legend_list = lgd_list)
 ```
 
-For visualization purpose we will use different UMAP parameters.
+For visualization purpose we will use different UMAP parameters. We read the R file from memory due to reasons explained in (#umap1).
 ```{r UMAP-visualization}
 #mat_red <- calculateUMAP(mat, n_neighbors=30, BPPARAM = MulticoreParam(RNGseed = 221228))
-mat_red <- readRDS(file.path(params$output, "20230628_mat_red.rds")) #discrepancies due to package update
+mat_red <- readRDS(file.path(params$output, "20230628_mat_red.rds")) 
+
 rownames(mat_red) <- colnames(spe)
-
-#saveRDS(mat_red, file.path(params$output, "mat_red.rds"))
-
 reducedDim(spe, "UMAP") <- mat_red
 ```
 
@@ -264,6 +261,8 @@ p2 <- dittoDimPlot(spe, var = "CD15_Bi209_mean", assay = "counts",
              reduction.use = "UMAP", size = 0.2, 
              colors = viridis(100), do.label = TRUE) +
     scale_color_viridis()
+
+p1+p2
 ```
 
 Next, we will plot the tissue type separately in the dim-red space.
@@ -337,7 +336,7 @@ spe[,spe$tissue=="PT"]$metacluster<- as.vector(PT_metacelltypes)
 ## Retrieve tumor cells from GD2/MPO double positive cells
 There is one cluster in BM samples, which expresses both GD2 and MPO. This is caused by lateral spillover in samples densely populated with either tumor cells (GD2+) or granulocytes (MPO+). We will retrieve disseminated tumor cells (DTCs) from this cluster using GMMs.
 
-```{r GD2+MPO+ subclustering}
+```{r GD2-MPO-subclustering, fig.height=6, fig.width=6}
 set.seed(20231201)
 
 markers <- grepl("GD2|CD45|MPO|CD15|CD11b", rownames(spe)) & !grepl("mean-80|IF", rownames(spe))
@@ -347,26 +346,26 @@ tmp <- t(assay(spe[,spe$celltype=="GD2+MPO+"], "counts")[markers,])
 gmm <- Mclust(tmp, G = 2)
 clusters <- gmm$classification
 
-rand_cells <- sample(seq_len(nrows(tmp)), 2000)
+rand_cells <- sample(seq_len(nrow(tmp)), 500)
 
 column_ha = HeatmapAnnotation(cluster = clusters[rand_cells], 
                               show_legend=T)
 
 tmp2 <- t(assay(spe[,spe$celltype=="GD2+MPO+"], "counts")[rowData(spe)$use_channel,])
 
-ht<- Heatmap(t(tmp2[,rand_cells]), 
+ht<- Heatmap(t(tmp2[rand_cells,]), 
         column_title = "Single-cell heatmap",
         cluster_columns=F,
         show_row_dend = F,
-        row_labels=sapply(strsplit(colnames(tmp2), "_"), "[[", 1),
+        row_labels=sapply(strsplit(colnames(tmp2[rand_cells,]), "_"), "[[", 1),
         top_annotation=column_ha,
-        column_order= order(unname(clusters), decreasing=F),
+        column_order= order(unname(clusters[rand_cells]), decreasing=F),
         show_column_dend = T,
         show_column_names=F,
         col=viridis(100)
         )
 
-draw(ht)
+d1 <- draw(ht)
 ```
 
 In the heatmap above, we can see a clear separation of GD2+ CD45- MPOlow CD15- CD11b- (cluster 1) from GD2+ CD45+ MPO+ CD15+ CD11b+ (cluster 2) cells. After thorough investigation on the image-level, cluster 1 was assigned to DTCs and cluster 2, a mix of DTCs and granulocytes, to “other”. 

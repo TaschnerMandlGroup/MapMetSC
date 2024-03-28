@@ -1,0 +1,155 @@
+---
+title: "Validation of TME celltypes using scRNA-seq data by Lee et al."
+author: "LazDaria"
+date: "`r Sys.Date()`"
+output: 
+  workflowr::wflow_html
+editor_options:
+  chunk_output_type: inline
+params: 
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  public: "/mnt/Multimodal_Imaging_Daria/Publication/public_datasets"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      error=FALSE,
+                      messages=FALSE,
+                      warning=FALSE)
+```
+
+# Validation using scRNA-seq data by Lee et al. {#lee}
+To evaluate the validity of tumor microenviroment (TME) cell phenotype annnotations, we compare the cell expression profiles to a previously generated scRNA-seq dataset of healthy human bone marrow of ages ranging from 2-84 years ([Lee et al.](https://doi.org/10.3389/fimmu.2023.1127879)). 
+
+## Load libraries
+<details>
+   <summary>Load libraries</summary>
+   
+```{r load-libraries}
+library(Seurat)
+library(dplyr)
+library(bruceR)
+library(ComplexHeatmap)
+library(viridis)
+library(BiocParallel)
+library(SingleR)
+library(dittoSeq)
+```
+</details>
+
+## Read data
+First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping) and the published Seurat object containing the scRNA-seq data. Please make sure to replace `params$public`with the path to the scRNA-seq data.
+
+```{r read-data}
+# IMC data
+protein <- readRDS(file.path(params$output,"spe_final.rds"))
+protein <- protein[rowData(protein)$use_channel,]
+col_celltype <- metadata(protein)$color_vectors$col_celltype
+protein <- protein[,protein$metacluster!="tumor" & protein$metacluster!="other"]
+
+#scRNA-seq data
+rna <- readRDS(file.path(params$public,"Lee/disco_bone_marrow_v2.0.rds"))
+DefaultAssay(rna) <- "RNA"
+rna@assays$RNA@data <- rna@assays$RNA@counts
+```
+
+## Set common tumor markers 
+Next, we will set common markers between the reference and query dataset. Therefore, we have to rename the features in the imaging dataset to the names of the corresponding genes. 
+```{r set-common-tumormarkers}
+protein2gene <- read.csv(file.path(params$public,"protein2gene.csv"), sep=";")
+
+code <- setNames(protein2gene$genes, protein2gene$protein)
+rownames(protein) <- recode(rownames(protein), !!!code)
+rowData(protein)$name <- rownames(protein)
+rowData(protein)$channel <- rownames(protein)
+
+#reduce metadata
+metadata <- c("sample_id", "ObjectNumber", "sample", "tissue", "celltype", "metacluster")
+colData(protein)[, metadata]
+colData(protein) <- colData(protein)[, metadata]
+
+common_features <- intersect(rownames(rna@assays$RNA@data), row.names(protein))
+```
+## Visualize public data
+
+Will will first visualize the scRNA-seq data. Therefore we first define a color code with similar colors for similar celltypes between IMC and scRNA-seq.
+```{r define-colors}
+col_clusters <- read.csv(file.path(params$public, "Lee/celltype_metacluster.csv"), sep=";")
+col_clust <- setNames(col_clusters$color, col_clusters$celltype)
+col_clust <- c(col_clust, c("tumor" = "snow2", "other"="goldenrod1"))
+```
+
+
+```{r mean-per-cluster-rna, fig.width=12, fig.height=10}
+rna_clusters <- rna@active.ident
+rna_data <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
+rna_mean <- aggregate(t(rna_data), list(rna_clusters), mean)
+
+rna_mean_t <- t(rna_mean[,2:ncol(rna_mean)])
+colnames(rna_mean_t) <- rna_mean[,"Group.1"]
+rna_mean_scaled <- t(apply(rna_mean_t, 1, RESCALE, to=0:1))
+
+column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(rna_clusters))[,"Freq"], height = unit(1, "cm")),
+                              show_legend=F)
+
+Heatmap(rna_mean_scaled, 
+        column_title = "Mean per cluster (scRNA-seq data)",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+```
+
+```{r umap-rna, fig.width=15, fig.height=10}
+DimPlot(rna, reduction="umap", cols=col_clust)
+```
+
+## Transfer labels with singleR
+Finally, we will investigate correlation between the datasets using label transfer by singleR. 
+
+```{r single-r, fig.width=13, fig.height=9}
+rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
+rna_clusters <- rna@active.ident
+protein_mat <- assay(protein, "counts")[common_features, ]
+
+#remove Seurat and SPE object prior to parallel computation
+rm(rna)
+rm(protein)
+
+predicted_labels <- SingleR(test = protein_mat, ref = rna_mat, labels = rna_clusters, BPPARAM = MulticoreParam(workers=16, RNGseed=20231030))
+plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),],annotation_colors=list(Labels = col_clust), annotation_legend=F, treeheight_row=0) #define colors first
+```
+
+We will plot the predicted metalabels in a UMAP.
+```{r predicted-umap}
+#save predicted labels in separate slot
+protein <- readRDS(file.path(params$output,"spe_final.rds"))
+protein$celltype_predicted <- "tumor"
+protein[,protein$metacluster=="other"]$celltype_predicted <- "other"
+protein[,rownames(predicted_labels)]$celltype_predicted <- predicted_labels$labels
+metadata(protein)$color_vectors$col_predicted_label <- col_clust
+
+p1 <- dittoDimPlot(protein, var = "celltype_predicted", 
+             reduction.use = "UMAP", size = 0.3, labels.size=2,
+             do.label = F,
+             legend.show=F) +
+  scale_color_manual(values = metadata(protein)$color_vectors$col_predicted_label) +
+  theme(legend.title = element_blank()) +
+  ggtitle("Predicted celltype on UMAP")
+
+p1
+```
+
+## Session Info
+
+<details>
+   <summary>SessionInfo</summary>
+   
+```{r, echo = FALSE}
+sessionInfo()
+```
+</details>

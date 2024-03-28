@@ -1,0 +1,191 @@
+---
+title: "Validation of metaclusters using scRNA-seq data by Fetahu et al."
+author: "LazDaria"
+date: "`r Sys.Date()`"
+output: 
+  workflowr::wflow_html
+editor_options:
+  chunk_output_type: inline
+params: 
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  public: "/mnt/Multimodal_Imaging_Daria/Publication/public_datasets"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      error=FALSE,
+                      messages=FALSE,
+                      warning=FALSE)
+```
+
+# Validation using scRNA-seq data by Fetahu et al. {#fetahu}
+To evaluate the validity of metacluster annnotations, we compare the cell expression profiles to our previously generated scRNA-seq dataset of NB bone marrow samples ([Fetahu et al.](https://doi.org/10.1038/s41467-023-39210-0)). 
+
+## Load libraries
+<details>
+   <summary>Load libraries</summary>
+   
+```{r load-libraries}
+library(SingleR)
+library(Seurat)
+library(bruceR)
+library(ComplexHeatmap)
+library(viridis)
+library(RColorBrewer)
+library(BiocParallel)
+library(dittoSeq)
+```
+</details>
+
+## Read data
+First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping) and the published Seurat object containing the scRNA-seq data. Please make sure to replace `params$public`with the path to the scRNA-seq data.
+
+```{r read-data}
+#read IMC data
+protein <- readRDS(file.path(params$output,"spe_final.rds"))
+protein <- protein[rowData(protein)$use_channel,]
+col_celltype <- metadata(protein)$color_vectors$col_celltype
+
+#read scRNA-seq data
+monocle_cell_dataset <- readRDS(file.path(params$public,"Fetahu/rna_integrated_monocle.rds"))
+rna <- as.Seurat(monocle_cell_dataset, data=NULL)
+rna <- RenameAssays(object = rna, originalexp = 'RNA')
+celltype_details <- readRDS(file.path(params$public,"Fetahu/metadata.rds"))
+rna@active.ident <- setNames(pull(celltype_details[match(celltype_details$cell,colnames(rna)),"cellont_cluster"], "cellont_cluster"),
+                             pull(celltype_details[match(celltype_details$cell,colnames(rna)), "cell"], "cell"))
+DefaultAssay(rna) <- "RNA"
+```
+
+## Set common features 
+Next, we will set common features between the reference and query dataset. Therefore, we have to rename the features in the imaging dataset to the names of the corresponding genes. 
+```{r set-common-features}
+protein2gene <- read.csv(file.path(params$public,"protein2gene.csv"), sep=";")
+
+code <- setNames(protein2gene$genes, protein2gene$protein)
+rownames(protein) <- recode(rownames(protein), !!!code)
+rowData(protein)$name <- rownames(protein)
+rowData(protein)$channel <- rownames(protein)
+
+#reduce metadata
+metadata <- c("sample_id", "ObjectNumber", "sample", "tissue", "celltype", "metacluster")
+colData(protein)[, metadata]
+colData(protein) <- colData(protein)[, metadata]
+
+common_features <- intersect(row.names(rna), row.names(protein))
+```
+
+## Visualize public data
+
+Will will first visualize the scRNA-seq data. Therefore we first define a color code with similar colors for similar celltypes between IMC and scRNA-seq.
+```{r define-colors}
+col_clusters <- c("B (3)" = rgb(145,2,144, maxColorValue = 255),
+                  "B (16)" = rgb(253,218,236, maxColorValue = 255),
+                  "B (19)" = rgb(240,0,240, maxColorValue = 255), 
+                  "B (11)" = rgb(188,128,189, maxColorValue = 255),
+                  "B (7)" = rgb(190,174,212, maxColorValue = 255),
+                  "M (1)" = rgb(28,146,255, maxColorValue = 255),
+                  "M (10)" = rgb(0,255,255, maxColorValue = 255),
+                  "M (15)" = rgb(39,130,187, maxColorValue = 255),
+                  "M (2)" = rgb(166,206,227, maxColorValue = 255),
+                  "T (18)" = rgb(227,26,28, maxColorValue = 255),
+                  "T (5)" = rgb(254,142,175, maxColorValue = 255),
+                  "T (6)" = rgb(242,3,137, maxColorValue = 255),
+                  "T (9)" = rgb(251,128,114, maxColorValue = 255),
+                  "SC (14)" =rgb(149,144,89, maxColorValue = 255),
+                  "SC (17)" =rgb(210,205,126, maxColorValue = 255),
+                  "SC (20)" = rgb(230,245,201, maxColorValue = 255),
+                  "NB (8)" = rgb(60,119,97, maxColorValue = 255),
+                  "E (13)" = rgb(254,217,166, maxColorValue = 255),
+                  "NK (4)" = rgb(212,143,75, maxColorValue = 255),
+                  "pDC (12)" = rgb(253,180,98, maxColorValue = 255),
+                  "other (21)" = rgb(174,129,37, maxColorValue = 255)) 
+```
+
+
+```{r mean-per-cluster-rna, fig.width=8, fig.height=8}
+rna_clusters <- rna@active.ident
+rna_data <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
+rna_mean <- aggregate(t(rna_data), list(rna_clusters), mean)
+
+rna_mean_t <- t(rna_mean[,2:ncol(rna_mean)])
+colnames(rna_mean_t) <- rna_mean[,"Group.1"]
+rna_mean_scaled <- t(apply(rna_mean_t, 1, RESCALE, to=0:1))
+
+column_ha = HeatmapAnnotation(ncells=anno_barplot(as.data.frame(table(rna_clusters))[,"Freq"], height = unit(1, "cm")),
+                              show_legend=F)
+
+Heatmap(rna_mean_scaled, 
+        column_title = "Mean per cluster (scRNA-seq data)",
+        top_annotation = column_ha, 
+        cluster_columns=T,
+        show_column_dend = T,
+        show_column_names=T,
+        show_row_names=T,
+        col=viridis(100)
+        )
+```
+
+```{r umap-rna}
+DimPlot(rna, reduction="UMAP", cols=col_clusters)
+```
+
+## Transfer labels with singleR
+Finally, we will investigate correlation between the datasets using label transfer by singleR. 
+
+```{r single-r}
+rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")[common_features, ]
+rna_clusters <- rna@active.ident
+protein_mat <- assay(protein, "counts")[common_features, ]
+
+predicted_labels <- SingleR(test = protein_mat, ref = rna_mat, labels = rna_clusters, BPPARAM = MulticoreParam(workers=10, RNGseed=20231030))
+
+plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),],annotation_colors=list(Labels = col_clusters), annotation_legend=F, treeheight_row=0,
+                 rows.order=names(col_clusters)) 
+
+protein$predicted_celltype <- predicted_labels$labels
+```
+
+For visualization purposes, we rename the predicted celltypes to their metacluster and assign colors.
+
+```{r metacluster-assignment}
+
+protein$predicted_metacluster <- sub(" \\(.*$", "", protein$predicted_celltype)
+
+col_metacluster <- c("NB"="palegreen4",
+                  "NK"="#FB8072",
+                  "T"="indianred",
+                  "E"="#80B1D3",
+                  "M"="#8DD3C7",
+                  "B"="#BC80BD",
+                  "other"="goldenrod1",
+                  "pDC"="tan4",
+                  "SC"="tan2"
+                )
+                
+metadata(protein)$color_vectors$col_predicted_meta <- col_metacluster
+```
+
+We will plot the predicted metalabels in a UMAP.
+
+```{r predicted-umap}
+p1 <- dittoDimPlot(protein, var = "predicted_metacluster", 
+             reduction.use = "UMAP", size = 0.3, labels.size=2,
+             do.label = F,
+             legend.show=F) +
+  scale_color_manual(values = metadata(protein)$color_vectors$col_predicted_meta) +
+  theme(legend.title = element_blank()) +
+  ggtitle("Predicted celltype on UMAP")
+
+p1
+```
+
+## Session Info
+
+<details>
+   <summary>SessionInfo</summary>
+   
+```{r, echo = FALSE}
+sessionInfo()
+```
+</details>

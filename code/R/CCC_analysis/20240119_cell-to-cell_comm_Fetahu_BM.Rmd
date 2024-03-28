@@ -15,6 +15,8 @@ output:
 params:
   input: "/home/data/MapMet/"
   out: "/home/out/MapMet/"
+  GO_db: "/home/sara_wz/annotation/GSEA_GeneSetEnrichments"
+  markers: "/home/sara_wz/annotation/MES_ADRN/"
 ---
 
 ```{r setup, include=FALSE}
@@ -246,7 +248,7 @@ df_net %>% saveRDS(paste0(params$out,"Rds/fetahu2023.signaling.rds"))
 
 ```
 
-```{r CellChat figures}
+```{r CellChat figures, eval=FALSE, include=FALSE}
 library(latex2exp)
 source("/home/data/MapMet/fetahu.scRNA.2023/scripts/csbg-neuroblastoma-d976641/styling.R")
 
@@ -673,13 +675,13 @@ table(predicted_label)
 ### downsample
 
 rna <- SetIdent(rna, value = "predicted_celltype")
-rna.small <- subset(rna, downsample = 500)
+rna.small <- subset(rna, downsample = 5000)
 rna_mat.small <- GetAssayData(rna.small, assay = "RNA", slot = "data")[common_genes_rna,]
-
 
 rna_mat_scaled <-  t(scale(rna_mat.small))
 
-rna_mat_scaled <- rna_mat_scaled %>% drop_na()
+# replace all non-finite values with 0
+rna_mat_scaled[!is.finite(rna_mat_scaled)] <- 0
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -706,7 +708,7 @@ col_fun = circlize::colorRamp2(c(-0.5, 0, 0.5, 1),
 
 
 x <- Heatmap(rna_mat_scaled, name = "IMC markers gene expression",  
-             column_split = factor(cluster_anno),
+             #column_split = factor(cluster_anno),
              cluster_columns = TRUE,
              show_column_dend = TRUE,
              cluster_column_slices = TRUE,
@@ -1670,8 +1672,9 @@ PART II
 # __Load data__
 
 ```{r load previous analysis}
-metadata <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/metadata.rds")
-scrna_data <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/rna_decontaminated.rds")
+metadata <- readRDS(paste0(params$input,"/fetahu.scRNA.2023/data/metadata.rds"))
+scrna_data <- readRDS(paste0(params$input,"/home/data/MapMet/fetahu.scRNA.2023/data/rna_decontaminated.rds"))
+                      
 predicted_labels <- readRDS(file = paste0(params$out,"Rds/20240313_predicted_labels_IMC-BMtoRNA.rds"))
 
 rna <- as.Seurat(scrna_data, data=NULL)
@@ -1809,18 +1812,26 @@ marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB,
 marker_results_top5 <- dplyr::filter(marker_results, feature_rank < 6)
 marker_results_top5
 
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    slice_max(n = 10, order_by = avg_log2FC)
+marker_results %>%
+    group_by(group1) %>%
+    slice_max(n = 10, order_by = log_fc)
 
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    top_n(n = 10, wt = avg_log2FC) -> top10
+marker_results %>%
+    group_by(group1) %>%
+    top_n(n = 10, wt = log_fc) -> top10
 
-DoHeatmap(fetahu.NB, features = top10$gene) + NoLegend()
+DEG_tumor <- DoHeatmap(fetahu.NB, features = top10$feature) + NoLegend()
+DEG_tumor
+
+pdf(paste0(params$out,"figures/fetahu2023.scRNA.markers.heatmap_2024-03-08.pdf"))
+DEG_tumor
+dev.off()
+
+saveRDS(marker_results, 
+        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters.markers_2024-03-08.Rds"))
 
 saveRDS(fetahu.NB, 
-        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters.Rds"))
+        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters_2024-03-08.Rds"))
 
 # Visualization
 p1 <- DimPlot(fetahu.NB, reduction = "umap", 
@@ -1852,6 +1863,35 @@ overlap
 # I find 6 genes from the IMC markers to be among the 2000 most variable genes
 # in the tumor cluster
 ```
+
+#### __Module score__
+
+```{r}
+# Gene module score
+# gene lsits from: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10171398/
+# gene immune evasion signature
+immune_evasion <- c("PDCD1","CTLA4","HAVCR2","LAG3","TIGIT","CD244","CD160",
+                    "IRF4","BATF","NFATC1","FOXP3","IL2RA","TNFRSF18","IKZF4",
+                    "CD80","CD86","CD274","PDCD1LG2","LGALS9")
+
+
+fetahu.NB <- AddModuleScore(fetahu.NB, immune_evasion,
+                            name = "immune_evasion_set", seed = 28)
+
+# Plot score
+FeaturePlot(tcells,
+            features = "immune_evasion_set1", label = TRUE, repel = TRUE, 
+            order = TRUE, pt.size = 1) +
+            scale_colour_gradientn(colours = brewer.pal(n = 20, name = "RdPu"))
+
+
+VlnPlot(tcells,features = "immune_evasion_set1", log = TRUE,pt.size = 0)
+
+VlnPlot(tcells_pd1,features = "immune_evasion_set1", log = TRUE,pt.size = 0)
+
+RidgePlot(tcells_pd1, features = "immune_evasion_set1", log = TRUE)
+```
+
 
 #### __Predicted cell types based on IMC data__
 
@@ -1993,15 +2033,20 @@ marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB,
                                             group_column = "seurat_clusters")
 marker_results_top5 <- dplyr::filter(marker_results, feature_rank < 6)
 
-DoHeatmap(fetahu.NB, feature = marker_results_top5$feature)
+marker_results %>%
+    group_by(group1) %>%
+    slice_max(n = 10, order_by = log_fc)
 
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    slice_max(n = 10, order_by = avg_log2FC)
+marker_results %>%
+    group_by(group1) %>%
+    top_n(n = 10, wt = log_fc) -> top10
 
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    top_n(n = 10, wt = avg_log2FC) -> top10
+DEG_tumor <- DoHeatmap(fetahu.NB, features = top10$feature) + NoLegend()
+DEG_tumor
+
+pdf(paste0(params$out,"figures/fetahu2023.scRNA.markers.heatmap_2024-03-25.pdf"))
+DEG_tumor
+dev.off()
 
 DoHeatmap(fetahu.NB, features = top10$gene) + NoLegend()
 
@@ -2444,9 +2489,12 @@ tcells_pd1 <- tcells_pd1 %>%
 
 VlnPlot(tcells_pd1,features,log = TRUE)
 RidgePlot(tcells_pd1,features,log=TRUE)
+```
 
-# Gene set enrichment score
+## __T-cell exhustion module score__
 
+```{r}
+# Gene module score
 features <- c("PDCD1","CTLA4","BATF","VHL",
               "LAG3","CD244","CD160","HAVCR2",
               "IL10RA","PRDM1","GATA3","IKZF2","TBX21","EOMES")
@@ -2489,7 +2537,7 @@ Idents(rna) <- rna@meta.data$original_celltype
 
 # CellChat infers the biologically significant cell-cell communication by 
 # assigning each interaction with a probability value and peforming a permutation test. 
-pathway <- c("CXCL", "CCL")
+pathway <- c("TWEAK", "PSAP")
 treat_resist_fetahu_lables <- subset(x = rna, 
                                      idents = c("T (5)","T (6)","T (9)","T (18)",
                                                 "NB (8)", 
@@ -2535,6 +2583,7 @@ cellchat <- filterCommunication(cellchat, min.cells = 50)
 df.net <- subsetCommunication(cellchat)
 df.net.pathways <- subsetCommunication(cellchat, slot.name = "netP" )
 # slot.name = "netP" for nferred communications at the level of signaling pathways
+
 df.net.pathways
 
 # Infer the cell-cell communication at a signaling pathway level
@@ -2588,7 +2637,9 @@ library(ggalluvial)
 #selectK(cellchat, pattern = "outgoing") # define the number of patterns/cut-off
 
 nPatterns = 3
-cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing", k = nPatterns)
+cellchat <- identifyCommunicationPatterns(cellchat, 
+                                          pattern = "outgoing", 
+                                          k = nPatterns)
 
 # river plot
 netAnalysis_river(cellchat, pattern = "outgoing")
@@ -2600,7 +2651,9 @@ netAnalysis_dot(cellchat, pattern = "outgoing")
 #selectK(cellchat, pattern = "incoming") # define the number of patterns/cut-off
 
 nPatterns = 7
-cellchat <- identifyCommunicationPatterns(cellchat, pattern = "incoming", k = nPatterns)
+cellchat <- identifyCommunicationPatterns(cellchat, 
+                                          pattern = "incoming", 
+                                          k = nPatterns)
 
 saveRDS(cellchat, file = paste0(params$out,"/Rds/CCC_analysis_Fetahu2023.Rds"))
 
@@ -2611,11 +2664,93 @@ df.net.fetahu <- subsetCommunication(cellchat,
 df.path.fetahu <- subsetCommunication(cellchat,
                                slot.name = "netP")
 
-# Signalling source: Cluster 9
-filt <- df.net.pathways$source == "T (9)"
-df.net.pathways[filt,]
+# Signalling source: T-cells, Cluster 9
+filt <- df.path.fetahu$source == "T (9)"
+T9 <- df.path.fetahu[filt,]
+T9 <- T9 %>% arrange(prob)
 
+# Signalling source: T-cells, Cluster 9
+# Signalling target: Monocytes, Cluster 1
+
+filt <- T9$target == "M (1)"
+T9_M1 <- T9[filt,]
+T9_M1 <- T9_M1 %>% arrange(prob)
+T9_M1
+
+# T9 to M1 CCC: FAS/FASLG signaling pathway is essential for immune system 
+# regulation, including activation-induced cell death (AICD) of T cells and 
+# cytotoxic T lymphocyte induced cell death
+
+# NGF pathway
+
+# Signalling source: T-cells, Cluster 5
+filt <- df.path.fetahu$source == "T (5)"
+T5 <- df.path.fetahu[filt,]
+T5 <- T5 %>% arrange(prob)
+
+# Signalling source: T-cells, Cluster 6
+filt <- df.path.fetahu$source == "T (6)"
+T6 <- df.path.fetahu[filt,]
+T6 <- T6 %>% arrange(prob)
+
+# Signalling source: T-cells, Cluster 18
+filt <- df.path.fetahu$source == "T (18)"
+T18 <- df.path.fetahu[filt,]
+T18 <- T18 %>% arrange(prob)
+
+# Signalling source: Monocytes, Cluster 1
+filt <- df.path.fetahu$source == "M (1)"
+M1 <- df.path.fetahu[filt,]
+M1 <- M1 %>% arrange(prob)
+
+# Signalling source: Monocytes, Cluster 1
+# Signalling target: T-cells, Cluster 9
+
+filt <- M1$target == "T (9)"
+M1_T9 <- M1[filt,]
+M1_T9 <- M1_T9 %>% arrange(prob)
+M1_T9
+
+# Signalling source: Monocytes, Cluster 10
+filt <- df.path.fetahu$source == "M (10)"
+M10 <- df.path.fetahu[filt,]
+M10 <- M10 %>% arrange(prob)
+
+# Signalling source: Monocytes, Cluster 15
+filt <- df.path.fetahu$source == "M (15)"
+M15 <- df.path.fetahu[filt,]
+M15 <- M15 %>% arrange(prob)
+
+# Filter only unique pathways in cluster 9 by subtracting pathways 
+# present in all other T-cell clusters (clustster 5, 6 and 18)
+
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T5$pathway_name)]
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T6$pathway_name)]
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T18$pathway_name)]
+
+subset(T9, pathway_name == "TWEAK")
+subset(T9, pathway_name == "PSAP")
+
+# Do we see a differential gene expression of the above genes (pathways) between
+# MYCNA and sporadic NB sub-types?
+
+rna$group_celltype <- paste(rna$original_celltype, rna$group, sep = "_")
+Idents(rna) <- "group_celltype"
+rna.de <- FindMarkers(rna, ident.1 = "T (9)_II", ident.2 = "T (9)_IV", verbose = FALSE)
+head(rna.de, n = 10)
+
+# TOP DEGs in cluster 9, between MYNCA and non-MYNCA tumors
+rna.de <- rna.de %>% filter(p_val_adj < 0.01) %>% filter(abs(avg_log2FC) > 1)
+rna.de 
+
+DoHeatmap(rna.de,
+  features = rownames(rna.de),
+  group.by = "group_celltype")
+
+# Probability of CCC between all cells
+cellchat@netP$prob 
 ```
+
 
 ## __Cell type annotation based on: Lazic et al., 2024__
 
@@ -2787,7 +2922,7 @@ df.path.lazic <- subsetCommunication(cellchat_predict,
 
 ## __Cell type abundance per patient__
 
-```{r}
+```{r barplot}
 pt <- table(rna$original_celltype,rna$sample)
 pt <- as.data.frame(pt)
 pt$Var1 <- as.character(pt$Var1)
@@ -2797,17 +2932,28 @@ ggplot(pt, aes(x = Var2, y = Freq, fill = Var1)) +
   geom_col(position = "fill", width = 0.5) +
   xlab("Sample") +
   ylab("Proportion") +
-  
   theme(legend.title = element_blank())
 ```
+
 ## __Cell type abundance per group__
 
-```{r miloR}
-# Subset to TME only
-tumor_cells <- "NB (8)"
-fetahu.NB <- subset(rna, idents = tumor_cells, invert = TRUE)
+```{r miloR - two groups}
+#1. If comparing two groups use normal DA testing
 
+# MiloR doesn't use the "original" clusters but rather creates neighborhoods
+# based on similar logFC (note the fold change here is the number of cells
+# per cell type)
+
+#BiocManager::install("scran")
+#BiocManager::install("statmod")
+
+library("statmod")
 library("miloR")
+library("SingleCellExperiment")
+library("scater")
+library("scran")
+library("dplyr")
+library("patchwork")
 
 # For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
 # This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
@@ -2815,21 +2961,32 @@ library("miloR")
 rna_milo <- Milo(as.SingleCellExperiment(rna))
 rna_milo
 
+
+reducedDim(rna_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(rna), "UMAP")
+
+plotUMAP(rna_milo, colour_by="group") + plotUMAP(rna_milo, colour_by="sample")
+
 # We need to add the KNN graph to the Milo object. This is stored in the graph slot, in igraph format.
 rna_milo <- buildGraph(rna_milo, k = 30, d = 30, reduced.dim = "PCA")
+
+# test k = 10
 
 # Defining representative neighbourhoods on the KNN graph
 rna_milo <- makeNhoods(rna_milo, prop = 0.1, k = 30, d=30, 
                        refined = TRUE, 
-                       reduced_dims = "PCA")
+                       reduced_dims = "PCA") # (faster) refinement_scheme="graph"
 
-# plot the distribution of neighbourhood sizes (i.e. how many cells form each neighbourhood) 
+# plot the distribution of neighbourhood sizes (i.e. how many cells form each neighborhood) 
 # to evaluate whether the value of k used for graph building was appropriate
 plotNhoodSizeHist(rna_milo)
 
 # Counting cells in neighbourhoods
-rna_milo <- countCells(rna_milo, meta.data = as.data.frame(colData(rna_milo)), sample="sample")
+rna_milo <- countCells(rna_milo, 
+                       meta.data = as.data.frame(colData(rna_milo)), 
+                       sample="sample")
 head(nhoodCounts(rna_milo))
+
+#1. If comparing two samples use normal DA testing
 
 # Defining experimental design
 rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
@@ -2837,8 +2994,9 @@ rna_design <- distinct(rna_design)
 rownames(rna_design) <- rna_design$sample
 rna_design
 
-# Computing neighbourhood connectivity
-rna_milo <- calcNhoodDistance(rna_milo, d=30, reduced.dim = "PCA")
+# Computing neighborhood connectivity
+rna_milo <- calcNhoodDistance(rna_milo, d = 30, reduced.dim = "PCA")
+
 
 # DA testing
 da_results <- testNhoods(rna_milo, design = ~ group, 
@@ -2855,22 +3013,728 @@ rna_milo <- buildNhoodGraph(rna_milo)
 # QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
 
 # Plot single-cell UMAP
-umap_pl <- plotReducedDim(rna_milo, dimred = "umap", colour_by="group", 
+umap_pl <- plotReducedDim(rna_milo, 
+                          dimred = "UMAP", 
+                          colour_by = "group", 
                           text_by = "original_celltype", 
-                          text_size = 3, point_size=0.5) +
-  guides(fill="none")
+                          text_size = 3, point_size = 0.5,) +
+  guides(fill = "none")
 
 # Plot neighbourhood graph
-nh_graph_pl <- plotNhoodGraphDA(rna_milo, da_results, layout="umap",alpha=0.1) 
-  
+nh_graph_pl <- plotNhoodGraphDA(rna_milo, da_results, layout="UMAP", alpha=0.05) 
+
 umap_pl + nh_graph_pl +
-  plot_layout(guides="collect")
+  plot_layout(guides = "collect")
 
 da_results <- annotateNhoods(rna_milo, da_results, 
                              coldata_col = "original_celltype")
-head(da_results)
+
+da_results$original_celltype <- ifelse(da_results$original_celltype_fraction < 0.7, 
+                                       "Mixed", da_results$original_celltype)
+
+
+results <- da_results %>% arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) > 0.6)
+results
+
+plotDAbeeswarm(da_results, group.by = "original_celltype")
+
+#2. If comparing more than two sample / groups, use DA testing with contrasts
+
+# For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
+# This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
+
+rna_milo <- Milo(as.SingleCellExperiment(rna))
+rna_milo
+
+reducedDim(rna_milo, "UMAP") <- reducedDim(rna_milo, "UMAP")
+
+plotUMAP(rna_milo, colour_by="group") + plotUMAP(rna_milo, colour_by="sample")
+
+
+# Define cell neighbourhoods
+rna_milo <- buildGraph(rna_milo, k = 10, d = 30)
+
+## Constructing kNN graph with k = 10
+rna_milo <- makeNhoods(rna_milo, 
+                       prop = 0.1, 
+                       k = 10, 
+                       d = 30, 
+                       refined = TRUE, 
+                       refinement_scheme = "graph") # make nhoods using graph-only as this is faster
+
+# metadata
+colData(rna_milo)$sample <- paste(colData(rna_milo)$group, colData(rna_milo)$sample, sep="_")
+
+# Counting cells in neighbourhoods
+rna_milo <- countCells(rna_milo, meta.data = data.frame(colData(rna_milo)), samples="sample") # make the nhood X sample counts matrix
+
+# Differential abundance testing with contrasts
+rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
+rna_design <- distinct(rna_design)
+rownames(rna_design) <- rna_design$sample
+
+# Reorder rownames to match columns of nhoodCounts(milo)
+rna_design <- rna_design[colnames(nhoodCounts(rna_milo)), , drop=FALSE]
+table(rna_design$group)
+
+# Comparisons
+
+#A. ATRXmut vs. MYCNA
+rownames(rna_design) <- rna_design$sample
+contrast.1 <- c("groupIII - groupII") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsMYCNA <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.1, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_ATRXmutvsMYCNA$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsMYCNA <- annotateNhoods(rna_milo, da_results_ATRXmutvsMYCNA, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsMYCNA$original_celltype <- 
+  ifelse(da_results_ATRXmutvsMYCNA$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsMYCNA$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsMYCNA %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsMYCNA, group.by = "original_celltype")
+
+
+
+#B. ATRXmut vs. sporadic
+contrast.2 <- c("groupIII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsSporadic <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.2, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_ATRXmutvsSporadic$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsSporadic <- annotateNhoods(rna_milo, da_results_ATRXmutvsSporadic, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsSporadic$original_celltype <- 
+  ifelse(da_results_ATRXmutvsSporadic$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsSporadic$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsSporadic %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsSporadic, group.by = "original_celltype")
+
+#C. MYCNA vs. sporadic
+contrast.3 <- c("groupII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_MYCNAvsSporadic <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.3, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_MYCNAvsSporadic$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_MYCNAvsSporadic <- annotateNhoods(rna_milo, da_results_MYCNAvsSporadic, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_MYCNAvsSporadic$original_celltype <- 
+  ifelse(da_results_MYCNAvsSporadic$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_MYCNAvsSporadic$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_MYCNAvsSporadic %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_MYCNAvsSporadic, group.by = "original_celltype")
+
+
+#D. ATRXmut vs. MYCNA and sporadic
+
+model <- model.matrix(~ 0 + group, data = rna_design)
+ave.contrast <- c("groupIII - (groupII + groupIV) / 2")
+mod.constrast <- makeContrasts(contrasts = ave.contrast, levels = model)
+mod.constrast
+
+da_results_ATRXmutvsAll <- testNhoods(rna_milo, design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = ave.contrast, 
+                         fdr.weighting = "graph-overlap")
+
+table(da_results_ATRXmutvsAll$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsAll <- annotateNhoods(rna_milo, da_results_ATRXmutvsAll, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsAll$original_celltype <- 
+  ifelse(da_results_ATRXmutvsAll$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsAll$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsAll %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsAll, group.by = "original_celltype")
+
+#E. ATRXmut vs. control
+
+contrast.4 <- c("groupIII - groupI") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsCtrl <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.4, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction with graph-overlap weighting
+table(da_results_ATRXmutvsCtrl$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsCtrl <- annotateNhoods(rna_milo, da_results_ATRXmutvsCtrl, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsCtrl$original_celltype <- 
+  ifelse(da_results_ATRXmutvsCtrl$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsCtrl$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsCtrl %>% 
+  arrange(FDR) %>% filter(FDR < 0.5 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(results, group.by = "original_celltype")
 ```
 
+```{r miloR - many groups}
+#2. If comparing more than two sample / groups, use DA testing with contrasts
+
+# MiloR doesn't use the "original" clusters but rather creates neighborhoods
+# based on similar logFC (note the fold change here is the number of cells
+# per cell type)
+
+#BiocManager::install("scran")
+#BiocManager::install("statmod")
+
+library("statmod")
+library("miloR")
+library("SingleCellExperiment")
+library("scater")
+library("scran")
+library("dplyr")
+library("patchwork")
+
+#2. If comparing more than two sample / groups, use DA testing with contrasts
+
+# For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
+# This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
+
+rna_milo <- Milo(as.SingleCellExperiment(rna))
+rna_milo
+
+reducedDim(rna_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(rna), "UMAP")
+
+plotUMAP(rna_milo, colour_by="group") + plotUMAP(rna_milo, colour_by="sample")
+
+
+# Define cell neighbourhoods
+rna_milo <- buildGraph(rna_milo, k = 10, d = 30)
+
+## Constructing kNN graph with k = 10
+rna_milo <- makeNhoods(rna_milo, 
+                       prop = 0.1, 
+                       k = 10, 
+                       d = 30, 
+                       refined = TRUE, 
+                       refinement_scheme = "graph") # make nhoods using graph-only as this is faster
+
+# metadata
+colData(rna_milo)$sample <- paste(colData(rna_milo)$group, colData(rna_milo)$sample, sep="_")
+
+# Counting cells in neighbourhoods
+rna_milo <- countCells(rna_milo, meta.data = data.frame(colData(rna_milo)), samples="sample") # make the nhood X sample counts matrix
+
+# QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
+
+# Plot single-cell UMAP
+umap_pl <- plotReducedDim(rna_milo, 
+                          dimred = "UMAP", 
+                          colour_by = "group", 
+                          text_by = "original_celltype", 
+                          text_size = 3, point_size = 0.5,) +
+  guides(fill = "none")
+
+# Plot neighbourhood graph
+nh_graph_pl <- plotNhoodGraphDA(rna_milo, da_results, layout="UMAP", alpha=0.05) 
+
+umap_pl + nh_graph_pl +
+  plot_layout(guides = "collect")
+
+# Differential abundance testing with contrasts
+rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
+rna_design <- distinct(rna_design)
+rownames(rna_design) <- rna_design$sample
+
+# Reorder rownames to match columns of nhoodCounts(milo)
+rna_design <- rna_design[colnames(nhoodCounts(rna_milo)), , drop=FALSE]
+table(rna_design$group)
+
+# Comparisons
+
+#A. ATRXmut vs. MYCNA
+rownames(rna_design) <- rna_design$sample
+contrast.1 <- c("groupIII - groupII") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsMYCNA <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.1, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_ATRXmutvsMYCNA$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsMYCNA <- annotateNhoods(rna_milo, da_results_ATRXmutvsMYCNA, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsMYCNA$original_celltype <- 
+  ifelse(da_results_ATRXmutvsMYCNA$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsMYCNA$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsMYCNA %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsMYCNA, group.by = "original_celltype")
+
+
+
+#B. ATRXmut vs. sporadic
+contrast.2 <- c("groupIII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsSporadic <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.2, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_ATRXmutvsSporadic$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsSporadic <- annotateNhoods(rna_milo, da_results_ATRXmutvsSporadic, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsSporadic$original_celltype <- 
+  ifelse(da_results_ATRXmutvsSporadic$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsSporadic$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsSporadic %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsSporadic, group.by = "original_celltype")
+
+#C. MYCNA vs. sporadic
+contrast.3 <- c("groupII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_MYCNAvsSporadic <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.3, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_MYCNAvsSporadic$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_MYCNAvsSporadic <- annotateNhoods(rna_milo, da_results_MYCNAvsSporadic, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_MYCNAvsSporadic$original_celltype <- 
+  ifelse(da_results_MYCNAvsSporadic$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_MYCNAvsSporadic$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_MYCNAvsSporadic %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_MYCNAvsSporadic, group.by = "original_celltype")
+
+
+#D. ATRXmut vs. MYCNA and sporadic
+
+model <- model.matrix(~ 0 + group, data = rna_design)
+ave.contrast <- c("groupIII - (groupII + groupIV) / 2")
+mod.constrast <- makeContrasts(contrasts = ave.contrast, levels = model)
+mod.constrast
+
+da_results_ATRXmutvsAll <- testNhoods(rna_milo, design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = ave.contrast, 
+                         fdr.weighting = "graph-overlap")
+
+table(da_results_ATRXmutvsAll$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsAll <- annotateNhoods(rna_milo, da_results_ATRXmutvsAll, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsAll$original_celltype <- 
+  ifelse(da_results_ATRXmutvsAll$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsAll$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsAll %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsAll, group.by = "original_celltype")
+
+#E. ATRXmut vs. control
+
+contrast.4 <- c("groupIII - groupI") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsCtrl <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.4, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction with graph-overlap weighting
+table(da_results_ATRXmutvsCtrl$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsCtrl <- annotateNhoods(rna_milo, da_results_ATRXmutvsCtrl, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsCtrl$original_celltype <- 
+  ifelse(da_results_ATRXmutvsCtrl$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsCtrl$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsCtrl %>% 
+  arrange(FDR) %>% filter(FDR < 0.5 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(results, group.by = "original_celltype")
+```
+
+
+# __Gene set enrichment analysis__
+
+```{r GSEA function}
+# from: https://bioinformaticsbreakdown.com/how-to-gsea/
+
+GSEA = function(gene_list, GO_file, pval) {
+  set.seed(54321)
+  library(dplyr)
+  library(fgsea)
+
+  if ( any( duplicated(names(gene_list)) )  ) {
+    warning("Duplicates in gene names")
+    gene_list = gene_list[!duplicated(names(gene_list))]
+  }
+  if  ( !all( order(gene_list, decreasing = TRUE) == 1:length(gene_list)) ){
+    warning("Gene list not sorted")
+    gene_list = sort(gene_list, decreasing = TRUE)
+  }
+  myGO = fgsea::gmtPathways(GO_file)
+
+  fgRes <- fgsea::fgsea(pathways = myGO,
+                           stats = gene_list,
+                           minSize=15, ## minimum gene set size
+                           maxSize=400) ## maximum gene set size) 
+  fgRes <-as.data.frame(fgRes) %>% filter(padj < 0.1) %>% arrange(desc(NES))
+  message(paste("Number of signficant gene sets =", nrow(fgRes)))
+
+  message("Collapsing Pathways -----")
+  concise_pathways = collapsePathways(data.table::as.data.table(fgRes),
+                                      pathways = myGO,
+                                      stats = gene_list)
+  fgRes = fgRes[fgRes$pathway %in% concise_pathways$mainPathways, ]
+  message(paste("Number of gene sets after collapsing =", nrow(fgRes)))
+
+  fgRes$Enrichment = ifelse(fgRes$NES > 0, "Up-regulated", "Down-regulated")
+  filtRes = rbind(head(fgRes, n = 10),
+                  tail(fgRes, n = 10 ))
+
+  total_up = sum(fgRes$Enrichment == "Up-regulated")
+  total_down = sum(fgRes$Enrichment == "Down-regulated")
+  header = paste0("Top 10 (Total pathways: Up=", total_up,", Down=", total_down, ")")
+
+  colos = setNames(c("firebrick2", "dodgerblue2"),
+                 c("Up-regulated", "Down-regulated"))
+
+g1= ggplot(filtRes, aes(reorder(pathway, NES), NES)) +
+  geom_point( aes(fill = Enrichment, size = size), shape=21) +
+  scale_fill_manual(values = colos ) +
+  scale_size_continuous(range = c(2,10)) +
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  labs(x="Pathway", y="Normalized Enrichment Score",
+       title=header) 
+
+  output = list("Results" = fgRes, "Plot" = g1)
+  return(output)
+}
+```
+
+```{r Gene enrichment analysis - all, fig.height=10, fig.width=20}
+#BiocManager::install("fgsea")
+
+library("fgsea")
+
+# All gene sets: msigdb.v2023.2.Hs.symbols.gmt
+# H: Hallmark gene sets
+# C5: ontology gene sets
+# C6: oncogenic signature gene sets
+# C7: immunologic signature gene sets
+# C8: cell type signature gene sets
+# 3CA: Curated Cancer Cell Atlas gene sets
+
+# Set the GO file to all gene sets from GSEA database
+GO_file = paste0(params$GO_db,"/msigdb.v2023.2.Hs.symbols.gmt")
+
+# using here the tumor clusters from 08.03.2024
+de_results <- de_results %>% filter(padj < 0.01)
+
+#1. CLUSTER 0
+clust0 <- de_results %>% filter(group1 == "0") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#2. CLUSTER 1
+clust0 <- de_results %>% filter(group1 == "1") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#3. CLUSTER 2 (sporadic NBs all cluster here)
+clust0 <- de_results %>% filter(group1 == "2") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#4. CLUSTER 3
+clust0 <- de_results %>% filter(group1 == "3") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#5. CLUSTER 4
+clust0 <- de_results %>% filter(group1 == "4") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#6. CLUSTER 5
+clust0 <- de_results %>% filter(group1 == "5") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+```
+
+```{r Gene enrichment analysis - hallmarks, fig.height=5, fig.width=10}
+#BiocManager::install("fgsea")
+
+library("fgsea")
+
+# All gene sets: msigdb.v2023.2.Hs.symbols.gmt
+# H: Hallmark gene sets
+# C5: ontology gene sets
+# C6: oncogenic signature gene sets
+# C7: immunologic signature gene sets
+# C8: cell type signature gene sets
+# 3CA: Curated Cancer Cell Atlas gene sets
+
+# Set the GO file to all gene sets from GSEA database
+GO_file = paste0(params$GO_db,"/h.all.v2023.2.Hs.symbols.gmt")
+
+# using here the tumor clusters from 08.03.2024
+de_results <- de_results %>% filter(padj < 0.01)
+
+#1. CLUSTER 0
+clust0 <- de_results %>% filter(group1 == "0") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#2. CLUSTER 1
+clust0 <- de_results %>% filter(group1 == "1") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#3. CLUSTER 2 (sporadic NBs all cluster here)
+clust0 <- de_results %>% filter(group1 == "2") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#4. CLUSTER 3
+clust0 <- de_results %>% filter(group1 == "3") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#5. CLUSTER 4
+clust0 <- de_results %>% filter(group1 == "4") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#6. CLUSTER 5
+clust0 <- de_results %>% filter(group1 == "5") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+```
 
 
 -------------------------------------------------------------------------------

@@ -34,13 +34,14 @@ library(factoextra)
 library(ComplexHeatmap)
 library(viridis)
 library(bruceR)
+library(SingleCellExperiment)
 ```
 </details>
 
 ## Read data
 First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping) and the published Seurat object containing the scRNA-seq data. Please make sure to replace `params$public`with the path to the scRNA-seq data.
 
-```{r read-data}
+```{r read-data, message=FALSE}
 # IMC data
 protein <- readRDS(file.path(params$output,"spe_final.rds"))
 protein <- protein[rowData(protein)$use_channel,]
@@ -65,7 +66,6 @@ rowData(protein)$channel <- rownames(protein)
 
 #reduce metadata
 metadata <- c("sample_id", "ObjectNumber", "sample", "tissue", "celltype", "metacluster")
-colData(protein)[, metadata]
 colData(protein) <- colData(protein)[, metadata]
 
 common_features <- intersect(rownames(rna@assays$RNA@data), row.names(protein))
@@ -137,7 +137,6 @@ rownames(tmp2) <- tmp[,"Group.1"]
 protein_percent_mat <- tmp2 / unname(table(protein_clusters))
 protein_percent_mat <- t(protein_percent_mat)
 protein_percent_mat[protein_percent_mat < 0.1] <- 0.1 #for visualization purposes
-head(protein_percent_mat)
 
 tmp <- rna_data
 tmp[tmp > unname(quantile(rna_exp_mat[rna_exp_mat>0], c(0.2)))] <- 1
@@ -148,7 +147,6 @@ rownames(tmp2) <- tmp[,"Group.1"]
 rna_percent_mat <- tmp2 / unname(table(rna_clusters))
 rna_percent_mat <- t(rna_percent_mat)
 rna_percent_mat[rna_percent_mat < 0.1] <- 0.1 #for visualization purposes
-head(rna_percent_mat)
 
 #Annotation bars
 clusters <- c(rna_clusters, protein_clusters)

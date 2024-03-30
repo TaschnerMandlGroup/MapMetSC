@@ -551,6 +551,8 @@ were generated:
 <pre><code>
 Untracked files:
     Untracked:  analysis/05_correlation_Fetahu.Rmd
+    Untracked:  analysis/05_correlation_Jansky.Rmd
+    Untracked:  analysis/05_correlation_Lee.Rmd
 
 Unstaged changes:
     Modified:   analysis/04_phenotyping.Rmd
@@ -1017,15 +1019,15 @@ Rphenograph_out &lt;- Rphenoannoy(mat_red_clustering, k = 45)</code></pre>
 <pre><code>Run Rphenograph starts:
   -Input data of 1992421 rows and 5 columns
   -k is set to 45</code></pre>
-<pre><code>  Finding nearest neighbors...DONE ~ 843.685 s
+<pre><code>  Finding nearest neighbors...DONE ~ 842.612 s
   Compute jaccard coefficient between nearest-neighbor sets...</code></pre>
 <pre><code>Presorting knn...</code></pre>
-<pre><code>presorting DONE ~ 148.593 s
+<pre><code>presorting DONE ~ 148.091 s
   Start jaccard
-DONE ~ 8.425 s
-  Build undirected graph from the weighted links...DONE ~ 64.663 s
-  Run louvain clustering on the graph ...DONE ~ 415.184 s</code></pre>
-<pre><code>Run Rphenograph DONE, totally takes 1331.957s.</code></pre>
+DONE ~ 8.203 s
+  Build undirected graph from the weighted links...DONE ~ 64.463 s
+  Run louvain clustering on the graph ...DONE ~ 426.69 s</code></pre>
+<pre><code>Run Rphenograph DONE, totally takes 1341.968s.</code></pre>
 <pre><code>  Return a community class
   -Modularity value: 0.9465125 
   -Number of clusters: 78</code></pre>
@@ -1216,6 +1218,17 @@ Date
 <tbody>
 <tr>
 <td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/0ba6b0ccaf09130d86cd3bfc1f0938ce049ee71d/docs/figure/04_phenotyping.Rmd/UMAP-vis-clusters-1.png" target="_blank">0ba6b0c</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-28
+</td>
+</tr>
+<tr>
+<td>
 <a href="https://github.com/TaschnerMandlGroup/MapMet/blob/b4e1bb935030b528eab5396a2bcc944a7c4000a4/docs/figure/04_phenotyping.Rmd/UMAP-vis-clusters-1.png" target="_blank">b4e1bb9</a>
 </td>
 <td>
@@ -1245,6 +1258,43 @@ Scale for colour is already present.
 Adding another scale for colour, which will replace the existing scale.</code></pre>
 <pre class="r"><code>p1+p2</code></pre>
 <p><img src="figure/04_phenotyping.Rmd/UMAP-vis-marker-1.png" width="960" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-UMAP-vis-marker-1">
+Past versions of UMAP-vis-marker-1.png
+</button>
+</p>
+<div id="fig-UMAP-vis-marker-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/0ba6b0ccaf09130d86cd3bfc1f0938ce049ee71d/docs/figure/04_phenotyping.Rmd/UMAP-vis-marker-1.png" target="_blank">0ba6b0c</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-28
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <p>Next, we will plot the tissue type separately in the dim-red
 space.</p>
 <pre class="r"><code>var &lt;- &quot;tissue&quot;
@@ -1421,45 +1471,8 @@ ht&lt;- Heatmap(t(tmp2[rand_cells,]),
         col=viridis(100)
         )
 
-draw(ht)</code></pre>
-<p><img src="figure/04_phenotyping.Rmd/GD2+MPO+%20subclustering-1.png" width="576" style="display: block; margin: auto;" /></p>
-<p>
-<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-no-spaces-GD2+MPO+-subclustering-1">
-Past versions of "GD2+MPO+ subclustering-1.png"
-</button>
-</p>
-<div id="fig-no-spaces-GD2+MPO+-subclustering-1" class="collapse">
-<div class="table-responsive">
-<table class="table table-condensed table-hover">
-<thead>
-<tr>
-<th>
-Version
-</th>
-<th>
-Author
-</th>
-<th>
-Date
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/b4e1bb935030b528eab5396a2bcc944a7c4000a4/docs/figure/04_phenotyping.Rmd/GD2+MPO+ subclustering-1.png" target="_blank">b4e1bb9</a>
-</td>
-<td>
-LazDaria
-</td>
-<td>
-2024-03-27
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
+d1 &lt;- draw(ht)</code></pre>
+<p><img src="figure/04_phenotyping.Rmd/GD2-MPO-subclustering-1.png" width="576" style="display: block; margin: auto;" /></p>
 <p>In the heatmap above, we can see a clear separation of GD2+ CD45-
 MPOlow CD15- CD11b- (cluster 1) from GD2+ CD45+ MPO+ CD15+ CD11b+
 (cluster 2) cells. After thorough investigation on the image-level,
@@ -1703,6 +1716,17 @@ Date
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/0ba6b0ccaf09130d86cd3bfc1f0938ce049ee71d/docs/figure/04_phenotyping.Rmd/vis-metacluster-1.png" target="_blank">0ba6b0c</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-28
+</td>
+</tr>
 <tr>
 <td>
 <a href="https://github.com/TaschnerMandlGroup/MapMet/blob/b4e1bb935030b528eab5396a2bcc944a7c4000a4/docs/figure/04_phenotyping.Rmd/vis-metacluster-1.png" target="_blank">b4e1bb9</a>

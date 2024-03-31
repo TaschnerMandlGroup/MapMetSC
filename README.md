@@ -10,8 +10,6 @@ This repository provides scripts to reproduce figures published in [Lazic et al.
 To use `MapMetSC`, start with [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP) to download files, process images and extract single-cell data.
 
 ## Usage
- <details>
- <summary><strong>Docker</strong></summary>
   
 To be able to run the provided Rmd scripts, clone the repository via
  ```bash

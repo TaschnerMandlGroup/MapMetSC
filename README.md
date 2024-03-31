@@ -4,14 +4,16 @@
 [comment]: <> (repo-specific shields will work once the repo is online)
 ![Suggestions Welcome](https://img.shields.io/badge/suggestions-welcome-green)
 
-This repository provides scripts to reproduce figures published in [Lazic et al.](coming/soon). In brief, we spatially and temporally mapped primary and metastatic neuroblastoma by multi-modal high-plex imaging and combination with scRNA-seq datasets. The data analysis worflow in Lazic et al. is split into a python-based image-processing pipeline [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP) and an R-based single-cell analysis worfklow MapMetSC. 
+This repository provides scripts to reproduce figures published in [Lazic et al](coming/soon) (in preparation). In brief, we spatially and temporally mapped primary and metastatic neuroblastoma by multi-modal high-plex imaging in combination with scRNA-seq datasets. The data analysis worflow in Lazic et al. is split into a 
+- `python` based image-processing pipeline [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP) and an
+- `R` based single-cell analysis worfklow [MapMetSC](https://github.com/TaschnerMandlGroup/MapMetSC). 
 
 ## Data 
-To use `MapMetSC`, start with [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP) to download files, process images and extract single-cell data.
+To use `MapMetSC`, please refer to and first proceed with [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP) to download files, process images and extract **single-cell data**.
 
 ## Usage
   
-To be able to run the provided Rmd scripts, clone the repository via
+To be able to run the provided Rmd files, clone the repository via
  ```bash
  git clone https://github.com/TaschnerMandlGroup/MapMetSC.git
  ```

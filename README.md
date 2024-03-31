@@ -27,8 +27,9 @@ docker run -p 8787:8787 -e PASSWORD=mapmetsc -v <path/to/MapMetSC:/home/rstudio/
   
 ## Contributors
 
-[Daria Lazic](https://github.com/LazDaria)
-[Sara Wernig-Zorc](https://github.com/sarawernig)
+- [Daria Lazic](https://github.com/LazDaria)
+- [Sara Wernig-Zorc](https://github.com/sarawernig)
+- [Simon Gutwein](https://github.com/SimonBon/)
 
 ## Funding
 

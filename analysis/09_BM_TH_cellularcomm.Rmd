@@ -1,0 +1,386 @@
+---
+title: "Investigate therapeutic dynamics in metastatic bone marrow"
+author: "LazDaria"
+date: "`r Sys.Date()`"
+output: 
+  workflowr::wflow_html
+editor_options:
+  chunk_output_type: inline
+params: 
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      error=FALSE,
+                      messages=FALSE,
+                      warning=FALSE)
+```
+
+# Investigation of cell composition dynamics in metastatic bone marrow {#bm-th}
+Here, we investigate phenotypic changes in response to therapy in the metastatic bone marrow.
+
+## Load libraries
+<details>
+   <summary>Load libraries</summary>
+   
+```{r load-libraries}
+library(diffcyt)
+library(SingleCellExperiment)
+library(CATALYST)
+library(dplyr)
+library(tidyr)
+library(BioQC)
+library(ComplexHeatmap)
+library(viridis)
+library(circlize)
+library(ggplot2)
+library(gridExtra)
+library(ggpubr)
+library(gtools)
+```
+</details>
+
+## Read data
+First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping). 
+
+```{r read-data}
+spe <- readRDS(file.path(params$output,"spe_final.rds"))
+```
+## Hierarchical clustering of each timepoint 
+We first perform hierarchcial clustering for each timepoint, separately. 
+
+```{r}
+samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster=="tumor"]$sample_id)
+keep_rows <- rowData(spe)$use_channel 
+```
+
+Therefore, we define function for converting the SPE objects into catalayst compatible objects, for hierarhichal clustering and plotting of barplots and dendograms. 
+```{r functions}
+catalyst_convert <- function(timepoint){
+  keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$sample_id%in%samples_with_tumor_cells & spe$control=="no" & spe$timepoint == timepoint
+  sce_object <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
+  
+  sce_object$fm_id <- spe[keep_rows, keep_cols]$fm_id
+  sce_object$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
+  sce_object$sample_id <- factor(paste0(sce_object$fm_id, "_", sce_object$tissue))
+  
+  sce_object$condition <- "na" 
+  
+  sce_object$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
+  sce_object$metacluster <- factor(spe[keep_rows, keep_cols]$metacluster)
+  metadata(sce_object)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
+  
+  return(sce_object)
+}
+
+cluster_barplot <- function(sce_obj){
+  set.seed(20231103)
+  sce_tumor <- sce_obj[,sce_obj$metacluster=="tumor"]
+  
+  p <- plotAbundances(sce_tumor, k = "celltype", by = "sample", col_clust=T, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, 
+                      linkage="ward.D", distance="manhattan") 
+  
+  clustered_samples <- levels(p$data$sample_id)
+  return(list(plot = p, clustered_sample_list = clustered_samples))
+}
+
+plot_dend <- function(plot_object){
+  set.seed(20231103)
+  wide_df <- plot_object$data %>%
+    select(-condition) %>%
+    pivot_wider(names_from = cluster_id, values_from = Freq)
+  
+  wide_df <- data.frame(wide_df)
+  rownames(wide_df) <- wide_df$sample_id
+  wide_df <- wide_df %>% select(-sample_id)
+  
+  dist_matrix <- dist(wide_df, method = "manhattan")
+  hc <- hclust(dist_matrix, method = "ward.D")
+  
+  return(hc)
+}
+```
+
+
+### Diagnostic BM samples
+We transform the SPE object into a catalyst-compatible object, cluster proportions of tumor cell types across all diagnostic BM samples and plot the result in barplots:
+
+```{r catalyst-comp-cluster-DE}
+p_DE <- cluster_barplot(catalyst_convert("DE")) 
+clustered_samples_DE <- p_DE$clustered_sample_list
+p_DE$plot
+```
+
+along with the dendogram:
+
+```{r dendogram-de, fig.height=6, fig.width=10}
+dend <- plot_dend(p_DE$plot)
+plot(dend)
+```
+
+### Mid-induction chemotherapy (RE1) BM samples
+We repeat the same for the other therapeutic timepoints.
+
+```{r catalyst-comp-cluster-RE1}
+p_RE1 <- cluster_barplot(catalyst_convert("RE1")) 
+clustered_samples_RE1 <- p_RE1$clustered_sample_list
+p_RE1$plot
+```
+
+
+```{r dendogram-re1, fig.height=6, fig.width=5}
+dend <- plot_dend(p_RE1$plot)
+plot(dend)
+```
+
+### End of induction chemotherapy (RE2) BM samples
+
+```{r catalyst-comp-cluster-RE2}
+p_RE2 <- cluster_barplot(catalyst_convert("RE2")) 
+clustered_samples_RE2 <- p_RE2$clustered_sample_list
+p_RE2$plot
+```
+
+```{r dendogram-re2, fig.height=6, fig.width=5}
+dend <- plot_dend(p_RE2$plot)
+plot(dend)
+```
+
+### Relapse (REL) BM samples
+
+```{r catalyst-comp-cluster-REL}
+p_REL <- cluster_barplot(catalyst_convert("REL")) 
+clustered_samples_REL <- p_REL$clustered_sample_list
+p_REL$plot
+```
+
+
+```{r dendogram-rel, fig.height=6, fig.width=5}
+dend <- plot_dend(p_REL$plot)
+plot(dend)
+```
+
+### Merging all inf. BM samples 
+
+Next, we merge the cluster order of all BM samples to be able to plot the corresponding metadata. 
+Let's first convert the SPE object of all inf. BM samples into a CATALYST-compatible object.
+
+```{r catalyst-comp-object-all}
+keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$sample_id%in%samples_with_tumor_cells & spe$control=="no"
+
+sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
+
+#recode metadata on progression
+sce$progress <- factor(spe[keep_rows, keep_cols]$progression)
+progress <- recode(sce$progress, `0` = 'NoProg', `1` = 'Prog')
+sce$progress <- as.factor(progress)
+
+#recode metadata on MYCN amplification
+sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
+mna <- recode(sce$mna, `1` = 'MNA', `2` = 'het', `0` = 'nMNA', `9` = 'unknown')
+sce$mna <- as.factor(mna)
+
+sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
+sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
+
+sce$sample_id <- factor(paste0(sce$fm_id, "_", sce$tissue))
+
+sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
+sce$age_diag <- spe[keep_rows, keep_cols]$age_diag
+sce$condition <- sce$timepoint 
+
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
+sce$metacluster <- factor(spe[keep_rows, keep_cols]$metacluster)
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
+
+# Add metadata
+metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,patient, mna, condition, progress) %>% 
+    summarise(n_cells=n(),.groups = 'drop') %>%
+    as.data.frame()
+
+# Define cell_type_markers 
+type_markers <- c("MPO_Y89_mean", "CD44_In115_mean", "CD11b_Nd142_mean", "HLA-DR_Nd143_mean", "PRPH_Nd144_mean", "HLA-ABC_Sm147_mean", "CD20_Nd148_mean", "LUM_Sm149_mean", "CD11c_Nd150_mean",
+                  "CD24_Eu151_mean", "CD3_Sm152_mean", "CD45_Eu153_mean", "CD8a_Sm154_mean", "GD2_Gd155_mean", "CD34_Gd156_mean", "CD10_Gd158_mean", "CXCR4_Tb159_mean","SOX10_Dy162_mean",
+                  "FOXP3_Dy163_mean", "CHGA_Dy164_mean", "GATA3_Er168_mean", "CD56_Er170_mean", "CD4_Yb171_mean", "ELAVL4_Yb174_mean", "CD14_Lu175_mean", "Vimentin_Pt196_mean", "CD15_Bi209_mean")
+
+# Define cell_state_markers 
+state_markers <- c("CD274_Gd160_mean", "S100B_Dy161_mean", "CD279_Ho165_mean", "Ki-67_Tm169_mean", "GZMB_Yb173_mean")
+
+# Add to spe
+rowData(sce)$marker_class <- ifelse(rownames(sce) %in% type_markers, "type",
+                                    ifelse(rownames(sce) %in% state_markers, "state", 
+                                    "other"))
+```
+
+Then we merge cluster labels for all timepoints.
+
+```{r merge-order}
+clustered_samples <- c(clustered_samples_DE, clustered_samples_RE1, clustered_samples_RE2, clustered_samples_REL)
+sce$sample_id <- factor(sce$sample_id, levels=clustered_samples)
+sce_tumor <- sce[,sce$metacluster=="tumor"]
+sce_ME <- sce[,sce$metacluster!="tumor" & sce$metacluster!="mesenchymal"]
+```
+
+We compute tumor and TME intra-sample heterogeneity.
+
+```{r heterogeneity}
+proportions <- plotAbundances(sce, k = "celltype", by = "sample")
+prop <- proportions$data %>%
+  select(-condition) %>%
+  pivot_wider(names_from = cluster_id, values_from = Freq)
+
+prop <- data.frame(prop)
+rownames(prop) <- prop$sample_id
+prop <- prop %>% select(-sample_id)
+prop <- t(prop)
+rownames(prop) <- levels(sce$cluster_id)
+
+me_clusters <- unique(sce[,sce$metacluster!="tumor" & sce$metacluster!="mesenchymal"]$cluster_id)
+me_prop <- prop[rownames(prop)%in%me_clusters,]
+me_het <- apply(me_prop,2, entropy)
+  
+tumor_clusters <- unique(sce[,sce$metacluster=="tumor"]$cluster_id)
+tumor_prop <- prop[rownames(prop)%in%tumor_clusters,]
+tumor_het <- apply(tumor_prop,2, entropy)
+```
+
+## Plot metadata 
+Then we plot intra-sample heterogeneity together with sample-specific metadata for the clustered sammples.
+```{r plot-metadata}
+#access sample-level data
+sample_summary <- as.data.frame(colData(sce)) %>%
+  group_by(sample_id) %>%
+  summarize(mna = first(mna), 
+            progress=first(progress),
+            age_diag = first(age_diag),
+            condition = first(condition)
+  )
+
+sample_summary <- as.data.frame(sample_summary)
+rownames(sample_summary) <- sample_summary$sample_id
+sample_summary <- sample_summary %>% select(-sample_id)
+
+
+#assign color codes
+col_code <- c("MNA"=rgb(202,0,32, maxColorValue = 255),
+              "het"=rgb(146,197,222, maxColorValue = 255),
+              "nMNA"=rgb(5,113,176, maxColorValue = 255),
+              "Prog"=rgb(202,0,32, maxColorValue = 255),
+              "NoProg"=rgb(5,113,176, maxColorValue = 255)
+              )
+
+col_age_diag = colorRamp2(c(min(sample_summary$age_diag, na.rm = TRUE), (quantile(sample_summary$age_diag, 0.95, na.rm = TRUE)-min(sample_summary$age_diag, na.rm = TRUE))/2, quantile(sample_summary$age_diag,0.95, na.rm = TRUE)), viridis(3))
+col_me_het = colorRamp2(c(min(me_het, na.rm = TRUE), (max(me_het, na.rm = TRUE)-min(me_het, na.rm = TRUE))/2, max(me_het, na.rm = TRUE)), viridis(3))
+col_tumor_het = colorRamp2(c(min(tumor_het, na.rm = TRUE), (max(tumor_het, na.rm = TRUE)-min(tumor_het, na.rm = TRUE))/2, max(tumor_het, na.rm = TRUE)), viridis(3))
+
+# Plot metadata
+columnAnnotation(MYCN_amp=sample_summary$mna, col=list(MYCN_amp=col_code)) %v%
+  columnAnnotation(progression=sample_summary$progress, col=list(progression=col_code)) %v%
+  columnAnnotation(age=sample_summary$age_diag, col=list(age=col_age_diag)) %v%
+  columnAnnotation(TUM_het=tumor_het, col=list(TUM_het=col_tumor_het)) %v%
+  columnAnnotation(ME_het=me_het, col=list(ME_het=col_me_het))
+  
+```
+
+## Plot continuous and discrete summary statistics
+
+We then plot summary statistics of continuous and discrete metadata in boxplots and piecharts, respectively.
+```{r piecharts, fig.height=4, fig.width=5}
+discrete_metadata <- c("mna", "progress")
+
+discrete_metadata_colors <- list(col_code, col_code)
+
+plot_list <- list()
+for (d in seq_along(discrete_metadata)) {
+  sample_meta <- sample_summary[,c(discrete_metadata[d], "condition")]
+  sample_meta <- sample_meta[rowSums(sample_meta == "unknown") == 0, ] 
+  colnames(sample_meta) <- c("dis_var", "condition")
+  
+  result <- sample_meta %>%
+    group_by(condition, dis_var) %>%
+    summarise(Freq = n(), .groups = 'drop')
+  
+  result[,"dis_var"]<- as.factor(unlist(result[,"dis_var"]))
+  
+plot_list[[d]] <- ggplot(result, aes(x="", y=Freq, fill=dis_var, group=dis_var)) +
+    geom_col(position = "fill") +
+    scale_fill_manual(values = discrete_metadata_colors[[d]], name=discrete_metadata[d]) +
+    coord_polar("y", start=0)  +  
+    facet_grid(.~ condition) +
+    theme_void()
+}
+
+do.call("grid.arrange", c(plot_list, ncol=1))
+```
+```{r boxplots, fig.width=8, fig.height=6}
+het_t <- as.vector(unname(tumor_het[clustered_samples]))
+het_me <- as.vector(unname(me_het[clustered_samples]))
+perc_tumor <- round((as.vector(unname(table(sce_tumor$sample_id)[clustered_samples]))/as.vector(unname(table(sce$sample_id)[clustered_samples])))*100,3)
+condition <- sample_summary$condition
+
+cont_df <- data.frame(cbind(het_t, perc_tumor, me_het, condition),row.names=clustered_samples)
+
+plot_list <- list()
+
+for (d in colnames(cont_df)[1:ncol(cont_df)-1]) {
+
+  df <- cont_df[,c(d, "condition")] 
+  
+  colnames(df) <- c("y", "condition")
+  stats_df <- compare_means(y ~ condition,  
+                        p.adjust.method = "BH", 
+                        method='wilcox.test', 
+                        data = df)
+  
+  stats_df$p_adj_signif <- stars.pval(stats_df$p.adj)
+  stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
+  stats_df$p_long <- paste0(stats_df$p.adj, " (", stats_df$p_adj_signif, ")")
+
+  if (d == "perc_tumor"){
+    plot_list[[d]] <- ggboxplot(df, x = "condition", y = d,
+            color = "condition", palette =c("skyblue2", "slategray1", "slategray3", "slategray"), 
+            add.params = list(size = 1.5),
+            add = "jitter")+ 
+            stat_pvalue_manual(stats_df, label = "p_long", y.position = log10(max(df$y)), step.increase = 0.2,) +
+            theme(aspect.ratio = 2, legend.position="none") +
+            scale_y_log10(
+                breaks = scales::trans_breaks("log10", function(x) 10^x),
+                labels = scales::trans_format("log10", scales::math_format(10^.x))
+            )
+  }else{
+    plot_list[[d]] <- ggboxplot(df, x = "condition", y = d,
+                color = "condition", palette =c("skyblue2", "slategray1", "slategray3", "slategray"), 
+                add.params = list(size = 1.5),
+                add = "jitter")+ 
+                stat_pvalue_manual(stats_df, label = "p_long", y.position = max(df$y), step.increase = 0.2,) +
+                theme(aspect.ratio = 2, legend.position="none") 
+  }
+}
+
+do.call("grid.arrange", c(plot_list, ncol=3))
+```
+
+## Plot metaclusters
+
+Finally, we plot the proportions of metaclusters in the clustered samples.
+```{r plot-metaclusters, fig.width=14, figh.height=5}
+sce_tmp <- sce
+sce_tmp$cluster_id <- sce_tmp$metacluster
+metadata(sce_tmp)$cluster_codes <- data.frame(celltype = factor(sce_tmp$metacluster))
+p_all <- plotAbundances(sce_tmp, k = "celltype", by = "sample", col_clust=F, k_pal=metadata(spe)$color_vectors$col_metacluster)
+rm(sce_tmp)
+p_all
+```
+
+## Session Info
+
+<details>
+   <summary>SessionInfo</summary>
+   
+```{r, echo = FALSE}
+sessionInfo()
+```
+</details>

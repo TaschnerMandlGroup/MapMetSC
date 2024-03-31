@@ -1,5 +1,5 @@
 ---
-title: "Differential abundance analysis - BM (crtl vs inf.)"
+title: "Differential abundance between clinical conditions in diagnostic bone marrow samples"
 author: "LazDaria"
 date: "`r Sys.Date()`"
 output: 
@@ -18,29 +18,25 @@ knitr::opts_chunk$set(echo = TRUE,
                       warning=FALSE)
 ```
 
-# Sample overview - before and after metastasis {#crtl-inf}
-Next, to understand how metastasis affects the microenvironment at the metastatic site, we investigate the TME composition in control (non-infiltrated) versus tumor-infiltrated BM samples. 
+# DA analysis between clinical conditions in BM samples {#bm-da}
+Herein, we explore differential cell type abundances in tumor and TME.
 
 ## Load libraries
 <details>
    <summary>Load libraries</summary>
    
 ```{r load-libraries}
-library(diffcyt)
 library(SingleCellExperiment)
 library(CATALYST)
+library(diffcyt)
 library(dplyr)
-library(tidyr)
-library(BioQC)
-library(ComplexHeatmap)
-library(viridis)
-library(circlize)
 library(ggplot2)
-library(gridExtra)
 library(ggpubr)
 library(rstatix)
 library(gridExtra)
 library(gtools)
+library(tidyr)
+library(BioQC)
 ```
 </details>
 
@@ -51,11 +47,26 @@ First, we load the processed and phenotyped single-cell data from [chapter 4](#p
 spe <- readRDS(file.path(params$output,"spe_final.rds"))
 ```
 
-We will then transform the SPE object into a catalyst-compatible object. 
+We will then transform the SPE object into a catalyst-compatible object. Select whether you want to investigate differential abundance (DA) in the tumor (`tumor`) or TME (`TME`) compartment. We decide whether we want to compare between progression (`prog`) or MYCN (`mycn`) status. Reduce the dataset to only `nMNA` or `MNA` samples with `reduce_to`.
 
 ```{r catalyst-comp-object}
+compartment <- "tumor"
+status <- "prog"
+reduce_to <- "none"
+
+if (compartment == "tumor"){
+  keep_cols <- spe$celltype != "other" & spe$timepoint=="DE" & spe$metacluster=="tumor" & spe$tissue=="BM"
+}else{
+  keep_cols <- spe$celltype != "other" & spe$timepoint=="DE" & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal"  & spe$tissue=="BM"
+}
+
+if (status == "mycn"){
+  keep_cols <- keep_cols & (spe$MYCN_amp == 0 | spe$MYCN_amp == 1)}
+
+if (reduce_to == "nMNA"){keep_cols <- keep_cols & spe$MYCN_amp == 0}
+if (reduce_to == "MNA"){keep_cols <- keep_cols & spe$MYCN_amp == 1}
+
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$tissue=="BM" & spe$celltype != "other" & (spe$timepoint=="DE"|spe$timepoint=="") & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal" 
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
@@ -63,11 +74,6 @@ sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, k
 sce$progress <- factor(spe[keep_rows, keep_cols]$progression)
 progress <- recode(sce$progress, `0` = 'NoProg', `1` = 'Prog')
 sce$progress <- as.factor(progress)
-
-#recode metadata on crtl/inf
-sce$control <- factor(spe[keep_rows, keep_cols]$control)
-control <- recode(sce$control, `yes` = 'crtl', `no` = 'inf.')
-sce$control <- as.factor(control)
 
 #recode metadata on MYCN amplification
 sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
@@ -79,74 +85,78 @@ sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 
 sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", sce$patient, "_", sce$fm_id, "_", sce$tissue))
-
 sce$age_diag <- spe[keep_rows, keep_cols]$age_diag
-sce$solidity_clipped <- spe[keep_rows, keep_cols]$solidity_clipped
 
-sce$condition <- sce$control
-
-sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
 sce$metacluster <- factor(spe[keep_rows, keep_cols]$metacluster)
 
-# Add celltype information to metadata
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
 metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
+col_vector <- metadata(spe)$color_vectors$col_celltype_ordered
 
-# Add metadata
+if (status == "prog"){
+  sce$condition <- sce$progress
+}else{
+  sce$condition <- sce$mna
+}
+
+# Add experiment_info
 metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,patient, mna, condition, progress) %>% 
     summarise(n_cells=n(),.groups = 'drop') %>%
     as.data.frame()
 
-# Define cell_type_markers 
+# Define cell type and state markers
 type_markers <- c("MPO_Y89_mean", "CD44_In115_mean", "CD11b_Nd142_mean", "HLA-DR_Nd143_mean", "PRPH_Nd144_mean", "HLA-ABC_Sm147_mean", "CD20_Nd148_mean", "LUM_Sm149_mean", "CD11c_Nd150_mean",
                   "CD24_Eu151_mean", "CD3_Sm152_mean", "CD45_Eu153_mean", "CD8a_Sm154_mean", "GD2_Gd155_mean", "CD34_Gd156_mean", "CD10_Gd158_mean", "CXCR4_Tb159_mean","SOX10_Dy162_mean",
                   "FOXP3_Dy163_mean", "CHGA_Dy164_mean", "GATA3_Er168_mean", "CD56_Er170_mean", "CD4_Yb171_mean", "ELAVL4_Yb174_mean", "CD14_Lu175_mean", "Vimentin_Pt196_mean", "CD15_Bi209_mean")
 
-# Define cell_state_markers 
 state_markers <- c("CD274_Gd160_mean", "S100B_Dy161_mean", "CD279_Ho165_mean", "Ki-67_Tm169_mean", "GZMB_Yb173_mean")
 
-# Add to sce
 rowData(sce)$marker_class <- ifelse(rownames(sce) %in% type_markers, "type",
                                     ifelse(rownames(sce) %in% state_markers, "state", 
                                     "other"))
 ```
 
-## Overview celltype abundances
+## Plot cellular proportions per sample per condition
 
-Next, we plot an overview of TME celltype abundances in crtl and infl. BM samples.
+We then visualize the cellular proportions per sample and condition in barplots.
 
-```{r cohort-overview, fig.width=16, fig.height=6}
+```{r cohort-overview, fig.width=10, fig.height=5}
 set.seed(20231103)
 
-p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=T, k_pal=metadata(spe)$color_vectors$col_celltype_ordered, 
+p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=T, k_pal=col_vector, 
                     linkage="ward.D", distance="manhattan") 
+
 p
 ```
-
 We save the order of the clustered samples to be able to plot corresponding metadata.
 
 ```{r store-order}
-condition <- c("crtl", "inf.")
+condition <- levels(sce$condition)
 clustered_samples <- list()
 for (i in seq_along(condition)){
-  clustered_samples <- c(clustered_samples, sub(".*_([^_]+_[^_]+$)", "\\1", levels(droplevels(p$data[p$data$condition==condition[i],]$sample_id))))
-}
+  clustered_samples <- c(clustered_samples, levels(droplevels(p$data[p$data$condition==condition[i],]$sample_id)))
+  }
 clustered_samples <- as.character(clustered_samples)
 ```
 
-## Compute TME heterogeneity
+## Compute heterogeneity
 
-We compute TME intra-sample heterogeneity.
+We compute intra-sample heterogeneity.
 ```{r heterogeneity}
-prop <- p$data %>%
+proportions <- plotAbundances(sce, k = "celltype", by = "sample")
+prop <- proportions$data %>%
   select(-condition) %>%
   pivot_wider(names_from = cluster_id, values_from = Freq)
 
 prop <- data.frame(prop)
 rownames(prop) <- prop$sample_id
 prop <- prop %>% select(-sample_id)
+
 prop <- t(prop)
 rownames(prop) <- levels(sce$cluster_id)
-colnames(prop) <- sub(".*_([^_]+_[^_]+$)", "\\1", colnames(prop))
+
+rownames(prop) <- levels(sce$cluster_id)
+
 prop <- prop[,clustered_samples]
 het <- apply(prop,2, entropy)
 ```
@@ -157,73 +167,61 @@ Then we plot intra-sample heterogeneity together with sample-specific metadata f
 #access sample-level data
 sample_summary <- as.data.frame(colData(sce)) %>%
   group_by(sample_id) %>%
-  summarize(mna = first(mna), 
-            progress=first(progress),
-            control = first(control),
-            age_diag = first(age_diag)
+  summarize(age_diag = first(age_diag),
+            condition = first(condition)
   )
-
 sample_summary <- as.data.frame(sample_summary)
-rownames(sample_summary) <- sub(".*_([^_]+_[^_]+$)", "\\1", sample_summary$sample_id)  
+rownames(sample_summary) <- sample_summary$sample_id
 sample_summary <- sample_summary %>% select(-sample_id)
 sample_summary <- sample_summary[clustered_samples,]
 
-#assign color codes
-col_code <- c("MNA"=rgb(202,0,32, maxColorValue = 255),
-              "het"=rgb(146,197,222, maxColorValue = 255),
-              "nMNA"=rgb(5,113,176, maxColorValue = 255),
-              "Prog"=rgb(202,0,32, maxColorValue = 255),
-              "NoProg"=rgb(5,113,176, maxColorValue = 255)
-              )
+age <- sample_summary$age_diag
+condition <- sample_summary$condition
 
-col_age_diag = colorRamp2(c(min(sample_summary$age_diag, na.rm = TRUE), (quantile(sample_summary$age_diag, 0.95, na.rm = TRUE)-min(sample_summary$age_diag, na.rm = TRUE))/2, quantile(sample_summary$age_diag,0.95, na.rm = TRUE)), viridis(3))
-col_het = colorRamp2(c(min(het, na.rm = TRUE), (max(het, na.rm = TRUE)-min(het, na.rm = TRUE))/2, max(het, na.rm = TRUE)), viridis(3))
+het_t <- as.vector(unname(het[clustered_samples]))
+
+#calculate tumor infiltration per sample
+temp <- as.data.frame(table(spe[, paste0(spe$fm_id, "_", spe$tissue)%in%sub(".*_([^_]+_[^_]+$)", "\\1", clustered_samples)]$sample))
+rownames(temp) <- sapply(strsplit(as.character(temp$Var1), "_"), function(x) paste(x[3], x[4], sep = "_"))
+temp <- temp[sub(".*_([^_]+_[^_]+$)", "\\1", clustered_samples), ]
+rownames(temp) <- clustered_samples
+perc_tumor <- round((as.vector(unname(table(sce$sample_id)[clustered_samples]))/temp[clustered_samples,]$Freq)*100,3)
 
 # Plot metadata
-columnAnnotation(MYCN_amp=sample_summary$mna, col=list(MYCN_amp=col_code)) %v%
-  columnAnnotation(progression=sample_summary$progress, col=list(progression=col_code)) %v%
-  columnAnnotation(age=sample_summary$age_diag, col=list(age=col_age_diag)) %v%
-  columnAnnotation(het=het, col=list(het=col_het))
+cont_df <- data.frame(perc_tumor, het_t, age, condition,row.names=clustered_samples)
+
+plot_list <- list()
+
+for (d in colnames(cont_df)[1:ncol(cont_df)-1]) {
+
+  df <- cont_df[,c(d, "condition")] 
   
-```
-
-## Plot mean granulocyte roundness per sample
-To investigate the shift in granulocyte maturity upon metastasis, we plot the mean granulocyte roundness per sample. 
-
-```{r granulocyte-roundness, fig.width=4, fig.height=5}
-sce$sample <- sub(".*_([^_]+_[^_]+$)", "\\1", sce$sample_id)  
-
-df <- aggregate(sce[,sce$metacluster=="granulocyte"]$solidity_clipped, list(sce[,sce$metacluster=="granulocyte"]$sample), mean)
-rownames(df) <- df[,1]
-df <- df[-c(1)]
-colnames (df) <- "y"
-
-df$condition <- sample_summary[rownames(df),]$control
-
-stats_df <- compare_means(y ~ condition,  
-                      method='wilcox.test', 
-                      data = df)
+  colnames(df) <- c("y", "condition")
+  stats_df <- compare_means(y ~ condition,  
+                        p.adjust.method = "BH", 
+                        method='wilcox.test', 
+                        data = df)
   
-stats_df$p_adj_signif <- stars.pval(stats_df$p.adj)
-stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
-stats_df$p_long <- paste0(stats_df$p.adj, " (", stats_df$p_adj_signif, ")")
+  stats_df$p_adj_signif <- stars.pval(stats_df$p.adj)
+  stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
+  stats_df$p_long <- paste0(stats_df$p.adj, " (", stats_df$p_adj_signif, ")")
 
-p <- ggboxplot(df, x = "condition", y = "y",
+plot_list[[d]] <- ggboxplot(df, x = "condition", y = d,
                 color = "condition", palette =c("slategray1", "slategray"),
                 add.params = list(size = 1.5),
                 add = "jitter")+ 
                 stat_pvalue_manual(stats_df, label = "p_long", y.position = max(df$y), step.increase = 0.2,) +
-                theme(aspect.ratio = 1.5, legend.position="none") 
+                theme(aspect.ratio = 2, legend.position="none") 
+}
 
-p
+do.call("grid.arrange", c(plot_list, ncol=3))
 ```
 
-# Differential abundance analysis - CRTL vs INF
-
-## Prepare data
+## Differential abundance analysis
 We first prepare data for DA analysis using the `diffcyt` package. 
 
 ```{r prepare-data}
+
 #list of samples as input to diffcyt methods
 df_list <- lapply(unique(sce$sample_id), function(x){as.data.frame(t(counts(sce[,sce$sample_id==x])))})
 names(df_list) <- unique(sce$sample_id)
@@ -255,19 +253,26 @@ d_se <- transformData(d_se)
 d_counts <- calcCounts(d_se)
 ```
 
-Subsequently, we perform the DA analysis comparing celltype proportions between crtl and inf. BM samples. 
+Subsequently, we perform the DA analysis comparing celltype proportions between clinical conditions. 
 
 ```{r da-analysis}
+# Create design matrix
 design <- createDesignMatrix(experiment_info, cols_design = "condition")
+
+# Create contrast matrix
 contrast <- createContrast(c(0, 1)) 
-
-
 nrow(contrast) == ncol(design)
 
+if(compartment == "tumor"){
+  min_sam = round(dim(d_counts)[2]*0.2)
+}else{
+  min_sam = round(dim(d_counts)[2]*0.05)
+}
+
 # Test for differential abundance (DA) of clusters
-res_DA <- testDA_edgeR(d_counts,design, contrast, 
+res_DA <- testDA_voom(d_counts,design, contrast, 
                        min_cells=3, 
-                       min_samples=round(dim(d_counts)[2]*0.05)
+                       min_samples=min_sam
                        )
 
 FDR_cutoff = 0.1
@@ -275,13 +280,16 @@ rowData(res_DA)[rowData(res_DA)$p_adj<FDR_cutoff,]
 res<- data.frame(rowData(res_DA))
 ```
 ## Visualization of DA results
-Finally, we visualize DA results in boxplots.
+Finally, we visualize DA results in boxplots and barplots showing the logFC.
 
-```{r visualize-da, fig.width=12, fig.height=20}
-p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
-
-comparisons <- c("crtlvsinf.")
-ord <- c("crtl", "inf.")
+```{r visualize-da, fig.width=12, fig.height=10}
+if(status=="prog"){
+  comparisons <- c("NoProgvsProg")
+  ord <- c("NoProg", "Prog")
+}else{
+  comparisons <- c("nMNAvsMNA")
+  ord <- c("nMNA", "MNA")
+}
 
 plot_list_fc <- list()
 
@@ -307,7 +315,7 @@ for(i in 1:length(unique(p$data$cluster_id))){
   stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
   stats_df$p_fc <- paste0(stats_df$logFC, " (", stats_df$p_adj, ")", " (", stats_df$p_adj_signif, ")")
   
-  color <- unname(metadata(spe)$color_vectors$col_celltype_ordered[as.character(cluster_name)])
+  color <- unname(col_vector[as.character(cluster_name)])
   
   plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", order=ord,
               color = "condition", palette =c(color, color), 
@@ -324,25 +332,27 @@ for(i in 1:length(unique(p$data$cluster_id))){
       scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
 }
 
-grid.arrange(grobs = plot_list_fc, ncol = 4)
+grid.arrange(grobs = plot_list_fc, ncol = 5)
 ```
-Finally we plot the mean celltype abundance over all samples per condition.
+```{r barplot-logFC, fig.width=5, fig.height=8}
+df <- res[, c("logFC", "p_adj")]
+df$p_adj_signif <- stars.pval(df$p_adj)
+df$p_adj_signif[df$p_adj_signif==" "] <- "ns"
+df$cluster <- rownames(df)
 
-```{r visualize-barplot}
-df_normalized <- p$data %>%
-  group_by(cluster_id, condition) %>%
-  summarise(normalized_count = mean(Freq, na.rm = TRUE)) %>%
-  ungroup()
-
-df_normalized$cluster_id <- factor(df_normalized$cluster_id)
-
-ggplot(df_normalized, aes(fill=cluster_id, y=normalized_count, x=condition)) + 
+p1 <- ggplot(df, aes(fill=cluster, y=logFC, x=cluster)) + 
+  ggtitle(colnames(contrasts)[i]) +
   geom_bar(
     stat="identity",
-    show.legend = T) + 
-  scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype_ordered) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+    position="dodge",
+    show.legend = F) + 
+  scale_fill_manual(values = col_vector) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_text(aes(label = p_adj_signif), vjust = 0)
+  
+p1
 ```
+
 ## Session Info
 
 <details>

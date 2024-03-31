@@ -1,0 +1,250 @@
+---
+title: "Differential abundance across time in paired BM samples"
+author: "LazDaria"
+date: "`r Sys.Date()`"
+output: 
+  workflowr::wflow_html
+editor_options:
+  chunk_output_type: inline
+params: 
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      error=FALSE,
+                      messages=FALSE,
+                      warning=FALSE)
+```
+
+# Differential abundance analysis between therapeutic timepoints in paired BM {#bm-th-da-paired}
+Next, we compare celltype abundances between therapeutic timepoints in paired BM samples, quantitatively.
+
+## Load libraries
+<details>
+   <summary>Load libraries</summary>
+   
+```{r load-libraries}
+library(diffcyt)
+library(SingleCellExperiment)
+library(CATALYST)
+library(dplyr)
+library(tidyr)
+library(BioQC)
+library(ComplexHeatmap)
+library(viridis)
+library(circlize)
+library(ggplot2)
+library(ggpubr)
+library(rstatix)
+library(gridExtra)
+library(gtools)
+library(edgeR)
+```
+</details>
+
+## Read data
+First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping). 
+
+```{r read-data}
+spe <- readRDS(file.path(params$output,"spe_final.rds"))
+```
+
+We will then transform the SPE object into a catalyst-compatible object. Decide whether tumor (`tumor`) or TME (`TME`) celltypes should be analysed and which timepoint (`RE1`, `RE2`) should be compared to paired diagnostic samples. 
+
+```{r catalyst-comp-object}
+timepoint <- "RE2"
+compartment <- "TME"
+
+if (compartment=="tumor"){
+  BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster == "tumor" & spe$timepoint == "DE"]$study_id )
+  BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster == "tumor" & spe$timepoint == timepoint]$study_id )
+  paired_patients <- intersect(BM_patients_1, BM_patients_2)
+  keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$metacluster=="tumor" & spe$control=="no" & (spe$timepoint=="DE" | spe$timepoint==timepoint) & spe$study_id%in%paired_patients 
+}else{
+  BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$timepoint == "DE"]$study_id )
+  BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$timepoint == timepoint]$study_id )
+  paired_patients <- intersect(BM_patients_1, BM_patients_2)
+  keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal" & spe$control=="no" & (spe$timepoint=="DE" | spe$timepoint==timepoint) & spe$study_id%in%paired_patients 
+}
+
+keep_rows <- rowData(spe)$use_channel 
+
+sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
+
+sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
+sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
+sce$sample_id <- factor(paste0(sce$fm_id, "_", sce$tissue))
+sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
+sce$condition <- factor(sce$timepoint)
+
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
+sce$metacluster <- factor(spe[keep_rows, keep_cols]$metacluster)
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
+
+# Add metadata
+metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id, condition, patient) %>% 
+    summarise(n_cells=n(),.groups = 'drop') %>%
+    as.data.frame()
+
+# Define cell_type_markers 
+type_markers <- c("MPO_Y89_mean", "CD44_In115_mean", "CD11b_Nd142_mean", "HLA-DR_Nd143_mean", "PRPH_Nd144_mean", "HLA-ABC_Sm147_mean", "CD20_Nd148_mean", "LUM_Sm149_mean", "CD11c_Nd150_mean",
+                  "CD24_Eu151_mean", "CD3_Sm152_mean", "CD45_Eu153_mean", "CD8a_Sm154_mean", "GD2_Gd155_mean", "CD34_Gd156_mean", "CD10_Gd158_mean", "CXCR4_Tb159_mean","SOX10_Dy162_mean",
+                  "FOXP3_Dy163_mean", "CHGA_Dy164_mean", "GATA3_Er168_mean", "CD56_Er170_mean", "CD4_Yb171_mean", "ELAVL4_Yb174_mean", "CD14_Lu175_mean", "Vimentin_Pt196_mean", "CD15_Bi209_mean")
+
+# Define cell_state_markers 
+state_markers <- c("CD274_Gd160_mean", "S100B_Dy161_mean", "CD279_Ho165_mean", "Ki-67_Tm169_mean", "GZMB_Yb173_mean")
+
+# Add to sce
+rowData(sce)$marker_class <- ifelse(rownames(sce) %in% type_markers, "type",
+                                    ifelse(rownames(sce) %in% state_markers, "state", 
+                                    "other"))
+```
+
+# Differential abundance analysis - paired sequential BM samples
+
+## Prepare data
+We first prepare data for DA analysis using the `diffcyt` package. 
+
+```{r prepare-data}
+#list of samples as input to diffcyt methods
+df_list <- lapply(unique(sce$sample_id), function(x){as.data.frame(t(counts(sce[,sce$sample_id==x])))})
+names(df_list) <- unique(sce$sample_id)
+
+#experiment info
+experiment_info <- metadata(sce)$experiment_info
+experiment_info <- experiment_info[match(names(df_list),experiment_info$sample_id),]
+
+#marker info
+channel_name <- sapply(strsplit(rownames(rowData(spe)[keep_rows,]), "_"), "[[", 2)
+marker_name <- sapply(strsplit(rownames(rowData(spe)[keep_rows,]), "_"), "[[", 1)
+marker_class <-ifelse(rownames(spe)[keep_rows] %in% type_markers, "type",
+                                    ifelse(rownames(spe)[keep_rows] %in% state_markers, "state", 
+                                    "other"))
+row_data <- data.frame(cbind(channel_name, marker_name), row.names=marker_name)
+row_data$marker_class <- as.factor(marker_class)
+
+marker_info <-  row_data
+
+#prepare data into format for diffcyt pipeline 
+d_se <- prepareData(df_list, experiment_info, marker_info)
+rowData(d_se)$cluster_id <- sce[,rownames(d_se)]$cluster_id 
+metadata(d_se)$cluster_codes <- metadata(sce)$cluster_codes
+
+# Transform data
+d_se <- transformData(d_se)
+
+# Calculate counts
+d_counts <- calcCounts(d_se)
+```
+
+Subsequently, we perform the DA analysis comparing celltype proportions between paired BM samples from diagnosis and `r timepoint`.
+
+```{r da-analysis}
+design <- createDesignMatrix(experiment_info, cols_design = c("condition", "patient")) 
+contrast <- createContrast(c(0, 1, rep(0, length(unique(experiment_info$patient))-1))) #paired
+nrow(contrast) == ncol(design)
+
+if (compartment=="tumor"){
+  min_sam = 2
+}else{
+  min_sam = 1
+}
+
+# Test for differential abundance (DA) of clusters
+res_DA <- testDA_edgeR(d_counts,design, contrast, 
+                       min_cells=3, 
+                       min_samples=min_sam
+                       )
+
+
+FDR_cutoff = 0.1
+rowData(res_DA)[rowData(res_DA)$p_adj<FDR_cutoff,]
+res<- data.frame(rowData(res_DA))
+```
+
+## Visualization of DA results
+Finally, we visualize DA results in boxplots.
+
+```{r visualize-da, fig.width=12, fig.height=20}
+p <- plotAbundances(sce, k = "celltype", by = "cluster_id", shape_by = "sample_id")
+
+comparisons <- c(paste0("DEvs", timepoint))
+ord <- c("DE", timepoint)
+
+plot_list_values <- list()
+plot_list_stars <- list()
+plot_list_fc <- list()
+for(i in 1:length(unique(p$data$cluster_id))){
+  cluster_name <- unique(p$data$cluster_id)[i]
+  proportions <- data.frame(p$data[p$data$cluster_id == cluster_name, c("sample_id", "condition", "Freq")])
+  
+  p_adj <- c()
+  group1 <- c()
+  group2 <- c()
+  logFC <- c()
+  
+  for(j in 1:1){
+  stats <- res
+  p_adj <- c(p_adj, round(stats[rownames(stats)==droplevels(cluster_name), "p_adj"],3))
+  logFC <- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), "logFC"],2))
+  group1 <- c(group1, unlist(strsplit(comparisons[j], "vs"))[1])
+  group2 <- c(group2, unlist(strsplit(comparisons[j], "vs"))[2])
+  }
+
+  stats_df <- data.frame(p_adj=p_adj, group1=group1, group2=group2, logFC=logFC)
+  stats_df$p_adj_signif <- stars.pval(stats_df$p_adj)
+  stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
+  stats_df$p_fc <- paste0(stats_df$logFC, " (", stats_df$p_adj, ")", " (", stats_df$p_adj_signif, ")")
+
+  color <- unname(metadata(spe)$color_vectors$col_celltype_ordered[as.character(cluster_name)]) 
+  
+  plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", order=ord,
+              color = "condition", palette =c(color, color), 
+              add.params = list(size = 1.5),
+              add = "jitter", 
+              title=cluster_name, show.legend = F) +
+      stat_pvalue_manual(
+        stats_df,
+        y.position = max(proportions$Freq),
+        step.increase = 0.4,
+        label = "p_fc"
+        )  +
+      theme(aspect.ratio = 1.5, legend.position="none") +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+}
+
+grid.arrange(grobs = plot_list_fc, ncol = 6)
+```
+
+We will plot the logFC for the comparisons between conditions in a barplot.
+```{r barplot-logFC, fig.width=7, fig.height=8}
+df <- res[, c("logFC", "p_adj")]
+df$p_adj_signif <- stars.pval(df$p_adj)
+df$p_adj_signif[df$p_adj_signif==" "] <- "ns"
+df$cluster <- rownames(df)
+
+p <- ggplot(df, aes(fill=cluster, y=logFC, x=cluster)) + 
+  ggtitle(colnames(contrasts)[i]) +
+  geom_bar(
+    stat="identity",
+    position="dodge",
+    show.legend = F) + 
+  scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype_ordered) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_text(aes(label = p_adj_signif), vjust = 0)
+
+p
+```
+
+## Session Info
+
+<details>
+   <summary>SessionInfo</summary>
+   
+```{r, echo = FALSE}
+sessionInfo()
+```
+</details>

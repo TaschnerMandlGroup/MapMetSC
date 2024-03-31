@@ -187,7 +187,7 @@ col_code <- c("MNA"=rgb(202,0,32, maxColorValue = 255),
               "NoProg"=rgb(5,113,176, maxColorValue = 255)
               )
 
-col_age_diag = colorRamp2(c(min(sce$age_diag, na.rm = TRUE), (quantile(sce$age_diag, 0.95, na.rm = TRUE)-min(sce$age_diag, na.rm = TRUE))/2, quantile(sce$age_diag,0.95, na.rm = TRUE)), viridis(3))
+col_age_diag = colorRamp2(c(min(sample_summary$age_diag, na.rm = TRUE), (quantile(sample_summary$age_diag, 0.95, na.rm = TRUE)-min(sample_summary$age_diag, na.rm = TRUE))/2, quantile(sample_summary$age_diag,0.95, na.rm = TRUE)), viridis(3))
 col_tumor_het = colorRamp2(c(min(tumor_het, na.rm = TRUE), (max(tumor_het, na.rm = TRUE)-min(tumor_het, na.rm = TRUE))/2, max(tumor_het, na.rm = TRUE)), viridis(3))
 
 # Plot metadata

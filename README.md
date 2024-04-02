@@ -19,7 +19,7 @@ To be able to run the provided Rmd files, clone the repository via
  ```
 For reproducibility, we provide a docker image. Pull the docker image using:
  ```bash
- docker pull lazdaria/mapmetsc
+ docker pull lazdaria/mapmetsc:v1.0
  ```
  and run the container:
  ```bash

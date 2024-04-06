@@ -6,7 +6,7 @@
 
 _This repository is currently under development._
 
-This repository provides scripts to reproduce figures published in [Lazic et al](coming/soon) (in preparation). In brief, we spatially and temporally mapped primary and metastatic neuroblastoma by multi-modal high-plex imaging in combination with scRNA-seq datasets. The data analysis worflow in Lazic et al. is split into two parts:
+This repository provides scripts to reproduce figures published in Lazic et al(coming/soon) (in preparation). In brief, we spatially and temporally mapped primary and metastatic neuroblastoma by multi-modal high-plex imaging in combination with scRNA-seq datasets. The data analysis worflow in Lazic et al. is split into two parts:
 - [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP): `python` based image-processing pipeline 
 - [MapMetSC](https://github.com/TaschnerMandlGroup/MapMetSC): `R` based single-cell analysis worfklow 
 

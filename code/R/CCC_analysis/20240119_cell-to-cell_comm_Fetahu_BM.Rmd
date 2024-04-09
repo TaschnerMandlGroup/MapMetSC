@@ -15,6 +15,8 @@ output:
 params:
   input: "/home/data/MapMet/"
   out: "/home/out/MapMet/"
+  GO_db: "/home/sara_wz/annotation/GSEA_GeneSetEnrichments"
+  markers: "/home/sara_wz/annotation/MES_ADRN/"
 ---
 
 ```{r setup, include=FALSE}
@@ -119,6 +121,8 @@ library("CellChat")
 library("RColorBrewer")
 library("DElegate")
 library("dplyr")
+library("ggalluvial")
+library("NMF")
 ```
 
 # __Input data__
@@ -246,7 +250,7 @@ df_net %>% saveRDS(paste0(params$out,"Rds/fetahu2023.signaling.rds"))
 
 ```
 
-```{r CellChat figures}
+```{r CellChat figures, eval=FALSE, include=FALSE}
 library(latex2exp)
 source("/home/data/MapMet/fetahu.scRNA.2023/scripts/csbg-neuroblastoma-d976641/styling.R")
 
@@ -673,13 +677,13 @@ table(predicted_label)
 ### downsample
 
 rna <- SetIdent(rna, value = "predicted_celltype")
-rna.small <- subset(rna, downsample = 500)
+rna.small <- subset(rna, downsample = 5000)
 rna_mat.small <- GetAssayData(rna.small, assay = "RNA", slot = "data")[common_genes_rna,]
-
 
 rna_mat_scaled <-  t(scale(rna_mat.small))
 
-rna_mat_scaled <- rna_mat_scaled %>% drop_na()
+# replace all non-finite values with 0
+rna_mat_scaled[!is.finite(rna_mat_scaled)] <- 0
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -706,7 +710,7 @@ col_fun = circlize::colorRamp2(c(-0.5, 0, 0.5, 1),
 
 
 x <- Heatmap(rna_mat_scaled, name = "IMC markers gene expression",  
-             column_split = factor(cluster_anno),
+             #column_split = factor(cluster_anno),
              cluster_columns = TRUE,
              show_column_dend = TRUE,
              cluster_column_slices = TRUE,
@@ -1015,7 +1019,7 @@ To infer the cell state-specific communications, CellChat v2 identifies over-exp
 ligands or receptors in one cell group and then identifies over-expressed 
 ligand-receptor interactions if either ligand or receptor are over-expressed.
 
-## Sub-clusters (from Lazic et al., 2024)
+## __Sub-clusters (from Lazic et al., 2024)__
 
 ```{r CellChat: sub-clusters}
 
@@ -1670,8 +1674,9 @@ PART II
 # __Load data__
 
 ```{r load previous analysis}
-metadata <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/metadata.rds")
-scrna_data <- readRDS("/home/data/MapMet/fetahu.scRNA.2023/data/rna_decontaminated.rds")
+metadata <- readRDS(paste0(params$input,"/fetahu.scRNA.2023/data/metadata.rds"))
+scrna_data <- readRDS(paste0(params$input,"/fetahu.scRNA.2023/data/rna_decontaminated.rds"))
+                      
 predicted_labels <- readRDS(file = paste0(params$out,"Rds/20240313_predicted_labels_IMC-BMtoRNA.rds"))
 
 rna <- as.Seurat(scrna_data, data=NULL)
@@ -1774,7 +1779,7 @@ saveRDS(fetahu.NB,
 
 ## __Tumor cluster markers__
 
-### __clustering from 08.03.2024__
+## __clustering from 08.03.2024__
 
 ```{r markers 1}
 fetahu.NB <- readRDS(file = paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
@@ -1809,18 +1814,26 @@ marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB,
 marker_results_top5 <- dplyr::filter(marker_results, feature_rank < 6)
 marker_results_top5
 
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    slice_max(n = 10, order_by = avg_log2FC)
+marker_results %>%
+    group_by(group1) %>%
+    slice_max(n = 10, order_by = log_fc)
 
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    top_n(n = 10, wt = avg_log2FC) -> top10
+marker_results %>%
+    group_by(group1) %>%
+    top_n(n = 10, wt = log_fc) -> top10
 
-DoHeatmap(fetahu.NB, features = top10$gene) + NoLegend()
+DEG_tumor <- DoHeatmap(fetahu.NB, features = top10$feature) + NoLegend()
+DEG_tumor
+
+pdf(paste0(params$out,"figures/fetahu2023.scRNA.markers.heatmap_2024-03-08.pdf"))
+DEG_tumor
+dev.off()
+
+saveRDS(marker_results, 
+        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters.markers_2024-03-08.Rds"))
 
 saveRDS(fetahu.NB, 
-        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters.Rds"))
+        file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters_2024-03-08.Rds"))
 
 # Visualization
 p1 <- DimPlot(fetahu.NB, reduction = "umap", 
@@ -1853,7 +1866,112 @@ overlap
 # in the tumor cluster
 ```
 
-#### __Predicted cell types based on IMC data__
+### __Module score__
+
+#### __T-cell exhustion markers__
+
+```{r}
+# Gene module score
+# gene lsits from: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10171398/
+# gene immune evasion signature
+immune_evasion <- c("PDCD1","CTLA4","HAVCR2","LAG3","TIGIT","CD244","CD160",
+                    "IRF4","BATF","NFATC1","FOXP3","IL2RA","TNFRSF18","IKZF4",
+                    "CD80","CD86","CD274","PDCD1LG2","LGALS9")
+
+
+rowSums(fetahu.NB[['RNA']]["TIGIT",]>0)
+
+
+fetahu.NB <- AddModuleScore(tcells, immune_evasion,
+                            name = "immune_evasion_set", seed = 28, 
+                            assay = 'RNA')
+
+# Plot score
+FeaturePlot(tcells,
+            features = "immune_evasion_set", label = TRUE, repel = TRUE, 
+            order = TRUE, pt.size = 1) +
+            scale_colour_gradientn(colours = brewer.pal(n = 20, name = "RdPu"))
+
+
+VlnPlot(tcells,features = "immune_evasion_set1", log = TRUE,pt.size = 0)
+
+VlnPlot(tcells_pd1,features = "immune_evasion_set1", log = TRUE,pt.size = 0)
+
+RidgePlot(tcells_pd1, features = "immune_evasion_set1", log = TRUE)
+```
+
+#### __ADR/MES/NCC markers__
+
+```{r ADR/MES, fig.height=5, fig.width=5, warning=FALSE}
+#fetahu.NB <- readRDS(file = paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
+# Gene module score
+# Gene list from Boeva et al., 2021
+ADR.gene.list <- list(c("PHOX2B","GATA3","HAND2","HAND1","KLF7","ISL1","PHOX2A"))
+                  
+                  
+NCC.gene.list <- list(c("NR3C1","BHLHE41","MAFF","GLIS3","IRF1","IRF2","IRF3",
+                        "FLI1","MEF2D","PRRX1","RUNX1","RUNX2","TBX18","FOSL1",
+                        "FOSL2"))
+
+
+fetahu.NB <- AddModuleScore(fetahu.NB, ADR.gene.list,
+                            name = "adrenergic_signature_set", seed = 28, 
+                            assay = "SCT", ctrl = 10)
+
+fetahu.NB <- AddModuleScore(fetahu.NB, NCC.gene.list,
+                            name = "neural_crest_signature_set", seed = 28, 
+                            assay = "SCT", ctrl = 10)
+
+# Plot scores 
+FeaturePlot(fetahu.NB,
+            features = "adrenergic_signature_set1", label = TRUE, repel = TRUE, 
+            order = TRUE, pt.size = 0.5) +
+            scale_colour_gradientn(colours = brewer.pal(n = 5, name = "RdPu"))
+
+FeaturePlot(fetahu.NB,
+            features = "neural_crest_signature_set1", label = TRUE, repel = TRUE, 
+            order = TRUE, pt.size = 0.5) +
+            scale_colour_gradientn(colours = brewer.pal(n = 5, name = "RdPu"))
+
+# Gene list from Van Groeningen et al., 2017
+ADR.gene.list2 <- read.table("/home/sara_wz/annotation/MES_ADRN/vangroningen2017_ADR_genes.txt",
+                          header = FALSE, quote = "")
+MES.gene.list2 <- read.csv("/home/sara_wz/annotation/MES_ADRN/vangroningen2017_MES_genes.txt",
+                          header = FALSE, quote = "")
+
+# Check how many cells express gene X
+rowSums(fetahu.NB[['RNA']]["PHOX2B",]>0)
+
+
+fetahu.NB <- AddModuleScore(fetahu.NB, list(ADR.gene.list2$V1),
+                            name = "adrenergic_signature_set_v2_", seed = 28, 
+                            ctrl = 10)
+
+fetahu.NB <- AddModuleScore(fetahu.NB,list(MES.gene.list2$V1),
+                            name = "mesenchymal_signature_set", seed = 28, 
+                            ctrl = 10)
+
+# Plot score for ADR
+FeaturePlot(fetahu.NB,
+            features = "adrenergic_signature_set_v2_1", label = TRUE, 
+            repel = TRUE, order = TRUE, pt.size = 0.5) +
+            scale_colour_gradientn(colours = brewer.pal(n = 5, name = "RdPu"))
+
+# Plot score for MES
+FeaturePlot(fetahu.NB,
+            features = "mesenchymal_signature_set1", label = TRUE, 
+            repel = TRUE, order = TRUE, pt.size = 0.5) +
+            scale_colour_gradientn(colours = brewer.pal(n = 5, name = "RdPu"))
+
+VlnPlot(fetahu.NB,features = "adrenergic_signature_set_v2_1", log = TRUE,pt.size = 0)
+VlnPlot(fetahu.NB,features = "mesenchymal_signature_set1", log = TRUE,pt.size = 0)
+
+RidgePlot(fetahu.NB, features = "adrenergic_signature_set_v2_1", log = TRUE)
+RidgePlot(fetahu.NB, features = "mesenchymal_signature_set1", log = TRUE)
+```
+
+
+### __Predicted cell types based on IMC data__
 
 ```{r downstream analysis of treatment resistant cells 1}
 Idents(fetahu.NB) <- fetahu.NB@meta.data$predicted_celltype
@@ -1940,7 +2058,9 @@ marker_results %>%
     top_n(n = 10, wt = log_fc) -> top10
 ```
 
-##### __Original cell types__
+### __Predicted cell types based on RNA data__
+
+original cell types published in Fetahu et al., 2023
 
 ```{r}
 Idents(fetahu.NB.filt) <- fetahu.NB.filt@meta.data$seurat_clusters
@@ -1958,7 +2078,1118 @@ DoHeatmap(fetahu.NB.filt, features = top_5$feature, assay = "RNA")
 ```
 
 
-### __clustering from 25.03.2024__
+### __Gene set enrichment analysis__
+
+```{r GSEA function}
+# from: https://bioinformaticsbreakdown.com/how-to-gsea/
+
+GSEA = function(gene_list, GO_file, pval) {
+  set.seed(54321)
+  library(dplyr)
+  library(fgsea)
+
+  if ( any( duplicated(names(gene_list)) )  ) {
+    warning("Duplicates in gene names")
+    gene_list = gene_list[!duplicated(names(gene_list))]
+  }
+  if  ( !all( order(gene_list, decreasing = TRUE) == 1:length(gene_list)) ){
+    warning("Gene list not sorted")
+    gene_list = sort(gene_list, decreasing = TRUE)
+  }
+  myGO = fgsea::gmtPathways(GO_file)
+
+  fgRes <- fgsea::fgsea(pathways = myGO,
+                           stats = gene_list,
+                           minSize=15, ## minimum gene set size
+                           maxSize=400) ## maximum gene set size) 
+  fgRes <-as.data.frame(fgRes) %>% filter(padj < 0.1) %>% arrange(desc(NES))
+  message(paste("Number of signficant gene sets =", nrow(fgRes)))
+
+  message("Collapsing Pathways -----")
+  concise_pathways = collapsePathways(data.table::as.data.table(fgRes),
+                                      pathways = myGO,
+                                      stats = gene_list)
+  fgRes = fgRes[fgRes$pathway %in% concise_pathways$mainPathways, ]
+  message(paste("Number of gene sets after collapsing =", nrow(fgRes)))
+
+  fgRes$Enrichment = ifelse(fgRes$NES > 0, "Up-regulated", "Down-regulated")
+  filtRes = rbind(head(fgRes, n = 10),
+                  tail(fgRes, n = 10 ))
+
+  total_up = sum(fgRes$Enrichment == "Up-regulated")
+  total_down = sum(fgRes$Enrichment == "Down-regulated")
+  header = paste0("Top 10 (Total pathways: Up=", total_up,", Down=", total_down, ")")
+
+  colos = setNames(c("firebrick2", "dodgerblue2"),
+                 c("Up-regulated", "Down-regulated"))
+
+g1= ggplot(filtRes, aes(reorder(pathway, NES), NES)) +
+  geom_point( aes(fill = Enrichment, size = size), shape=21) +
+  scale_fill_manual(values = colos ) +
+  scale_size_continuous(range = c(2,10)) +
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  labs(x="Pathway", y="Normalized Enrichment Score",
+       title=header) 
+
+  output = list("Results" = fgRes, "Plot" = g1)
+  return(output)
+}
+```
+
+```{r Gene enrichment analysis - all, fig.height=10, fig.width=20}
+#BiocManager::install("fgsea")
+
+library("fgsea")
+
+# All gene sets: msigdb.v2023.2.Hs.symbols.gmt
+# H: Hallmark gene sets
+# C5: ontology gene sets
+# C6: oncogenic signature gene sets
+# C7: immunologic signature gene sets
+# C8: cell type signature gene sets
+# 3CA: Curated Cancer Cell Atlas gene sets
+
+# Set the GO file to all gene sets from GSEA database
+GO_file = paste0(params$GO_db,"/msigdb.v2023.2.Hs.symbols.gmt")
+
+# using here the tumor clusters from 08.03.2024
+de_results <- de_results %>% filter(padj < 0.01)
+
+#1. CLUSTER 0
+clust0 <- de_results %>% filter(group1 == "0") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#2. CLUSTER 1
+clust0 <- de_results %>% filter(group1 == "1") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#3. CLUSTER 2 (sporadic NBs all cluster here)
+clust0 <- de_results %>% filter(group1 == "2") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#4. CLUSTER 3
+clust0 <- de_results %>% filter(group1 == "3") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#5. CLUSTER 4
+clust0 <- de_results %>% filter(group1 == "4") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#6. CLUSTER 5
+clust0 <- de_results %>% filter(group1 == "5") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+```
+
+```{r Gene enrichment analysis - hallmarks, fig.height=5, fig.width=10}
+#BiocManager::install("fgsea")
+
+library("fgsea")
+
+# All gene sets: msigdb.v2023.2.Hs.symbols.gmt
+# H: Hallmark gene sets
+# C5: ontology gene sets
+# C6: oncogenic signature gene sets
+# C7: immunologic signature gene sets
+# C8: cell type signature gene sets
+# 3CA: Curated Cancer Cell Atlas gene sets
+
+# Set the GO file to all gene sets from GSEA database
+GO_file = paste0(params$GO_db,"/h.all.v2023.2.Hs.symbols.gmt")
+
+# using here the tumor clusters from 08.03.2024
+de_results <- de_results %>% filter(padj < 0.01)
+
+#1. CLUSTER 0
+clust0 <- de_results %>% filter(group1 == "0") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#2. CLUSTER 1
+clust0 <- de_results %>% filter(group1 == "1") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#3. CLUSTER 2 (sporadic NBs all cluster here)
+clust0 <- de_results %>% filter(group1 == "2") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#4. CLUSTER 3
+clust0 <- de_results %>% filter(group1 == "3") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#5. CLUSTER 4
+clust0 <- de_results %>% filter(group1 == "4") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+
+#6. CLUSTER 5
+clust0 <- de_results %>% filter(group1 == "5") %>% arrange(log_fc)
+
+gene_list = clust0$log_fc
+names(gene_list) = clust0$feature
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list = gene_list[!duplicated(names(gene_list))]
+head(gene_list)
+
+# Run GSEA analysis
+res = GSEA(gene_list, GO_file, pval = 0.1)
+dim(res$Results)
+res$Plot
+```
+
+
+### __CD44 expression plot__
+
+```{r CD44, fig.height=5, fig.width=5}
+# CD44
+CD44 <- FeaturePlot(fetahu.NB, label = TRUE,
+                    features = "CD44", 
+                    order = T, cols = c("gray","red"), pt.size = 0.5)
+CD44
+
+pdf(paste0(params$out,"figures/FeaturePlot_TumorClusters_CD44.pdf"))
+CD44
+dev.off()
+```
+
+### __CCC analysis__
+
+#### __Cell type annotation based on: Fetahu et al., 2023__
+
+```{r original labels}
+
+true_label <- rna@active.ident
+predicted_label <- predicted_labels$labels
+
+rna$original_celltype <- rna@active.ident
+rna$predicted_celltype <- predicted_label
+
+Idents(rna) <- rna@meta.data$original_celltype
+
+
+# CellChat infers the biologically significant cell-cell communication by 
+# assigning each interaction with a probability value and peforming a permutation test. 
+pathway <- c("TWEAK", "PSAP")
+treat_resist_fetahu_lables <- subset(x = rna, 
+                                     idents = c("T (5)","T (6)","T (9)","T (18)",
+                                                "NB (8)", 
+                                                "M (1)","M (2)","M (10)","M (15)"))
+cellchat <- createCellChat(object = treat_resist_fetahu_lables, 
+                           group.by = "ident", assay = "RNA")
+
+# set the used database in the object
+cellchat@DB <- CellChatDB
+
+# Prepare DB
+CellChatDB <- CellChatDB.human 
+showDatabaseCategory(CellChatDB)
+
+
+# subset the expression data of signaling genes for saving computation cost
+cellchat <- subsetData(cellchat) # This step is necessary even if using the whole database
+cellchat <- identifyOverExpressedGenes(cellchat)
+cellchat <- identifyOverExpressedInteractions(cellchat)
+
+# The number of highly variable ligand-receptor pairs used for signaling inference is 2893 
+
+# project gene expression data onto PPI (Use `raw.use = FALSE` in the function 
+# computeCommunProb() in order to use the projected data)
+cellchat <- projectData(cellchat, PPI.human)
+
+# Changing the parameter for how many cells (per cluster/cell type) have to 
+# express the ligand/receptor to be considered in the analysis
+
+computeAveExpr(cellchat, features = c("PDCD1","CD274"), 
+               type =  "truncatedMean", trim = 0.01)
+
+
+# Compute the communication probability and infer cellular communication network
+cellchat <- computeCommunProb(cellchat,  
+                              #type = "truncatedMean", trim = 0.01,
+                              raw.use = FALSE, population.size = TRUE)
+
+cellchat <- filterCommunication(cellchat, min.cells = 50)
+# population.size = TRUE <- cell numbers per cell type/cluster 
+# used for the probability calculation 
+
+df.net <- subsetCommunication(cellchat)
+df.net.pathways <- subsetCommunication(cellchat, slot.name = "netP" )
+# slot.name = "netP" for nferred communications at the level of signaling pathways
+
+df.net.pathways
+
+# Infer the cell-cell communication at a signaling pathway level
+cellchat <- computeCommunProbPathway(cellchat)
+
+# Calculate the aggregated cell-cell communication network
+cellchat <- aggregateNet(cellchat)
+
+groupSize <- as.numeric(table(cellchat@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat@net$count, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Number of interactions")
+netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Interaction weights/strength")
+
+# Bubble plot: all the significant interactions (Ligand-Receptor pairs) from 
+# one cell groups (defined by 'sources.use') to other cell groups (defined by 'targets.use')
+
+netVisual_bubble(cellchat, sources.use = 3,  remove.isolate = FALSE)
+netVisual_chord_gene(cellchat, sources.use = 3, slot.name = "netP", legend.pos.x = 10)
+
+# Compute the network centrality scores
+cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP") 
+# the slot 'netP' means the inferred intercellular communication network of signaling pathways
+# Visualize the computed centrality scores using heatmap, allowing ready identification of major signaling roles of cell groups
+netAnalysis_signalingRole_network(cellchat, signaling = pathway, 
+                                  width = 8, height = 2.5, font.size = 10)
+
+# Visualize dominant senders (sources) and receivers (targets) in a 2D space
+
+# Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+gg1 <- netAnalysis_signalingRole_scatter(cellchat)
+#> Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+# Signaling role analysis on the cell-cell communication networks of interest
+gg2 <- netAnalysis_signalingRole_scatter(cellchat, signaling = pathway)
+#> Signaling role analysis on the cell-cell communication network from user's input
+gg1 + gg2
+
+# Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+ht1 <- netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing")
+ht2 <- netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming")
+ht1
+ht2
+
+library(NMF)
+library(ggalluvial)
+
+# run selectK to infer the number of patterns.
+#selectK(cellchat, pattern = "outgoing") # define the number of patterns/cut-off
+
+nPatterns = 3
+cellchat <- identifyCommunicationPatterns(cellchat, 
+                                          pattern = "outgoing", 
+                                          k = nPatterns)
+
+# river plot
+netAnalysis_river(cellchat, pattern = "outgoing")
+
+# dot plot
+netAnalysis_dot(cellchat, pattern = "outgoing")
+
+
+#selectK(cellchat, pattern = "incoming") # define the number of patterns/cut-off
+
+nPatterns = 7
+cellchat <- identifyCommunicationPatterns(cellchat, 
+                                          pattern = "incoming", 
+                                          k = nPatterns)
+
+# river plot
+netAnalysis_river(cellchat, pattern = "incoming")
+
+# dot plot
+netAnalysis_dot(cellchat, pattern = "incoming")
+
+saveRDS(cellchat, file = paste0(params$out,"/Rds/CCC_analysis_Fetahu2023.Rds"))
+
+
+df.net.fetahu <- subsetCommunication(cellchat,
+                            slot.name = "net")
+
+df.path.fetahu <- subsetCommunication(cellchat,
+                               slot.name = "netP")
+
+# Signalling source: T-cells, Cluster 9
+filt <- df.path.fetahu$source == "T (9)"
+T9 <- df.path.fetahu[filt,]
+T9 <- T9 %>% arrange(desc(prob))
+
+# Signalling source: T-cells, Cluster 9
+# Signalling target: Monocytes, Cluster 1
+
+filt <- T9$target == "M (1)"
+T9_M1 <- T9[filt,]
+T9_M1 <- T9_M1 %>% arrange(desc(prob))
+T9_M1
+
+# T9 to M1 CCC: FAS/FASLG signaling pathway is essential for immune system 
+# regulation, including activation-induced cell death (AICD) of T cells and 
+# cytotoxic T lymphocyte induced cell death
+
+# NGF pathway
+
+# Signalling source: T-cells, Cluster 5
+filt <- df.path.fetahu$source == "T (5)"
+T5 <- df.path.fetahu[filt,]
+T5 <- T5 %>% arrange(desc(prob))
+
+# Signalling source: T-cells, Cluster 6
+filt <- df.path.fetahu$source == "T (6)"
+T6 <- df.path.fetahu[filt,]
+T6 <- T6 %>% arrange(desc(prob))
+
+# Signalling source: T-cells, Cluster 18
+filt <- df.path.fetahu$source == "T (18)"
+T18 <- df.path.fetahu[filt,]
+T18 <- T18 %>% arrange(desc(prob))
+
+# Signalling source: Monocytes, Cluster 1
+filt <- df.path.fetahu$source == "M (1)"
+M1 <- df.path.fetahu[filt,]
+M1 <- M1 %>% arrange(desc(prob))
+
+# Signalling source: Monocytes, Cluster 1
+# Signalling target: T-cells, Cluster 9
+
+filt <- M1$target == "T (9)"
+M1_T9 <- M1[filt,]
+M1_T9 <- M1_T9 %>% arrange(desc(prob))
+M1_T9
+
+# Signalling source: Monocytes, Cluster 10
+filt <- df.path.fetahu$source == "M (10)"
+M10 <- df.path.fetahu[filt,]
+M10 <- M10 %>% arrange(desc(prob))
+
+# Signalling source: Monocytes, Cluster 15
+filt <- df.path.fetahu$source == "M (15)"
+M15 <- df.path.fetahu[filt,]
+M15 <- M15 %>% arrange(desc(prob))
+
+# Filter only unique pathways in cluster 9 by subtracting pathways 
+# present in all other T-cell clusters (clustster 5, 6 and 18)
+
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T5$pathway_name)]
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T6$pathway_name)]
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T18$pathway_name)]
+
+subset(T9, pathway_name == "TWEAK")
+subset(T9, pathway_name == "PSAP")
+
+# Do we see a differential gene expression of the above genes (pathways) between
+# MYCNA and sporadic NB sub-types?
+
+rna$group_celltype <- paste(rna$original_celltype, rna$group, sep = "_")
+Idents(rna) <- "group_celltype"
+rna.de <- FindMarkers(rna, ident.1 = "T (9)_II", ident.2 = "T (9)_IV", verbose = FALSE)
+head(rna.de, n = 10)
+
+# TOP DEGs in cluster 9, between MYNCA and non-MYNCA tumors
+rna.de <- rna.de %>% filter(p_val_adj < 0.01) %>% filter(abs(avg_log2FC) > 1)
+rna.de 
+
+DoHeatmap(rna.de,
+  features = rownames(rna.de),
+  group.by = "group_celltype")
+
+# Probability of CCC between all cells
+cellchat@netP$prob 
+```
+
+
+#### __Cell type annotation based on: Lazic et al., 2024__
+
+```{r }
+
+# CellChat infers the biologically significant cell-cell communication by 
+# assigning each interaction with a probability value and peforming a permutation test. 
+
+treat_resist <- c("CD14- PDL1+ MO/DC",
+                  "CD14+ PDL1+ MO", 
+                  "CD14+ PDL1+ MO",
+                  "CD4+ PD1+ T cell",
+                  "CD8+ PDL1lo T cell", 
+                  "CD8+ S100B+ T cell",
+                  "CD8+ GZMB+ PD1lo T cell",
+                  "early SYM-like TC",
+                  "CD44+ mes-like TC")
+
+#treat_resist <- c("early SYM-like TC","CD44+ mes-like TC",
+#                 "CD14+ PDL1+ MO","CD4+ PD1+ T cell")
+
+treat_resist_lazic_lables <- subset(x = rna, 
+                                     idents = treat_resist) #5814  cells
+cellchat_predict <- createCellChat(object = treat_resist_lazic_lables, 
+                           group.by = "ident", assay = "RNA")
+
+table(treat_resist_lazic_lables$predicted_celltype)
+
+# early SYM-like TC -> only 132 cells !!
+
+# Prepare DB
+cellchatDB <-  CellChatDB.human 
+showDatabaseCategory(cellchatDB)
+
+# set the used database in the object
+cellchat_predict@DB <- cellchatDB
+
+
+# subset the expression data of signaling genes for saving computation cost
+cellchat_predict <- subsetData(cellchat_predict) # This step is necessary even if using the whole database
+cellchat_predict <- identifyOverExpressedGenes(cellchat_predict)
+cellchat_predict <- identifyOverExpressedInteractions(cellchat_predict)
+
+# The number of highly variable ligand-receptor pairs used for signaling inference is 2601 
+
+# project gene expression data onto PPI (Use `raw.use = FALSE` in the function 
+# `computeCommunProb()` in order to use the projected data)
+cellchat_predict <- projectData(cellchat_predict, PPI.human)
+
+# Changing the parameter for how many cells (per cluster/cell type) have to 
+# express the ligand/receptor to be considered in the analysis
+
+computeAveExpr(cellchat_predict, features = c("PDCD1","CD274"), 
+               type =  "truncatedMean", trim = 0.01)
+
+
+# Compute the communication probability and infer cellular communication network
+cellchat_predict <- computeCommunProb(cellchat_predict,  
+                              #type = "truncatedMean", trim = 0.01,
+                              raw.use = FALSE, population.size = TRUE)
+
+# population.size = TRUE <- cell numbers per cell type/cluster 
+# used for the probability calculation 
+
+cellchat_predict <- filterCommunication(cellchat_predict, min.cells = 10)
+
+
+df.net <- subsetCommunication(cellchat_predict)
+df.net.pathways <- subsetCommunication(cellchat_predict, slot.name = "netP" )
+# slot.name = "netP" for nferred communications at the level of signaling pathways
+df.net.pathways
+
+# Infer the cell-cell communication at a signaling pathway level
+cellchat_predict <- computeCommunProbPathway(cellchat_predict)
+
+# Calculate the aggregated cell-cell communication network
+cellchat_predict <- aggregateNet(cellchat_predict)
+
+groupSize <- as.numeric(table(cellchat_predict@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat_predict@net$count, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Number of interactions")
+netVisual_circle(cellchat_predict@net$weight, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Interaction weights/strength")
+
+# Bubble plot: all the significant interactions (Ligand-Receptor pairs) from 
+# one cell groups (defined by 'sources.use') to other cell groups (defined by 'targets.use')
+
+netVisual_bubble(cellchat_predict, sources.use = 3,  remove.isolate = FALSE)
+netVisual_chord_gene(cellchat_predict, sources.use = 3, 
+                     slot.name = "netP", legend.pos.x = 10)
+
+# Compute the network centrality scores
+cellchat_predict <- netAnalysis_computeCentrality(cellchat_predict, 
+                                                  slot.name = "netP") 
+# the slot 'netP' means the inferred intercellular communication network of signaling pathways
+# Visualize the computed centrality scores using heatmap, allowing ready identification of major signaling roles of cell groups
+netAnalysis_signalingRole_network(cellchat_predict, signaling = pathway, 
+                                  width = 8, height = 2.5, font.size = 10)
+
+# Visualize dominant senders (sources) and receivers (targets) in a 2D space
+gg1 <- netAnalysis_signalingRole_scatter(cellchat_predict)
+# Signaling role analysis on the cell-cell communication networks of interest
+gg2 <- netAnalysis_signalingRole_scatter(cellchat_predict, signaling = pathway)
+#> Signaling role analysis on the cell-cell communication network from user's input
+gg1
+gg2
+
+# Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+ht1 <- netAnalysis_signalingRole_heatmap(cellchat_predict, pattern = "outgoing")
+ht2 <- netAnalysis_signalingRole_heatmap(cellchat_predict, pattern = "incoming")
+ht1
+ht2
+
+library(NMF)
+library(ggalluvial)
+
+# run selectK to infer the number of patterns.
+#selectK(cellchat_predict, pattern = "outgoing") # define the number of patterns/cut-off
+
+nPatterns = 2
+cellchat_predict <- identifyCommunicationPatterns(cellchat_predict, 
+                                                  pattern = "outgoing", 
+                                                  k = nPatterns)
+
+# river plot
+netAnalysis_river(cellchat_predict, pattern = "outgoing")
+
+# dot plot
+netAnalysis_dot(cellchat_predict, pattern = "outgoing")
+
+
+#selectK(cellchat_predict, pattern = "incoming") # define the number of patterns/cut-off
+
+nPatterns = 2
+cellchat_predict <- identifyCommunicationPatterns(cellchat_predict, 
+                                                  pattern = "incoming", 
+                                                  k = nPatterns)
+
+
+saveRDS(cellchat_predict, file = paste0(params$out,
+                                        "/Rds/CCC_analysis_Lazic2024_v2.Rds"))
+ 
+
+df.net.lazic <- subsetCommunication(cellchat_predict,
+                                    slot.name = "net")
+
+df.path.lazic <- subsetCommunication(cellchat_predict,
+                                     slot.name = "netP")
+
+# runcellchat_predictApp(cellchat_predict)
+
+```
+
+## __Combine Tumor sub-clusters and TM clusters__
+
+```{r fig.height=5, fig.width=5}
+# set cell type annotation of the tumor cell object to the new seurat clusters
+Idents(fetahu.NB) <- fetahu.NB@meta.data$seurat_clusters
+
+# identify cell IDs associated with each cluster
+cluster0 <- WhichCells(fetahu.NB, ident = "0")
+cluster1 <- WhichCells(fetahu.NB, ident = "1")
+cluster2 <- WhichCells(fetahu.NB, ident = "2")
+cluster3 <- WhichCells(fetahu.NB, ident = "3")
+cluster4 <- WhichCells(fetahu.NB, ident = "4")
+cluster5 <- WhichCells(fetahu.NB, ident = "5")
+
+# Here we switch to the integrated object (named rna), which contains the whole
+# dataset (TME and tumor cells)
+
+# re-label the NB cells to the corresponding tumor cluster number
+Idents(object = rna, cells = cluster0) <- "NB (0)"
+Idents(object = rna, cells = cluster1) <- "NB (1)"
+Idents(object = rna, cells = cluster2) <- "NB (2)"
+Idents(object = rna, cells = cluster3) <- "NB (3)"
+Idents(object = rna, cells = cluster4) <- "NB (4)"
+Idents(object = rna, cells = cluster5) <- "NB (5)"
+
+rna@meta.data
+
+# Add active identities to metadata column new_clusters
+rna$new_clusters <- rna@active.ident
+
+# sanity check that the catagories make sense
+# and that the catagory NB (8) is no longer present in the metadata
+levels(rna@meta.data$new_clusters)
+
+# set cell type annotation of the rna object to the new seurat clusters
+Idents(rna) <- rna@meta.data$new_clusters
+
+
+saveRDS(rna, file = 
+          paste0(params$out,"Rds/fetahu.scRNA.TME.and.tumor.clusters.combined.Rds"))
+
+tumor_cells <- WhichCells(rna, ident = c("NB (0)","NB (1)","NB (2)", 
+                                         "NB (3)", "NB (4)", "NB (5)"))
+
+DimPlot(rna,order = TRUE,seed = 28,cells = tumor_cells)
+CD44_TC <- FeaturePlot(rna, cells = tumor_cells, features = "CD44",
+            order = T, cols = c("gray","red"), pt.size = 1)
+CD44_TC
+
+pdf(paste0(params$out,"figures/FeaturePlot_Original_TC_CD44.pdf"))
+CD44_TC
+dev.off()
+```
+
+
+### __CCC analysis on combined TC and TME cells__
+
+Cell type annotation based on: Fetahu et al., 2023 and additional sub-clustering
+of the tumor cluster (NB, cluster 8) - using clustering from 08.03.2024
+
+```{r CCC}
+# set cell type annotation of the rna object to the new seurat clusters
+Idents(rna) <- rna@meta.data$new_clusters
+
+
+# CellChat infers the biologically significant cell-cell communication by 
+# assigning each interaction with a probability value and peforming a permutation test. 
+pathway <- c("TWEAK", "PSAP")
+treat_resist_fetahu_lables <- subset(x = rna, 
+                                     idents = c("T (5)","T (6)","T (9)","T (18)",
+                                                "NB (0)", "NB (1)", "NB (2)",
+                                                "NB (3)", "NB (4)", "NB (5)",
+                                                "M (1)","M (2)","M (10)","M (15)"))
+
+cellchat <- createCellChat(object = treat_resist_fetahu_lables, 
+                           group.by = "ident", assay = "RNA")
+
+# Prepare DB
+CellChatDB <- CellChatDB.human 
+showDatabaseCategory(CellChatDB)
+
+
+# set the used database in the object
+cellchat@DB <- CellChatDB
+
+
+# subset the expression data of signaling genes for saving computation cost
+cellchat <- subsetData(cellchat) # This step is necessary even if using the whole database
+cellchat <- identifyOverExpressedGenes(cellchat)
+cellchat <- identifyOverExpressedInteractions(cellchat)
+
+# The number of highly variable ligand-receptor pairs used for signaling inference is 2893 
+
+# project gene expression data onto PPI (Use `raw.use = FALSE` in the function 
+# computeCommunProb() in order to use the projected data)
+cellchat <- projectData(cellchat, PPI.human)
+
+# Changing the parameter for how many cells (per cluster/cell type) have to 
+# express the ligand/receptor to be considered in the analysis
+
+computeAveExpr(cellchat, features = c("PDCD1","CD274"), 
+               type =  "truncatedMean", trim = 0.01)
+
+
+# Compute the communication probability and infer cellular communication network
+cellchat <- computeCommunProb(cellchat,  
+                              #type = "truncatedMean", trim = 0.01,
+                              raw.use = FALSE, population.size = TRUE)
+
+cellchat <- filterCommunication(cellchat, min.cells = 50)
+# population.size = TRUE <- cell numbers per cell type/cluster 
+# used for the probability calculation 
+
+df.net <- subsetCommunication(cellchat)
+df.net.pathways <- subsetCommunication(cellchat, slot.name = "netP" )
+# slot.name = "netP" for nferred communications at the level of signaling pathways
+
+df.net.pathways
+
+# Infer the cell-cell communication at a signaling pathway level
+cellchat <- computeCommunProbPathway(cellchat)
+
+# Calculate the aggregated cell-cell communication network
+cellchat <- aggregateNet(cellchat)
+
+groupSize <- as.numeric(table(cellchat@idents))
+netVisual_circle(cellchat@net$count, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Number of interactions")
+netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Interaction weights/strength")
+
+pdf(paste0(params$out,"/figures/2024-04-09_Fetahu2023_CCC_Interaction_strength.pdf"))
+netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, 
+                 weight.scale = T, label.edge= F, 
+                 title.name = "Interaction weights/strength")
+dev.off()
+
+# Bubble plot: all the significant interactions (Ligand-Receptor pairs) from 
+# one cell groups (defined by 'sources.use') to other cell groups (defined by 'targets.use')
+
+netVisual_bubble(cellchat, sources.use = 1,  remove.isolate = TRUE, thresh = 0.00001)
+netVisual_chord_gene(cellchat, sources.use = 1, slot.name = "netP", legend.pos.x = 10)
+
+# Compute the network centrality scores
+cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP") 
+# the slot 'netP' means the inferred intercellular communication network of signaling pathways
+# Visualize the computed centrality scores using heatmap, allowing ready identification of major signaling roles of cell groups
+pdf(paste0(params$out,"/figures/2024-04-09_Fetahu2023_CCC_PSAP_TWEAK.pdf"))
+netAnalysis_signalingRole_network(cellchat, signaling = pathway, 
+                                  width = 8, height = 2.5, font.size = 10)
+dev.off()
+
+# Visualize dominant senders (sources) and receivers (targets) in a 2D space
+# Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+gg1 <- netAnalysis_signalingRole_scatter(cellchat)
+gg1
+
+pdf(paste0(params$out,"/figures/2024-04-09_Fetahu2023_CCC_allPathways.pdf"))
+gg1
+dev.off()
+
+#> Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+# Signaling role analysis on the cell-cell communication networks of interest
+
+gg2 <- netAnalysis_signalingRole_scatter(cellchat, signaling = "PSAP")
+gg2
+
+pdf(paste0(params$out,"/figures/2024-04-09_Fetahu2023_CCC_PSAP.pdf"))
+gg2
+dev.off()
+
+
+gg3 <- netAnalysis_signalingRole_scatter(cellchat, signaling = "TWEAK")
+gg3
+
+pdf(paste0(params$out,"/figures/2024-04-09_Fetahu2023_CCC_TWEAK.pdf"))
+gg3
+dev.off()
+
+
+# Signaling role analysis on the aggregated cell-cell communication network from all signaling pathways
+ht1 <- netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing")
+ht2 <- netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming")
+ht1
+ht2
+
+pdf(paste0(params$out,"/figures/2024-04-09_Fetahu2023_CCC_outgoingSignals.pdf"))
+ht1
+dev.off()
+
+
+pdf(paste0(params$out,"/figures/2024-04-09_Fetahu2023_CCC_incomingSignals.pdf"))
+ht2
+dev.off()
+
+# run selectK to infer the number of patterns.
+#selectK(cellchat, pattern = "outgoing") # define the number of patterns/cut-off
+
+nPatterns = 10
+cellchat <- identifyCommunicationPatterns(cellchat, 
+                                          pattern = "outgoing", 
+                                          k = nPatterns)
+
+# river plot
+pdf(paste0(params$out,"/figures/2024-04-09_Fetahu2023_CCC_outgoingSignals_patterns.pdf"))
+netAnalysis_river(cellchat, pattern = "outgoing")
+dev.off()
+
+# dot plot
+netAnalysis_dot(cellchat, pattern = "outgoing")
+
+
+#selectK(cellchat, pattern = "incoming") # define the number of patterns/cut-off
+
+nPatterns = 10
+cellchat <- identifyCommunicationPatterns(cellchat, 
+                                          pattern = "incoming", 
+                                          k = nPatterns)
+
+# river plot
+pdf(paste0(params$out,"/figures/2024-04-09_Fetahu2023_CCC_incomingSignals_patterns.pdf"))
+netAnalysis_river(cellchat, pattern = "incoming")
+dev.off()
+
+# dot plot
+netAnalysis_dot(cellchat, pattern = "incoming")
+
+#####################
+
+df_net_int <-
+  cellchat %>% 
+  subsetCommunication(thresh = NA) %>% 
+  as_tibble() %>% 
+  group_by(interaction_name_2) %>% 
+  mutate(prob.norm = prob / max(prob)) %>% 
+  ungroup() %>% 
+  arrange(desc(prob.norm))
+
+df_net_int
+
+df_net_int <- drop_na(df_net_int)
+
+# remove interactions within the group
+filt <- df_net_int$source != df_net_int$target
+
+df_net_int <- df_net_int[filt,]
+
+write.table(df_net_int, 
+            file = paste0(params$out,"tables/fetahu2023.CCC.TCandTME.csv"), 
+            sep = "\t", quote = FALSE, row.names = FALSE) 
+
+saveRDS(df_net_int, 
+        file = paste0(params$out,"Rds/fetahu2023.TCandTME_signaling.rds"))
+
+saveRDS(cellchat, 
+        file = paste0(params$out,"/Rds/CCC_analysis_Fetahu2023_withTC.Rds"))
+
+
+df_net_select <-
+  cellchat %>% 
+  subsetCommunication(thresh = 0.05,) %>% 
+  as_tibble() %>% 
+  group_by(interaction_name_2) %>% 
+  mutate(prob.norm = prob / max(prob)) %>% 
+  ungroup() %>% 
+  mutate(
+    source = factor(source, c("M (1)","T (9)", "NB (0)")),
+    target = factor(target, c("M (1)","T (9)", "NB (0)"))) %>% 
+  arrange(desc(prob.norm))
+
+df_net_select
+
+df_net_select <- drop_na(df_net_select)
+
+# remove interactions within the group
+filt <- df_net_select$source != df_net_select$target
+
+df_net_select <- df_net_select[filt,]
+
+write.table(df_net_select, 
+            file = paste0(params$out,"tables/fetahu2023.CCC.TCandTME_select.csv"), 
+            sep = "\t", quote = FALSE, row.names = FALSE) 
+
+#################### exploring the results ###############################
+
+df.net.fetahu <- subsetCommunication(cellchat,
+                            slot.name = "net")
+
+df.path.fetahu <- subsetCommunication(cellchat,
+                               slot.name = "netP")
+
+summary_treat_resist <- drop_na(df_net_int)
+write.table(summary_treat_resist, 
+            file = paste0(params$out,"figures/CCC_treatResist.csv"),
+            sep = "\t", quote = FALSE)
+
+# Signalling source: T-cells, Cluster 9
+filt <- df.path.fetahu$source == "T (9)"
+T9 <- df.path.fetahu[filt,]
+T9 <- T9 %>% arrange(desc(prob))
+
+# Signalling source: T-cells, Cluster 9
+# Signalling target: Monocytes, Cluster 1
+
+filt <- T9$target == "M (1)"
+T9_M1 <- T9[filt,]
+T9_M1 <- T9_M1 %>% arrange(desc(prob))
+T9_M1
+
+# T9 to M1 CCC: FAS/FASLG signaling pathway is essential for the immune system 
+# regulation, including activation-induced cell death (AICD) of T cells and 
+# cytotoxic T lymphocyte induced cell death
+
+# NGF pathway
+
+# Signalling source: T-cells, Cluster 5
+filt <- df.path.fetahu$source == "T (5)"
+T5 <- df.path.fetahu[filt,]
+T5 <- T5 %>% arrange(desc(prob))
+
+# Signalling source: T-cells, Cluster 6
+filt <- df.path.fetahu$source == "T (6)"
+T6 <- df.path.fetahu[filt,]
+T6 <- T6 %>% arrange(desc(prob))
+
+# Signalling source: T-cells, Cluster 18
+filt <- df.path.fetahu$source == "T (18)"
+T18 <- df.path.fetahu[filt,]
+T18 <- T18 %>% arrange(desc(prob))
+
+# Signalling source: Monocytes, Cluster 1
+filt <- df.path.fetahu$source == "M (1)"
+M1 <- df.path.fetahu[filt,]
+M1 <- M1 %>% arrange(desc(prob))
+
+# Signalling source: Monocytes, Cluster 1
+# Signalling target: T-cells, Cluster 9
+
+filt <- M1$target == "T (9)"
+M1_T9 <- M1[filt,]
+M1_T9 <- M1_T9 %>% arrange(desc(prob))
+M1_T9
+
+# Signalling source: Monocytes, Cluster 10
+filt <- df.path.fetahu$source == "M (10)"
+M10 <- df.path.fetahu[filt,]
+M10 <- M10 %>% arrange(desc(prob))
+
+# Signalling source: Monocytes, Cluster 15
+filt <- df.path.fetahu$source == "M (15)"
+M15 <- df.path.fetahu[filt,]
+M15 <- M15 %>% arrange(desc(prob))
+
+
+#########################################
+
+# Signalling source: NB, Cluster 0
+filt <- df.path.fetahu$source == "NB (0)"
+NB0 <- df.path.fetahu[filt,]
+NB0 <- NB0 %>% arrange(desc(prob))
+# Signalling target: Monocytes, Cluster 1
+filt <- NB0$target == "M (1)"
+NB0_M1 <- NB0[filt,]
+NB0_M1 <- NB0_M1 %>% arrange(desc(prob))
+NB0_M1
+
+# Signalling source: Monocytes, Cluster 1
+filt <- df.path.fetahu$source == "M (1)"
+M1 <- df.path.fetahu[filt,]
+M1 <- M1 %>% arrange(desc(prob))
+# Signalling target: NB, Cluster 0
+filt <- M1$target == "NB (0)"
+M1_NB0 <- M1[filt,]
+M1_NB0 <- M1_NB0 %>% arrange(desc(prob))
+M1_NB0
+
+# CyPA stimulates proinflammatory and apoptosis signaling pathways in vascular smooth muscle cells (VSMCs) and endothelial cells (ECs), promotes VSMC migration and proliferation, EC adhesion molecules expression, and inflammatory cell chemotaxis and apoptosis.
+
+###################################
+
+# Signalling source: Monocytes, Cluster 1
+filt <- df.path.fetahu$source == "M (1)"
+M1 <- df.path.fetahu[filt,]
+M1 <- M1 %>% arrange(desc(prob))
+
+# Signalling target: T-cells, Cluster 9
+filt <- M1$target == "T (9)"
+M1_T9 <- M1[filt,]
+M1_T9 <- M1_T9 %>% arrange(desc(prob))
+M1_T9
+
+
+# Signalling source: Monocytes, Cluster 1
+filt <- df.path.fetahu$source == "T (9)"
+T9 <- df.path.fetahu[filt,]
+T9 <- T9 %>% arrange(desc(prob))
+
+# Signalling target: T-cells, Cluster 9
+filt <- T9$target == "M (1)"
+T9_M1 <- T9[filt,]
+T9_M1 <- T9_M1 %>% arrange(desc(prob))
+T9_M1
+
+# Filter only unique pathways in cluster 9 by subtracting pathways 
+# present in all other T-cell clusters (clustster 5, 6 and 18)
+
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T5$pathway_name)]
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T6$pathway_name)]
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T18$pathway_name)]
+
+subset(T9, pathway_name == "TWEAK")
+subset(T9, pathway_name == "PSAP")
+
+# Do we see a differential gene expression of the above genes (pathways) between
+# MYCNA and sporadic NB sub-types?
+
+rna$group_celltype <- paste(rna$original_celltype, rna$group, sep = "_")
+Idents(rna) <- "group_celltype"
+rna.de <- FindMarkers(rna, ident.1 = "T (9)_II", ident.2 = "T (9)_IV", verbose = FALSE)
+head(rna.de, n = 10)
+
+# TOP DEGs in cluster 9, between MYNCA and non-MYNCA tumors
+rna.de <- rna.de %>% filter(p_val_adj < 0.01) %>% filter(abs(avg_log2FC) > 1)
+rna.de 
+
+DoHeatmap(rna,
+  features = rownames(rna.de),
+  group.by = "group_celltype")
+
+# Probability of CCC between all cells
+cellchat@netP$prob 
+```
+
+
+## __clustering from 25.03.2024__
 
 using the new label transfer (BM samples only)
 
@@ -1993,15 +3224,20 @@ marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB,
                                             group_column = "seurat_clusters")
 marker_results_top5 <- dplyr::filter(marker_results, feature_rank < 6)
 
-DoHeatmap(fetahu.NB, feature = marker_results_top5$feature)
+marker_results %>%
+    group_by(group1) %>%
+    slice_max(n = 10, order_by = log_fc)
 
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    slice_max(n = 10, order_by = avg_log2FC)
+marker_results %>%
+    group_by(group1) %>%
+    top_n(n = 10, wt = log_fc) -> top10
 
-fetahu.NB.markers %>%
-    group_by(cluster) %>%
-    top_n(n = 10, wt = avg_log2FC) -> top10
+DEG_tumor <- DoHeatmap(fetahu.NB, features = top10$feature) + NoLegend()
+DEG_tumor
+
+pdf(paste0(params$out,"figures/fetahu2023.scRNA.markers.heatmap_2024-03-25.pdf"))
+DEG_tumor
+dev.off()
 
 DoHeatmap(fetahu.NB, features = top10$gene) + NoLegend()
 
@@ -2107,6 +3343,8 @@ marker_results %>%
 #saveRDS(fetahu.NB, 
 #       file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters_2024-03-25.Rds"))
 ```
+
+
 
 
 # __Identify PDL-1+ and PD-1+ immune cells__
@@ -2444,9 +3682,12 @@ tcells_pd1 <- tcells_pd1 %>%
 
 VlnPlot(tcells_pd1,features,log = TRUE)
 RidgePlot(tcells_pd1,features,log=TRUE)
+```
 
-# Gene set enrichment score
+## __T-cell exhustion module score__
 
+```{r}
+# Gene module score
 features <- c("PDCD1","CTLA4","BATF","VHL",
               "LAG3","CD244","CD160","HAVCR2",
               "IL10RA","PRDM1","GATA3","IKZF2","TBX21","EOMES")
@@ -2472,7 +3713,7 @@ RidgePlot(tcells_pd1, features = "exhustion_markers_set1", log = TRUE)
 ```
 
 
-# ___CCC analysis___
+# __CCC analysis__
 
 ## __Cell type annotation based on: Fetahu et al., 2023__
 
@@ -2489,7 +3730,7 @@ Idents(rna) <- rna@meta.data$original_celltype
 
 # CellChat infers the biologically significant cell-cell communication by 
 # assigning each interaction with a probability value and peforming a permutation test. 
-pathway <- c("CXCL", "CCL")
+pathway <- c("TWEAK", "PSAP")
 treat_resist_fetahu_lables <- subset(x = rna, 
                                      idents = c("T (5)","T (6)","T (9)","T (18)",
                                                 "NB (8)", 
@@ -2535,6 +3776,7 @@ cellchat <- filterCommunication(cellchat, min.cells = 50)
 df.net <- subsetCommunication(cellchat)
 df.net.pathways <- subsetCommunication(cellchat, slot.name = "netP" )
 # slot.name = "netP" for nferred communications at the level of signaling pathways
+
 df.net.pathways
 
 # Infer the cell-cell communication at a signaling pathway level
@@ -2588,7 +3830,9 @@ library(ggalluvial)
 #selectK(cellchat, pattern = "outgoing") # define the number of patterns/cut-off
 
 nPatterns = 3
-cellchat <- identifyCommunicationPatterns(cellchat, pattern = "outgoing", k = nPatterns)
+cellchat <- identifyCommunicationPatterns(cellchat, 
+                                          pattern = "outgoing", 
+                                          k = nPatterns)
 
 # river plot
 netAnalysis_river(cellchat, pattern = "outgoing")
@@ -2600,7 +3844,9 @@ netAnalysis_dot(cellchat, pattern = "outgoing")
 #selectK(cellchat, pattern = "incoming") # define the number of patterns/cut-off
 
 nPatterns = 7
-cellchat <- identifyCommunicationPatterns(cellchat, pattern = "incoming", k = nPatterns)
+cellchat <- identifyCommunicationPatterns(cellchat, 
+                                          pattern = "incoming", 
+                                          k = nPatterns)
 
 saveRDS(cellchat, file = paste0(params$out,"/Rds/CCC_analysis_Fetahu2023.Rds"))
 
@@ -2611,11 +3857,93 @@ df.net.fetahu <- subsetCommunication(cellchat,
 df.path.fetahu <- subsetCommunication(cellchat,
                                slot.name = "netP")
 
-# Signalling source: Cluster 9
-filt <- df.net.pathways$source == "T (9)"
-df.net.pathways[filt,]
+# Signalling source: T-cells, Cluster 9
+filt <- df.path.fetahu$source == "T (9)"
+T9 <- df.path.fetahu[filt,]
+T9 <- T9 %>% arrange(desc(prob))
 
+# Signalling source: T-cells, Cluster 9
+# Signalling target: Monocytes, Cluster 1
+
+filt <- T9$target == "M (1)"
+T9_M1 <- T9[filt,]
+T9_M1 <- T9_M1 %>% arrange(desc(prob))
+T9_M1
+
+# T9 to M1 CCC: FAS/FASLG signaling pathway is essential for immune system 
+# regulation, including activation-induced cell death (AICD) of T cells and 
+# cytotoxic T lymphocyte induced cell death
+
+# NGF pathway
+
+# Signalling source: T-cells, Cluster 5
+filt <- df.path.fetahu$source == "T (5)"
+T5 <- df.path.fetahu[filt,]
+T5 <- T5 %>% arrange(desc(prob))
+
+# Signalling source: T-cells, Cluster 6
+filt <- df.path.fetahu$source == "T (6)"
+T6 <- df.path.fetahu[filt,]
+T6 <- T6 %>% arrange(desc(prob))
+
+# Signalling source: T-cells, Cluster 18
+filt <- df.path.fetahu$source == "T (18)"
+T18 <- df.path.fetahu[filt,]
+T18 <- T18 %>% arrange(desc(prob))
+
+# Signalling source: Monocytes, Cluster 1
+filt <- df.path.fetahu$source == "M (1)"
+M1 <- df.path.fetahu[filt,]
+M1 <- M1 %>% arrange(desc(prob))
+
+# Signalling source: Monocytes, Cluster 1
+# Signalling target: T-cells, Cluster 9
+
+filt <- M1$target == "T (9)"
+M1_T9 <- M1[filt,]
+M1_T9 <- M1_T9 %>% arrange(desc(prob))
+M1_T9
+
+# Signalling source: Monocytes, Cluster 10
+filt <- df.path.fetahu$source == "M (10)"
+M10 <- df.path.fetahu[filt,]
+M10 <- M10 %>% arrange(desc(prob))
+
+# Signalling source: Monocytes, Cluster 15
+filt <- df.path.fetahu$source == "M (15)"
+M15 <- df.path.fetahu[filt,]
+M15 <- M15 %>% arrange(desc(prob))
+
+# Filter only unique pathways in cluster 9 by subtracting pathways 
+# present in all other T-cell clusters (clustster 5, 6 and 18)
+
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T5$pathway_name)]
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T6$pathway_name)]
+unique(T9$pathway_name)[!unique(T9$pathway_name) %in% unique(T18$pathway_name)]
+
+subset(T9, pathway_name == "TWEAK")
+subset(T9, pathway_name == "PSAP")
+
+# Do we see a differential gene expression of the above genes (pathways) between
+# MYCNA and sporadic NB sub-types?
+
+rna$group_celltype <- paste(rna$original_celltype, rna$group, sep = "_")
+Idents(rna) <- "group_celltype"
+rna.de <- FindMarkers(rna, ident.1 = "T (9)_II", ident.2 = "T (9)_IV", verbose = FALSE)
+head(rna.de, n = 10)
+
+# TOP DEGs in cluster 9, between MYNCA and non-MYNCA tumors
+rna.de <- rna.de %>% filter(p_val_adj < 0.01) %>% filter(abs(avg_log2FC) > 1)
+rna.de 
+
+DoHeatmap(rna.de,
+  features = rownames(rna.de),
+  group.by = "group_celltype")
+
+# Probability of CCC between all cells
+cellchat@netP$prob 
 ```
+
 
 ## __Cell type annotation based on: Lazic et al., 2024__
 
@@ -2787,7 +4115,7 @@ df.path.lazic <- subsetCommunication(cellchat_predict,
 
 ## __Cell type abundance per patient__
 
-```{r}
+```{r barplot}
 pt <- table(rna$original_celltype,rna$sample)
 pt <- as.data.frame(pt)
 pt$Var1 <- as.character(pt$Var1)
@@ -2797,17 +4125,28 @@ ggplot(pt, aes(x = Var2, y = Freq, fill = Var1)) +
   geom_col(position = "fill", width = 0.5) +
   xlab("Sample") +
   ylab("Proportion") +
-  
   theme(legend.title = element_blank())
 ```
+
 ## __Cell type abundance per group__
 
-```{r miloR}
-# Subset to TME only
-tumor_cells <- "NB (8)"
-fetahu.NB <- subset(rna, idents = tumor_cells, invert = TRUE)
+```{r miloR - two groups}
+#1. If comparing two groups use normal DA testing
 
+# MiloR doesn't use the "original" clusters but rather creates neighborhoods
+# based on similar logFC (note the fold change here is the number of cells
+# per cell type)
+
+#BiocManager::install("scran")
+#BiocManager::install("statmod")
+
+library("statmod")
 library("miloR")
+library("SingleCellExperiment")
+library("scater")
+library("scran")
+library("dplyr")
+library("patchwork")
 
 # For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
 # This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
@@ -2815,21 +4154,32 @@ library("miloR")
 rna_milo <- Milo(as.SingleCellExperiment(rna))
 rna_milo
 
+
+reducedDim(rna_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(rna), "UMAP")
+
+plotUMAP(rna_milo, colour_by="group") + plotUMAP(rna_milo, colour_by="sample")
+
 # We need to add the KNN graph to the Milo object. This is stored in the graph slot, in igraph format.
 rna_milo <- buildGraph(rna_milo, k = 30, d = 30, reduced.dim = "PCA")
+
+# test k = 10
 
 # Defining representative neighbourhoods on the KNN graph
 rna_milo <- makeNhoods(rna_milo, prop = 0.1, k = 30, d=30, 
                        refined = TRUE, 
-                       reduced_dims = "PCA")
+                       reduced_dims = "PCA") # (faster) refinement_scheme="graph"
 
-# plot the distribution of neighbourhood sizes (i.e. how many cells form each neighbourhood) 
+# plot the distribution of neighbourhood sizes (i.e. how many cells form each neighborhood) 
 # to evaluate whether the value of k used for graph building was appropriate
 plotNhoodSizeHist(rna_milo)
 
 # Counting cells in neighbourhoods
-rna_milo <- countCells(rna_milo, meta.data = as.data.frame(colData(rna_milo)), sample="sample")
+rna_milo <- countCells(rna_milo, 
+                       meta.data = as.data.frame(colData(rna_milo)), 
+                       sample="sample")
 head(nhoodCounts(rna_milo))
+
+#1. If comparing two samples use normal DA testing
 
 # Defining experimental design
 rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
@@ -2837,8 +4187,9 @@ rna_design <- distinct(rna_design)
 rownames(rna_design) <- rna_design$sample
 rna_design
 
-# Computing neighbourhood connectivity
-rna_milo <- calcNhoodDistance(rna_milo, d=30, reduced.dim = "PCA")
+# Computing neighborhood connectivity
+rna_milo <- calcNhoodDistance(rna_milo, d = 30, reduced.dim = "PCA")
+
 
 # DA testing
 da_results <- testNhoods(rna_milo, design = ~ group, 
@@ -2855,37 +4206,550 @@ rna_milo <- buildNhoodGraph(rna_milo)
 # QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
 
 # Plot single-cell UMAP
-umap_pl <- plotReducedDim(rna_milo, dimred = "umap", colour_by="group", 
+umap_pl <- plotReducedDim(rna_milo, 
+                          dimred = "UMAP", 
+                          colour_by = "group", 
                           text_by = "original_celltype", 
-                          text_size = 3, point_size=0.5) +
-  guides(fill="none")
+                          text_size = 3, point_size = 0.5,) +
+  guides(fill = "none")
 
 # Plot neighbourhood graph
-nh_graph_pl <- plotNhoodGraphDA(rna_milo, da_results, layout="umap",alpha=0.1) 
-  
+nh_graph_pl <- plotNhoodGraphDA(rna_milo, da_results, layout="UMAP", alpha=0.05) 
+
 umap_pl + nh_graph_pl +
-  plot_layout(guides="collect")
+  plot_layout(guides = "collect")
 
 da_results <- annotateNhoods(rna_milo, da_results, 
                              coldata_col = "original_celltype")
-head(da_results)
+
+da_results$original_celltype <- ifelse(da_results$original_celltype_fraction < 0.7, 
+                                       "Mixed", da_results$original_celltype)
+
+
+results <- da_results %>% arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) > 0.6)
+results
+
+plotDAbeeswarm(da_results, group.by = "original_celltype")
+
+#2. If comparing more than two sample / groups, use DA testing with contrasts
+
+# For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
+# This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
+
+rna_milo <- Milo(as.SingleCellExperiment(rna))
+rna_milo
+
+reducedDim(rna_milo, "UMAP") <- reducedDim(rna_milo, "UMAP")
+
+plotUMAP(rna_milo, colour_by="group") + plotUMAP(rna_milo, colour_by="sample")
+
+
+# Define cell neighbourhoods
+rna_milo <- buildGraph(rna_milo, k = 10, d = 30)
+
+## Constructing kNN graph with k = 10
+rna_milo <- makeNhoods(rna_milo, 
+                       prop = 0.1, 
+                       k = 10, 
+                       d = 30, 
+                       refined = TRUE, 
+                       refinement_scheme = "graph") # make nhoods using graph-only as this is faster
+
+# metadata
+colData(rna_milo)$sample <- paste(colData(rna_milo)$group, colData(rna_milo)$sample, sep="_")
+
+# Counting cells in neighbourhoods
+rna_milo <- countCells(rna_milo, meta.data = data.frame(colData(rna_milo)), samples="sample") # make the nhood X sample counts matrix
+
+# Differential abundance testing with contrasts
+rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
+rna_design <- distinct(rna_design)
+rownames(rna_design) <- rna_design$sample
+
+# Reorder rownames to match columns of nhoodCounts(milo)
+rna_design <- rna_design[colnames(nhoodCounts(rna_milo)), , drop=FALSE]
+table(rna_design$group)
+
+# Comparisons
+
+#A. ATRXmut vs. MYCNA
+rownames(rna_design) <- rna_design$sample
+contrast.1 <- c("groupIII - groupII") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsMYCNA <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.1, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_ATRXmutvsMYCNA$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsMYCNA <- annotateNhoods(rna_milo, da_results_ATRXmutvsMYCNA, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsMYCNA$original_celltype <- 
+  ifelse(da_results_ATRXmutvsMYCNA$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsMYCNA$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsMYCNA %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsMYCNA, group.by = "original_celltype")
+
+
+
+#B. ATRXmut vs. sporadic
+contrast.2 <- c("groupIII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsSporadic <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.2, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_ATRXmutvsSporadic$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsSporadic <- annotateNhoods(rna_milo, da_results_ATRXmutvsSporadic, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsSporadic$original_celltype <- 
+  ifelse(da_results_ATRXmutvsSporadic$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsSporadic$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsSporadic %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsSporadic, group.by = "original_celltype")
+
+#C. MYCNA vs. sporadic
+contrast.3 <- c("groupII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_MYCNAvsSporadic <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.3, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_MYCNAvsSporadic$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_MYCNAvsSporadic <- annotateNhoods(rna_milo, da_results_MYCNAvsSporadic, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_MYCNAvsSporadic$original_celltype <- 
+  ifelse(da_results_MYCNAvsSporadic$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_MYCNAvsSporadic$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_MYCNAvsSporadic %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_MYCNAvsSporadic, group.by = "original_celltype")
+
+
+#D. ATRXmut vs. MYCNA and sporadic
+
+model <- model.matrix(~ 0 + group, data = rna_design)
+ave.contrast <- c("groupIII - (groupII + groupIV) / 2")
+mod.constrast <- makeContrasts(contrasts = ave.contrast, levels = model)
+mod.constrast
+
+da_results_ATRXmutvsAll <- testNhoods(rna_milo, design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = ave.contrast, 
+                         fdr.weighting = "graph-overlap")
+
+table(da_results_ATRXmutvsAll$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsAll <- annotateNhoods(rna_milo, da_results_ATRXmutvsAll, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsAll$original_celltype <- 
+  ifelse(da_results_ATRXmutvsAll$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsAll$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsAll %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsAll, group.by = "original_celltype")
+
+#E. ATRXmut vs. control
+
+contrast.4 <- c("groupIII - groupI") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsCtrl <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.4, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction with graph-overlap weighting
+table(da_results_ATRXmutvsCtrl$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsCtrl <- annotateNhoods(rna_milo, da_results_ATRXmutvsCtrl, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsCtrl$original_celltype <- 
+  ifelse(da_results_ATRXmutvsCtrl$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsCtrl$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsCtrl %>% 
+  arrange(FDR) %>% filter(FDR < 0.5 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(results, group.by = "original_celltype")
 ```
 
+```{r miloR - many groups}
+#2. If comparing more than two sample / groups, use DA testing with contrasts
 
+# MiloR doesn't use the "original" clusters but rather creates neighborhoods
+# based on similar logFC (note the fold change here is the number of cells
+# per cell type)
+
+#BiocManager::install("scran")
+#BiocManager::install("statmod")
+
+library("statmod")
+library("miloR")
+library("SingleCellExperiment")
+library("scater")
+library("scran")
+library("dplyr")
+library("patchwork")
+
+#2. If comparing more than two sample / groups, use DA testing with contrasts
+
+# For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
+# This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
+
+rna_milo <- Milo(as.SingleCellExperiment(rna))
+rna_milo
+
+reducedDim(rna_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(rna), "UMAP")
+
+plotUMAP(rna_milo, colour_by="group") + plotUMAP(rna_milo, colour_by="sample")
+
+
+# Define cell neighbourhoods
+rna_milo <- buildGraph(rna_milo, k = 10, d = 30)
+
+## Constructing kNN graph with k = 10
+rna_milo <- makeNhoods(rna_milo, 
+                       prop = 0.1, 
+                       k = 10, 
+                       d = 30, 
+                       refined = TRUE, 
+                       refinement_scheme = "graph") # make nhoods using graph-only as this is faster
+
+# metadata
+colData(rna_milo)$sample <- paste(colData(rna_milo)$group, colData(rna_milo)$sample, sep="_")
+
+# Counting cells in neighbourhoods
+rna_milo <- countCells(rna_milo, meta.data = data.frame(colData(rna_milo)), samples="sample") # make the nhood X sample counts matrix
+
+# QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
+
+# Plot single-cell UMAP
+umap_pl <- plotReducedDim(rna_milo, 
+                          dimred = "UMAP", 
+                          colour_by = "group", 
+                          text_by = "original_celltype", 
+                          text_size = 3, point_size = 0.5,) +
+  guides(fill = "none")
+
+# Plot neighbourhood graph
+nh_graph_pl <- plotNhoodGraphDA(rna_milo, da_results, layout="UMAP", alpha=0.05) 
+
+umap_pl + nh_graph_pl +
+  plot_layout(guides = "collect")
+
+# Differential abundance testing with contrasts
+rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
+rna_design <- distinct(rna_design)
+rownames(rna_design) <- rna_design$sample
+
+# Reorder rownames to match columns of nhoodCounts(milo)
+rna_design <- rna_design[colnames(nhoodCounts(rna_milo)), , drop=FALSE]
+table(rna_design$group)
+
+# Comparisons
+
+#A. ATRXmut vs. MYCNA
+rownames(rna_design) <- rna_design$sample
+contrast.1 <- c("groupIII - groupII") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsMYCNA <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.1, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_ATRXmutvsMYCNA$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsMYCNA <- annotateNhoods(rna_milo, da_results_ATRXmutvsMYCNA, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsMYCNA$original_celltype <- 
+  ifelse(da_results_ATRXmutvsMYCNA$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsMYCNA$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsMYCNA %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsMYCNA, group.by = "original_celltype")
+
+
+
+#B. ATRXmut vs. sporadic
+contrast.2 <- c("groupIII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsSporadic <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.2, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_ATRXmutvsSporadic$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsSporadic <- annotateNhoods(rna_milo, da_results_ATRXmutvsSporadic, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsSporadic$original_celltype <- 
+  ifelse(da_results_ATRXmutvsSporadic$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsSporadic$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsSporadic %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsSporadic, group.by = "original_celltype")
+
+#C. MYCNA vs. sporadic
+contrast.3 <- c("groupII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_MYCNAvsSporadic <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.3, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction withgraph-overlap weighting
+table(da_results_MYCNAvsSporadic$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_MYCNAvsSporadic <- annotateNhoods(rna_milo, da_results_MYCNAvsSporadic, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_MYCNAvsSporadic$original_celltype <- 
+  ifelse(da_results_MYCNAvsSporadic$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_MYCNAvsSporadic$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_MYCNAvsSporadic %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_MYCNAvsSporadic, group.by = "original_celltype")
+
+
+#D. ATRXmut vs. MYCNA and sporadic
+
+model <- model.matrix(~ 0 + group, data = rna_design)
+ave.contrast <- c("groupIII - (groupII + groupIV) / 2")
+mod.constrast <- makeContrasts(contrasts = ave.contrast, levels = model)
+mod.constrast
+
+da_results_ATRXmutvsAll <- testNhoods(rna_milo, design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = ave.contrast, 
+                         fdr.weighting = "graph-overlap")
+
+table(da_results_ATRXmutvsAll$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsAll <- annotateNhoods(rna_milo, da_results_ATRXmutvsAll, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsAll$original_celltype <- 
+  ifelse(da_results_ATRXmutvsAll$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsAll$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsAll %>% 
+  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(da_results_ATRXmutvsAll, group.by = "original_celltype")
+
+#E. ATRXmut vs. control
+
+contrast.4 <- c("groupIII - groupI") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
+
+# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
+da_results_ATRXmutvsCtrl <- testNhoods(rna_milo, 
+                         design = ~ 0 + group, 
+                         design.df = rna_design, 
+                         model.contrasts = contrast.4, 
+                         fdr.weighting="graph-overlap")
+## Using TMM normalisation
+## Performing spatial FDR correction with graph-overlap weighting
+table(da_results_ATRXmutvsCtrl$SpatialFDR < 0.1)
+
+# annotate hood with original cell type annotation
+da_results_ATRXmutvsCtrl <- annotateNhoods(rna_milo, da_results_ATRXmutvsCtrl, 
+                             coldata_col = "original_celltype")
+
+# remove hoods that contained mixed cell type populations
+da_results_ATRXmutvsCtrl$original_celltype <- 
+  ifelse(da_results_ATRXmutvsCtrl$original_celltype_fraction < 0.7, 
+         "Mixed", da_results_ATRXmutvsCtrl$original_celltype)
+
+# filter only significant populations (less than 10% false discovery rate and 
+# fold change bigger than 0.5)
+results <- da_results_ATRXmutvsCtrl %>% 
+  arrange(FDR) %>% filter(FDR < 0.5 & abs(logFC) >= 0.5)
+results
+
+plotDAbeeswarm(results, group.by = "original_celltype")
+```
 
 -------------------------------------------------------------------------------
 
 PART III
 
-# __Dong et al., 2021 dataset__
+
+# __DEG analysis__
 
 <br>
 
-NB primary tumors at diagnosis
 
-```{r}
-dong <- readRDS(file="/home/out/CancReg/scRNA-seq_stage_M/results/published/data/tumor_data_dong.rds")
+```{r DEG analysis}
+# Set groups  to genetic subtypes
+Idents(rna) <- rna@meta.data$group
+
+# Normalize the data
+rna <- NormalizeData(rna)
+
+# DEG analysis with DElegate
+de_results <- DElegate::findDE(object = rna, 
+                               group_column = "group")
+
+# DEG analysis with Seurat
+#1. Find DE features between ATRXm vs. MYCNA
+ATRXm.de.MYCNA <- FindMarkers(rna, ident.1 = "II", ident.2 = "III")
+ATRXm.de.MYCNA
+
+#2. Find DE features between ATRTXm vs. sporadic
+ATRXm.de.Sporadic <- FindMarkers(rna, ident.1 = "II", ident.2 = "IV")
+ATRXm.de.Sporadic
+
+#3. Find DE features between ATRTXm vs. non-DTC-infiltrated BM
+ATRXm.de.Ctrl <- FindMarkers(rna, ident.1 = "II", ident.2 = "I")
+ATRXm.de.Ctrl
 ```
+
+Here we want to know which genes are differentially expressed in NK cells in 
+ATRX deleted NB genetic subtype, compare to other genetic subtypes (MYCN amplified 
+and sporadic) and in control BM.
+
+```{r NK cells only}
+# Set groups as genetic groups
+Idents(rna) <- rna@meta.data$original_celltype
+
+# subset rna object to NK cell cluster 
+NK_cells <- "NK (4)"
+fetahu.NK <- subset(rna, idents = NK_cells, invert = FALSE)
+
+# Set groups to genetic subtypes
+Idents(fetahu.NK) <- fetahu.NK@meta.data$group
+
+# Plot UMAP with 
+DimPlot(fetahu.NK)
+
+#0. Normalize expression data
+rna <- NormalizeData(fetahu.NK)
+
+
+#1. DEG analysis with DElegate
+de_results <- DElegate::findDE(object = fetahu.NK, 
+                               compare = "all_vs_all", 
+                               order_results = TRUE,
+                               meta_data = metadata,
+                               compare_is_ref = TRUE,
+                               group_column = "group")
+
+de_results
+write.table(de_results, file = paste0(params$out,"/tables/DEG_ATRXvsAll_DElegate.csv"),
+            sep = "\t", row.names = FALSE, col.names = TRUE)
+
+#2. DEG analysis with Seurat
+#2.1 Find DE features between ATRXm vs. MYCNA
+ATRXm.de.MYCNA.NK <- FindMarkers(fetahu.NK, ident.1 = "III", ident.2 = "II")
+ATRXm.de.MYCNA.NK
+write.table(ATRXm.de.MYCNA.NK, file = paste0(params$out,"/tables/DEG_ATRXvsMYCNA.csv"),
+            sep = "\t", row.names = TRUE, col.names = TRUE)
+
+#2.2 Find DE features between ATRTXm vs. sporadic
+ATRXm.de.Sporadic.NK <- FindMarkers(fetahu.NK, ident.1 = "III", ident.2 = "IV")
+ATRXm.de.Sporadic.NK
+write.table(ATRXm.de.Sporadic.NK, file = paste0(params$out,"/tables/DEG_ATRXvsSporadic.csv"),
+            sep = "\t", row.names = TRUE, col.names = TRUE)
+
+#2.3 Find DE features between ATRTXm vs. non-DTC-infiltrated BM
+ATRXm.de.Ctrl.NK <- FindMarkers(fetahu.NK, ident.1 = "III", ident.2 = "I")
+ATRXm.de.Ctrl.NK
+write.table(ATRXm.de.Ctrl.NK, file = paste0(params$out,"/tables/DEG_ATRXvsCtrl.csv"),
+            sep = "\t", row.names = TRUE, col.names = TRUE)
+```
+
 
 
 # __Session Info__

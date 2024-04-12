@@ -29,6 +29,8 @@ knitr::opts_chunk$set(echo = TRUE,
 library(parallel)
 future::plan(strategy = 'future::multicore', workers = 12)
 options(future.globals.maxSize = 8 * 10^9)
+
+source("/home/sara_wz/MapMet_project/MapMetSC/code/R/CCC_analysis/MapMet_color_code.R")
 ```
 
 ## __Project description__ 
@@ -123,6 +125,11 @@ library("DElegate")
 library("dplyr")
 library("ggalluvial")
 library("NMF")
+library("clusterProfiler")
+library("org.Hs.eg.db")
+library("DOSE")
+library("ReactomePA")
+library("meshes")
 ```
 
 # __Input data__
@@ -1716,6 +1723,7 @@ fetahu.NB[["percent.mt"]] <- PercentageFeatureSet(object = fetahu.NB,
                                                   pattern = "^MT-")
 
 DefaultAssay(fetahu.NB) <- "RNA"
+
 fetahu.NB <- fetahu.NB %>%
     NormalizeData() %>%
     FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
@@ -1744,8 +1752,8 @@ fetahu.NB <- FindNeighbors(fetahu.NB, reduction = "pca",
 # define neighbors based on gene expression rather than dimensionality reduction
 # Compute an SNN on the gene expression level
 
-fetahu.NB <- FindNeighbors(fetahu.NB, 
-                           features = VariableFeatures(object = fetahu.NB))
+#fetahu.NB <- FindNeighbors(fetahu.NB, 
+#                           features = VariableFeatures(object = fetahu.NB))
 
 fetahu.NB <- FindClusters(fetahu.NB, resolution = 0.2,
                           random.seed = 28,
@@ -1775,7 +1783,109 @@ p1 + p2 + p3
 
 saveRDS(fetahu.NB, 
         file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters_2024-03-25.Rds"))
+
+VlnPlot(fetahu.NB, features = "CD44",group.by = "sample",
+        pt.size = 0,log = TRUE)
+
+VlnPlot(fetahu.NB, features = "CD44",group.by = "group",
+        pt.size = 0,log = TRUE)
+
+VlnPlot(fetahu.NB, features = "CD44",
+        pt.size = 0,log = TRUE)
+
 ```
+
+## __Tumor cluster re-integration__
+
+```{r fig.height=5, fig.width=5}
+
+sample.list <- SplitObject(fetahu.NB, split.by = "group")
+# number of cells per sample/patient
+for (x in sample.list) {
+  print(ncol(x))
+}
+
+length(sample.list)
+
+# remove samples with < 100 cells
+#sample.list <- sample.list[-c(4,7,9,10)]
+sample.list <- sample.list[-c(2)]
+
+length(sample.list)
+
+fetahu.NB.integrated <- lapply(X = sample.list, FUN = function(x) {
+  x <- NormalizeData(x)
+  x <- FindVariableFeatures(x)
+})
+
+# Sample integration
+features <- SelectIntegrationFeatures(object.list = fetahu.NB.integrated)
+anchors <- FindIntegrationAnchors(object.list = fetahu.NB.integrated, 
+                                  anchor.features = features)
+fetahu.NB.integrated <- IntegrateData(anchorset = anchors)
+
+# Perform downstream analysis on the integrated data
+DefaultAssay(fetahu.NB.integrated) <- "integrated"
+
+# Run the standard workflow for visualization and clustering
+fetahu.NB.integrated <- ScaleData(fetahu.NB.integrated, verbose = FALSE)
+fetahu.NB.integrated <- RunPCA(fetahu.NB.integrated, npcs = 30, verbose = FALSE)
+
+# UMAP dimensional reduction and cell clustering
+fetahu.NB.integrated <- RunUMAP(fetahu.NB.integrated, reduction = "pca", 
+                            dims = 1:5)
+fetahu.NB.integrated <- FindNeighbors(fetahu.NB.integrated, reduction = "pca", 
+                                  dims = 1:5, k.param = 50)
+fetahu.NB.integrated <- FindClusters(fetahu.NB.integrated, 
+                                  resolution = 0.4,
+                                  random.seed = 28,
+                                  group.singletons = TRUE) # -> adjust the resolution
+
+# Visualization
+p1 <- DimPlot(fetahu.NB.integrated, reduction = "umap", 
+              group.by = "group")
+p2 <- DimPlot(fetahu.NB.integrated, reduction = "umap", 
+              label = TRUE, repel = TRUE)
+p3 <- DimPlot(fetahu.NB.integrated, reduction = "umap", 
+              group.by = "sample")
+p4 <- FeaturePlot(fetahu.NB.integrated, features = "CD44",
+                  cols = c("gray","yellow","red"),
+                  split.by = "group", order = TRUE)
+
+p1
+p2
+p3
+p4
+
+VlnPlot(fetahu.NB.integrated, features = "CD44",group.by = "sample",
+        pt.size = 0)
+
+VlnPlot(fetahu.NB.integrated, features = "CD44",group.by = "group",
+        pt.size = 0)
+
+VlnPlot(fetahu.NB.integrated, features = "CD44")
+
+# set cell type annotation to the new seurat clusters
+Idents(fetahu.NB.integrated) <- fetahu.NB.integrated@meta.data$seurat_clusters
+
+#1. find cluster markers with Seurat
+fetahu.NB.integrated.markers <- FindAllMarkers(fetahu.NB.integrated, 
+                                      min.pct  = 0.1, 
+                                      logfc.threshold = 0.25,
+                                      min.cells.group = 50,
+                                      random.seed = 28)
+fetahu.NB.integrated.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 10, order_by = avg_log2FC)
+
+fetahu.NB.integrated.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+
+DoHeatmap(fetahu.NB.integrated, features = top10$gene) + NoLegend()
+```
+
+
 
 ## __Tumor cluster markers__
 
@@ -1866,41 +1976,31 @@ overlap
 # in the tumor cluster
 ```
 
-### __Module score__
 
-#### __T-cell exhustion markers__
+```{r CD44}
+fetahu.NB@active.ident <- factor(fetahu.NB@meta.data$sample)
 
-```{r}
-# Gene module score
-# gene lsits from: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10171398/
-# gene immune evasion signature
-immune_evasion <- c("PDCD1","CTLA4","HAVCR2","LAG3","TIGIT","CD244","CD160",
-                    "IRF4","BATF","NFATC1","FOXP3","IL2RA","TNFRSF18","IKZF4",
-                    "CD80","CD86","CD274","PDCD1LG2","LGALS9")
+CD44_high <- c("2016_4503","2018_1404","2019_5022","2019_5754")
+#CD44_mid <- c("2006_2684", "2018_1625","2018_6056")
+CD44_low <- c("2005_1702", "2016_3924","2019_2495", "2020_1667")
+fetahu.NB@meta.data$CD44 <- sapply(fetahu.NB@meta.data$sample, 
+                                   function(ita) ifelse(ita %in% CD44_high,
+                                                        "high", "low"))
 
+levels(fetahu.NB@meta.data$CD44)
 
-rowSums(fetahu.NB[['RNA']]["TIGIT",]>0)
+fetahu.NB@active.ident <- factor(fetahu.NB@meta.data$CD44)
 
-
-fetahu.NB <- AddModuleScore(tcells, immune_evasion,
-                            name = "immune_evasion_set", seed = 28, 
-                            assay = 'RNA')
-
-# Plot score
-FeaturePlot(tcells,
-            features = "immune_evasion_set", label = TRUE, repel = TRUE, 
-            order = TRUE, pt.size = 1) +
-            scale_colour_gradientn(colours = brewer.pal(n = 20, name = "RdPu"))
-
-
-VlnPlot(tcells,features = "immune_evasion_set1", log = TRUE,pt.size = 0)
-
-VlnPlot(tcells_pd1,features = "immune_evasion_set1", log = TRUE,pt.size = 0)
-
-RidgePlot(tcells_pd1, features = "immune_evasion_set1", log = TRUE)
+VlnPlot(fetahu.NB, features = "CD44", pt.size = 0,
+        group.by = "group", assay = "SCT")
 ```
 
+
+### __Module score__
+
 #### __ADR/MES/NCC markers__
+
+Markers from Boeva et al., 2021 and Van Groeningen et al., 2017
 
 ```{r ADR/MES, fig.height=5, fig.width=5, warning=FALSE}
 #fetahu.NB <- readRDS(file = paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
@@ -1968,6 +2068,130 @@ VlnPlot(fetahu.NB,features = "mesenchymal_signature_set1", log = TRUE,pt.size = 
 
 RidgePlot(fetahu.NB, features = "adrenergic_signature_set_v2_1", log = TRUE)
 RidgePlot(fetahu.NB, features = "mesenchymal_signature_set1", log = TRUE)
+```
+
+Markers from Thirant et al., 2023
+
+```{r ADR/MES2, fig.height=5, fig.width=5, warning=FALSE}
+#fetahu.NB <- readRDS(file = paste0(params$out,"Rds/fetahu.scRNA.tumor.cluster.Rds"))
+# Gene module score
+# Gene list from Thirant et al., 2023
+
+ADR.CH.gene.list.pat <- read.table("/home/sara_wz/annotation/MES_ADRN/thirant2023_ADR_CHRO_genes_patients.txt",
+                                   header = FALSE, quote = "")
+ADR.CH.gene.list.pdx <- read.table("/home/sara_wz/annotation/MES_ADRN/thirant2023_ADR_CHRO_genes_PDX.txt", 
+                                header = FALSE, quote = "")
+ADR.SYM.gene.list.pat <- read.table("/home/sara_wz/annotation/MES_ADRN/thirant2023_ADR_SYM_genes_patients.txt",
+                                   header = FALSE, quote = "")
+ADR.SYM.gene.list.pdx <- read.table("/home/sara_wz/annotation/MES_ADRN/thirant2023_ADR_SYM_genes_PDX.txt", 
+                                header = FALSE, quote = "")
+MES.gene.list.pat <- read.csv("/home/sara_wz/annotation/MES_ADRN/thirant2023_MES_all_genes_patients.txt", 
+                              header = FALSE, quote = "")
+MES.gene.list.pdx <- read.csv("/home/sara_wz/annotation/MES_ADRN/thirant2023_MES_genes_PDX.txt", 
+                              header = FALSE, quote = "")
+
+# Check how many cells express gene X
+rowSums(fetahu.NB[['RNA']]["PHOX2B",]>0)
+
+
+#1. gene signatures derived from patients
+fetahu.NB <- AddModuleScore(fetahu.NB, list(ADR.CH.gene.list.pat$V1),
+                            name = "noradrenergic_chromaffin_set_v1_", 
+                            seed = 28, ctrl = 50)
+
+fetahu.NB <- AddModuleScore(fetahu.NB, list(ADR.SYM.gene.list.pat$V1),
+                            name = "noradrenergic_sympathoblast_set_v1_", 
+                            seed = 28, ctrl = 50)
+
+fetahu.NB <- AddModuleScore(fetahu.NB, list(MES.gene.list.pat$V1),
+                            name = "mesenchymal_set_v1_", 
+                            seed = 28,  ctrl = 50)
+
+# Plot score for ADR
+FeaturePlot(fetahu.NB,
+            features = "noradrenergic_chromaffin_set_v1_1", label = TRUE, 
+            repel = TRUE, order = TRUE, pt.size = 0.5, cols = c("gray","red"))
+
+FeaturePlot(fetahu.NB,
+            features = "noradrenergic_sympathoblast_set_v1_1", label = TRUE, 
+            repel = TRUE, order = TRUE, pt.size = 0.5, cols = c("gray","red")) 
+            # + scale_colour_gradientn(colours = brewer.pal(n = 5, name = "RdPu"))
+
+# Plot score for MES
+FeaturePlot(fetahu.NB,
+            features = "mesenchymal_set_v1_1", label = TRUE, 
+            repel = TRUE, order = TRUE, pt.size = 0.5, cols = c("blue","red"))
+
+VlnPlot(fetahu.NB,features = "noradrenergic_chromaffin_set_v1_1", 
+        log = TRUE,pt.size = 0)
+VlnPlot(fetahu.NB,features = "noradrenergic_sympathoblast_set_v1_1", 
+        log = TRUE,pt.size = 0)
+VlnPlot(fetahu.NB,features = "mesenchymal_set_v1_1", 
+        log = TRUE,pt.size = 0)
+
+RidgePlot(fetahu.NB, features = "noradrenergic_chromaffin_set_v1_1", 
+          log = TRUE)
+RidgePlot(fetahu.NB,features = "noradrenergic_sympathoblast_set_v1_1", 
+          log = TRUE)
+RidgePlot(fetahu.NB, features = "mesenchymal_set_v1_1", 
+          log = TRUE)
+
+
+#2. gene signatures derived from PDX model of NB
+fetahu.NB <- AddModuleScore(fetahu.NB, list(ADR.CH.gene.list.pdx$V1),
+                            name = "noradrenergic_chromaffin_set_v2_", 
+                            seed = 28, ctrl = 50)
+
+
+fetahu.NB <- AddModuleScore(fetahu.NB, list(ADR.SYM.gene.list.pdx$V1),
+                            name = "noradrenergic_sympathoblast_set_v2_", 
+                            seed = 28, ctrl = 50)
+
+
+fetahu.NB <- AddModuleScore(fetahu.NB, list(MES.gene.list.pdx$V1),
+                            name = "mesenchymal_set_v2_", 
+                            seed = 28,  ctrl = 50)
+
+# Plot score for ADR
+FeaturePlot(fetahu.NB,
+            features = "noradrenergic_chromaffin_set_v2_1", label = TRUE, 
+            repel = TRUE, order = TRUE, pt.size = 0.5) +
+            scale_colour_gradientn(colours = brewer.pal(n = 5, name = "RdPu"))
+FeaturePlot(fetahu.NB,
+            features = "noradrenergic_sympathoblast_set_v2_1", label = TRUE, 
+            repel = TRUE, order = TRUE, pt.size = 0.5) +
+            scale_colour_gradientn(colours = brewer.pal(n = 5, name = "RdPu"))
+
+# Plot score for MES
+FeaturePlot(fetahu.NB,
+            features = "mesenchymal_set_v2_1", label = TRUE, 
+            repel = TRUE, order = TRUE, pt.size = 0.5) +
+            scale_colour_gradientn(colours = brewer.pal(n = 5, name = "RdPu"))
+
+VlnPlot(fetahu.NB,features = "noradrenergic_chromaffin_set_v2_1",
+        log = TRUE,pt.size = 0)
+VlnPlot(fetahu.NB,features = "noradrenergic_sympathoblast_set_v2_1", 
+        log = TRUE,pt.size = 0)
+VlnPlot(fetahu.NB,features = "mesenchymal_set_v2_1", 
+        log = TRUE,pt.size = 0)
+
+RidgePlot(fetahu.NB, features = "noradrenergic_chromaffin_set_v2_1", 
+          log = TRUE)
+RidgePlot(fetahu.NB,features = "noradrenergic_sympathoblast_set_v2_1", 
+          log = TRUE)
+RidgePlot(fetahu.NB, features = "mesenchymal_set_v2_1", 
+          log = TRUE)
+```
+
+```{r MES-specific markers, fig.height=10, fig.width=10}
+MES_features <- c("TNFRSF1A", "EGFR", "HES1" , "SOX9", "FOXC1")
+FeaturePlot(fetahu.NB, features = MES_features, pt.size = 0.5, 
+            order = TRUE, cols = c("gray","red"))
+VlnPlot(fetahu.NB,features = MES_features, log = TRUE, pt.size = 0)
+
+
+VlnPlot(fetahu.NB,features = MES_features, log = TRUE, pt.size = 0,
+        group.by = c())
 ```
 
 
@@ -2063,18 +2287,18 @@ marker_results %>%
 original cell types published in Fetahu et al., 2023
 
 ```{r}
-Idents(fetahu.NB.filt) <- fetahu.NB.filt@meta.data$seurat_clusters
+Idents(fetahu.NB) <- fetahu.NB@meta.data$seurat_clusters
 
-DoHeatmap(fetahu.NB.filt, features = NB.marker.genes, assay = "RNA")
+DoHeatmap(fetahu.NB, features = NB.marker.genes, assay = "RNA")
 
 # find cluster markers with DElegate 
-de_results <- DElegate::findDE(object = fetahu.NB.filt,
+de_results <- DElegate::findDE(object = fetahu.NB,
                                group_column = "seurat_clusters")
-marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB.filt,
+marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB,
                                             group_column = "seurat_clusters")
-top_5 <- dplyr::filter(marker_results, feature_rank < 6)
+top_10 <- dplyr::filter(marker_results, feature_rank < 11)
 
-DoHeatmap(fetahu.NB.filt, features = top_5$feature, assay = "RNA")
+DoHeatmap(fetahu.NB, features = top_10$feature, assay = "RNA")
 ```
 
 
@@ -2258,16 +2482,16 @@ library("fgsea")
 GO_file = paste0(params$GO_db,"/h.all.v2023.2.Hs.symbols.gmt")
 
 # using here the tumor clusters from 08.03.2024
-de_results <- de_results %>% filter(padj < 0.01)
+de_results <- de_results %>% filter(padj < 0.05)
 
 #1. CLUSTER 0
 clust0 <- de_results %>% filter(group1 == "0") %>% arrange(log_fc)
 
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
+gene_list_0 = clust0$log_fc
+names(gene_list_0) = clust0$feature
+gene_list_0 = sort(gene_list_0, decreasing = TRUE)
+gene_list_0 = gene_list_0[!duplicated(names(gene_list_0))]
+head(gene_list_0)
 
 # Run GSEA analysis
 res = GSEA(gene_list, GO_file, pval = 0.1)
@@ -2275,13 +2499,13 @@ dim(res$Results)
 res$Plot
 
 #2. CLUSTER 1
-clust0 <- de_results %>% filter(group1 == "1") %>% arrange(log_fc)
+clust1 <- de_results %>% filter(group1 == "1") %>% arrange(log_fc)
 
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
+gene_list_1 = clust1$log_fc
+names(gene_list_1) = clust1$feature
+gene_list_1 = sort(gene_list_1, decreasing = TRUE)
+gene_list_1 = gene_list_1[!duplicated(names(gene_list_1))]
+head(gene_list_1)
 
 # Run GSEA analysis
 res = GSEA(gene_list, GO_file, pval = 0.1)
@@ -2289,13 +2513,13 @@ dim(res$Results)
 res$Plot
 
 #3. CLUSTER 2 (sporadic NBs all cluster here)
-clust0 <- de_results %>% filter(group1 == "2") %>% arrange(log_fc)
+clust2 <- de_results %>% filter(group1 == "2") %>% arrange(log_fc)
 
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
+gene_list_2 = clust2$log_fc
+names(gene_list_2) = clust2$feature
+gene_list_2 = sort(gene_list_2, decreasing = TRUE)
+gene_list_2 = gene_list_2[!duplicated(names(gene_list_2))]
+head(gene_list_2)
 
 # Run GSEA analysis
 res = GSEA(gene_list, GO_file, pval = 0.1)
@@ -2303,13 +2527,13 @@ dim(res$Results)
 res$Plot
 
 #4. CLUSTER 3
-clust0 <- de_results %>% filter(group1 == "3") %>% arrange(log_fc)
+clust3 <- de_results %>% filter(group1 == "3") %>% arrange(log_fc)
 
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
+gene_list_3 = clust3$log_fc
+names(gene_list_3) = clust3$feature
+gene_list_3 = sort(gene_list_3, decreasing = TRUE)
+gene_list_3 = gene_list_3[!duplicated(names(gene_list_3))]
+head(gene_list_3)
 
 # Run GSEA analysis
 res = GSEA(gene_list, GO_file, pval = 0.1)
@@ -2317,13 +2541,13 @@ dim(res$Results)
 res$Plot
 
 #5. CLUSTER 4
-clust0 <- de_results %>% filter(group1 == "4") %>% arrange(log_fc)
+clust4 <- de_results %>% filter(group1 == "4") %>% arrange(log_fc)
 
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
+gene_list_4 = clust4$log_fc
+names(gene_list_4) = clust4$feature
+gene_list_4 = sort(gene_list_4, decreasing = TRUE)
+gene_list_4 = gene_list_4[!duplicated(names(gene_list_4))]
+head(gene_list_4)
 
 # Run GSEA analysis
 res = GSEA(gene_list, GO_file, pval = 0.1)
@@ -2331,18 +2555,171 @@ dim(res$Results)
 res$Plot
 
 #6. CLUSTER 5
-clust0 <- de_results %>% filter(group1 == "5") %>% arrange(log_fc)
+clust5 <- de_results %>% filter(group1 == "5") %>% arrange(log_fc)
 
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
+gene_list_5 = clust5$log_fc
+names(gene_list_5) = clust5$feature
+gene_list_5 = sort(gene_list_5, decreasing = TRUE)
+gene_list_5 = gene_list_5[!duplicated(names(gene_list_5))]
+head(gene_list_5)
 
 # Run GSEA analysis
 res = GSEA(gene_list, GO_file, pval = 0.1)
 dim(res$Results)
 res$Plot
+```
+
+
+
+### __Gene and Disease Ontology analysis__
+
+MF: Molecular Function, molecular activities of gene products
+CC: Cellular Component, where gene products are active
+BP: Biological Process, pathways and larger processes made up of the activities of multiple gene products
+
+```{r fig.height=20, fig.width=20}
+# Put DEGs from TC to a list
+gene.list <- list(gene_list_0,gene_list_1,gene_list_2,
+                  gene_list_3,gene_list_4,gene_list_5)
+
+loop_number = -1 # Because cluster number starts with zero
+
+# Loop through the clusters and perform enrichment analysis for each
+for (x in gene.list) {
+  loop_number = loop_number + 1
+  # Tell about 
+  cat('Processing cluster ', loop_number,'\n')
+  # Take only the most DEG (logFC > 2)
+  gene <- names(x)[abs(x) > 2]
+  print(length(gene))
+  # Convert gene symbols to ENSEMBL IDs
+  gene.df <- bitr(gene, fromType = "SYMBOL",
+        toType = c("ENSEMBL", "SYMBOL"),
+        OrgDb = org.Hs.eg.db)
+  # Enrichment analysis
+  # Biological Process enrichment
+  BP <- enrichGO(gene        = gene.df$ENSEMBL,
+                OrgDb         = org.Hs.eg.db,
+                keyType       = 'ENSEMBL',
+                ont           = "BP",
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.01,
+                qvalueCutoff  = 0.05)
+  # Molecular Function enrichment
+  MF <- enrichGO(gene         = gene.df$ENSEMBL,
+                OrgDb         = org.Hs.eg.db,
+                keyType       = 'ENSEMBL',
+                ont           = "MF",
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.01,
+                qvalueCutoff  = 0.05)
+  # Cellular Component enrichment
+  CC <- enrichGO(gene         = gene.df$ENSEMBL,
+                OrgDb         = org.Hs.eg.db,
+                keyType       = 'ENSEMBL',
+                ont           = "CC",
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.01,
+                qvalueCutoff  = 0.05)
+  # save top10 enriched terms
+  BP <- BP %>% arrange(p.adjust)
+  MF <- MF %>% arrange(p.adjust)
+  CC <- CC %>% arrange(p.adjust)
+  topBP <- head(BP, 10)
+  topMF <- head(MF, 10)
+  topCC <-  head(CC, 10)
+  # print top 10 terms
+  print(topBP)
+  print(topMF)
+  print(topCC)
+  # visualization
+  dotCC <- dotplot(BP, showCategory=30) + ggtitle("dotplot for Biological Process")
+  dotBP <- dotplot(MF, showCategory=30) + ggtitle("dotplot for Molecular Function")
+  dotMF <- dotplot(CC, showCategory=30) + ggtitle("dotplot for Cellular Component")
+ #BP <-  goplot(BP)
+ #MF <-  goplot(MF)
+ #CC <-  goplot(CC)
+  # show plots
+ #print(vBP)
+ #print(vMF)
+ #print(vCC)
+  print(dotBP)
+  print(dotMF)
+  print(dotCC)
+}
+```
+```{r Reactome}
+library(ReactomePA)
+
+# Put DEGs from TC to a list
+gene.list <- list(gene_list_0,gene_list_1,gene_list_2,gene_list_3,gene_list_4,
+     gene_list_5)
+
+loop_number = -1 # Because cluster number starts with zero
+
+# Loop through the clusters and perform enrichment analysis for each
+for (x in gene.list) {
+  loop_number = loop_number + 1
+  # Tell about 
+  cat('Processing cluster ', loop_number,'\n')
+  # Take only the most DEG (logFC > 2)
+  gene <- names(x)[abs(x) > 2]
+  # Convert gene symbols to ENSEMBL IDs
+  gene.df <- bitr(gene, fromType = "SYMBOL",
+        toType = c("ENTREZID", "SYMBOL"),
+        OrgDb = org.Hs.eg.db)
+  # Enrichment analysis
+  y <- gsePathway(gene.df$ENTREZID, 
+                  pvalueCutoff = 0.2,
+                  pAdjustMethod = "BH", 
+                  verbose = FALSE,
+                  keyType = "ENTREZID")
+  
+  # save top10 enriched terms
+  top <- head(y)
+  # print top 10 terms
+  print(top)
+  # visualization
+  plot <- viewPathway("Reactome pathway enrichment", 
+                      readable = TRUE, 
+                      foldChange = x)
+  # show plot
+  print(plot)
+}
+```
+
+
+```{r GSEA 2}
+# Put DEGs from TC to a list
+gene.list <- list(gene_list_0,gene_list_1,gene_list_2,gene_list_3,gene_list_4,
+     gene_list_5)
+
+loop_number = -1 # Because cluster number starts with zero
+
+# Loop through the clusters and perform enrichment analysis for each
+for (x in gene.list) {
+  loop_number = loop_number + 1
+  # Tell about 
+  cat('Processing cluster ', loop_number,'\n')
+  # Take only the most DEG (logFC > 2)
+  x = sort(x, decreasing = TRUE)
+  # Convert gene symbols to ENSEMBL IDs
+  gene.df <- bitr(names(x) , fromType = "SYMBOL",
+        toType = c("ENTREZID", "SYMBOL"),
+        OrgDb = org.Hs.eg.db)
+  
+  names(x) <- gene.df$ENTREZID
+  # GSEA analysis
+  gsea <- gseDO(x,pvalueCutoff = 0.05,seed = 28,
+                by = "fgsea",pAdjustMethod = "BH")
+  dotplot <- dotplot(gsea, showCategory=30) + ggtitle("dotplot for GSEA")
+  # print top 10 terms
+  print(out)
+  # show plot
+  print(dotplot)
+  # visualization
+}
+
 ```
 
 
@@ -3038,6 +3415,14 @@ write.table(df_net_select,
             file = paste0(params$out,"tables/fetahu2023.CCC.TCandTME_select.csv"), 
             sep = "\t", quote = FALSE, row.names = FALSE) 
 
+
+# set a cut-off for probability values
+
+df_net_select %>% group_by(prob.norm) %>% mutate(Rank = dense_rank(desc(prob.norm)))
+rank <- 
+  
+lm(formula = Rank ~ prob.norm, data = df_net_select)
+
 #################### exploring the results ###############################
 
 df.net.fetahu <- subsetCommunication(cellchat,
@@ -3373,6 +3758,67 @@ FeaturePlot(rna, label = TRUE,
 dev.off()
 ```
 
+## __T-cell exhaustion markers__
+
+Is PD1 co-expressed with CD8/CD4/GZMB/S100B?
+
+Here is gated for PD1 and S100B expressing T-cells and check the co-expression
+
+```{r PD1+ T-cells}
+# Change cell type annotation to the original annotation
+Idents(rna) <- rna@meta.data$original_celltype
+
+# T-cells
+tcells <- subset(x = rna, idents = c("T (6)","T (9)","T (5)")) # 19126 cells
+# with "T (18)" -> 19428  cells
+
+# PD1+ T cells
+tcells_pd1 <- subset(x = rna, idents = c("T (6)","T (9)","T (5)"),
+                 subset = PDCD1 > 0.1, ) 
+# with "T (18)" -> 552 cells
+
+
+# S100B+ cells
+tcells_s100b <- subset(x = rna, idents = c("T (6)","T (9)","T (5)"),
+                 subset = S100B > 0.1, ) # 897 cells
+
+
+features <- c("CD8A","CD4","GZMB","S100B")
+DotPlot(tcells, features = features) + RotatedAxis()
+DotPlot(tcells_pd1, features = features) + RotatedAxis()
+```
+
+## __Immune evasion score__
+
+```{r}
+# Gene module score
+# gene lsits from: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10171398/
+# gene immune evasion signature
+immune_evasion <- c("PDCD1","CTLA4","HAVCR2","LAG3","TIGIT","CD244","CD160",
+                    "IRF4","BATF","NFATC1","FOXP3","IL2RA","TNFRSF18","IKZF4",
+                    "CD80","CD86","CD274","PDCD1LG2","LGALS9")
+
+
+rowSums(tcells[['RNA']]["TIGIT",]>0)
+
+
+fetahu.NB <- AddModuleScore(tcells, immune_evasion,
+                            name = "immune_evasion_set", seed = 28, 
+                            assay = 'RNA')
+
+# Plot score
+FeaturePlot(tcells,
+            features = "immune_evasion_set", label = TRUE, repel = TRUE, 
+            order = TRUE, pt.size = 1) +
+            scale_colour_gradientn(colours = brewer.pal(n = 20, name = "RdPu"))
+
+
+VlnPlot(tcells,features = "immune_evasion_set1", log = TRUE,pt.size = 0)
+
+VlnPlot(tcells_pd1,features = "immune_evasion_set1", log = TRUE,pt.size = 0)
+
+RidgePlot(tcells_pd1, features = "immune_evasion_set1", log = TRUE)
+```
 
 ## __CD4, CD8 and GZMB expression in (exhausted) T-cells__
 
@@ -3417,36 +3863,6 @@ FeaturePlot(rna, label = TRUE,
 dev.off()
 ```
 
-
-Is PD1 co-expressed with CD8/CD4/GZMB/S100B?
-
-Here is gated for PD1 and S100B expressing T-cells and check the co-expression
-
-```{r PD1+ T-cells}
-# Change cell type annotation to the original annotation
-Idents(rna) <- rna@meta.data$original_celltype
-
-# T-cells
-tcells <- subset(x = rna, idents = c("T (6)","T (9)","T (5)")) # 19126 cells
-# with "T (18)" -> 19428  cells
-
-# PD1+ T cells
-tcells_pd1 <- subset(x = rna, idents = c("T (6)","T (9)","T (5)"),
-                 subset = PDCD1 > 0.1, ) 
-# with "T (18)" -> 552 cells
-
-
-# S100B+ cells
-tcells_s100b <- subset(x = rna, idents = c("T (6)","T (9)","T (5)"),
-                 subset = S100B > 0.1, ) # 897 cells
-
-
-features <- c("CD8A","CD4","GZMB","S100B")
-DotPlot(tcells, features = features) + RotatedAxis()
-DotPlot(tcells_pd1, features = features) + RotatedAxis()
-```
-
-
 ```{r scatter plots, fig.height=5, fig.width=5}
 tcells <- NormalizeData(tcells, 
                         normalization.method = "LogNormalize", 
@@ -3483,6 +3899,106 @@ FeatureScatter(tcells, feature1 = "S100B", feature2 = "GZMB")
 dev.off()
 ```
 
+
+## __Violin plot for PD1 and exhaustion marker expression in T cell clusters__
+
+```{r Violin plot}
+features <- "PDCD1"
+tcells <- tcells_pd1 %>%
+  NormalizeData(normalization.method = "LogNormalize") %>%
+  ScaleData()
+
+VlnPlot(tcells,features,log = TRUE)
+DoHeatmap(tcells,features)
+
+
+# PD1+ T cells only
+tcells_pd1 <- tcells_pd1 %>%
+  NormalizeData(normalization.method = "LogNormalize") %>%
+  ScaleData()
+
+VlnPlot(tcells_pd1,features,log = TRUE)
+RidgePlot(tcells_pd1,features,log=TRUE)
+```
+
+## __T-cell exhustion module score__
+
+```{r}
+# Gene module score
+features <- c("PDCD1","CTLA4","BATF","VHL",
+              "LAG3","CD244","CD160","HAVCR2",
+              "IL10RA","PRDM1","GATA3","IKZF2","TBX21","EOMES")
+
+tcells <- AddModuleScore(tcells, features,
+                         name = "exhustion_markers_set", seed = 28)
+
+tcells_pd1 <- AddModuleScore(tcells_pd1, features,
+                         name = "exhustion_markers_set", seed = 28)
+
+# Plot scores
+FeaturePlot(tcells,
+            features = "exhustion_markers_set1", label = TRUE, repel = TRUE, 
+            order = TRUE, pt.size = 1) +
+            scale_colour_gradientn(colours = brewer.pal(n = 20, name = "RdPu"))
+
+
+VlnPlot(tcells,features = "exhustion_markers_set1", log = TRUE,pt.size = 0)
+
+VlnPlot(tcells_pd1,features = "exhustion_markers_set1", log = TRUE,pt.size = 0)
+
+RidgePlot(tcells_pd1, features = "exhustion_markers_set1", log = TRUE)
+```
+
+
+
+## __T-cell exhaustion markers from Sevgi and Christoph (CCRI)__
+
+```{r}
+sevgi_christoph_gene_set <- c("PDCD1","CTLA4","NFATC1","SPRY2","BATF","VHL",
+                              "FOXO1","FOXP1","LAG3","CD244","CD160","HAVCR2",
+                              "TRAF1","TNFRSF9","IL10RA","IL10","PRDM1","STAT3",
+                              "IFNA1","IFNB1","IL21","CXCR5","SOCS3","GATA3",
+                              "IKZF2","BCL6","BCL2","TBX21","EOMES")
+
+sevgi_christoph_gene_set <- c("PDCD1","CTLA4","BATF","VHL",
+                              "LAG3","CD244","CD160","HAVCR2",
+                              "IL10RA","PRDM1","GATA3","IKZF2","TBX21","EOMES")
+
+DotPlot(tcells, features = sevgi_christoph_gene_set,dot.scale = 10,
+        cols = c("gray","purple")) + RotatedAxis()
+
+sevgi2024
+
+pdf(paste0(params$out,"figures/Tcell_exhustion_markers_fromSevgi-CCRI_dotPlot.pdf"))
+sevgi2024
+dev.off()
+
+```
+
+## __T-cell exhaustion markers from Mei et al., 2024__
+
+```{r Mei et al., 2024}
+gene_list_mei2024 <- c("TOX", "NR4A1","NR4A2","NR4A3","PDCD1","CTLA4","TIGIT",
+                       "HAVCR2","LAG3","BTLA","CD244","TBX21","EOMES",
+                       "BATF","VHL","FOXO1", "FOXO3", "FOXO4",  "FOXO6","FOXP1",
+                       "ENTPD1","CXCL13",
+                       "MYO1E","PRDM1","WARS","CREM","LAYN","PHLDA1",
+                       "SNAP47","CD38","MYO7A","PARK7",
+                       "NFATC1", "NFATC2", "NFATC3", "NFATC4", "NFAT5")
+
+mei2024 <- DotPlot(tcells, features = gene_list_mei2024) + RotatedAxis()
+mei2024_pd1 <- DotPlot(tcells_pd1, features = gene_list_mei2024) + RotatedAxis()
+
+mei2024
+mei2024_pd1
+
+pdf(paste0(params$out,"figures/Tcell_exhustion_markers_fromMei2024_dotPlot.pdf"))
+mei2024
+dev.off()
+
+```
+
+
 ## __Expression of activated T-cell markers__
 
 CD3 - predominantly located on T cells
@@ -3510,7 +4026,6 @@ DotPlot(tcells, features = features) + RotatedAxis()
 
 DotPlot(tcells_s100b, features = features) + RotatedAxis()
 ```
-
 
 Co-expression of T-cell exhaustion markers
 
@@ -3613,103 +4128,51 @@ DotPlot(rna, features = tumor_reactivity_genes_2) + RotatedAxis()
 pdf(paste0(params$out,"figures/Tcell_tumor_reactivity_markers_dotPlot.pdf"))
 y
 dev.off()
-
 ```
 
-## __T-cell exhustion markers from Sevgi and Christoph (CCRI)__
 
-```{r}
-sevgi_christoph_gene_set <- c("PDCD1","CTLA4","NFATC1","SPRY2","BATF","VHL",
-                              "FOXO1","FOXP1","LAG3","CD244","CD160","HAVCR2",
-                              "TRAF1","TNFRSF9","IL10RA","IL10","PRDM1","STAT3",
-                              "IFNA1","IFNB1","IL21","CXCR5","SOCS3","GATA3",
-                              "IKZF2","BCL6","BCL2","TBX21","EOMES")
 
-sevgi_christoph_gene_set <- c("PDCD1","CTLA4","BATF","VHL",
-                              "LAG3","CD244","CD160","HAVCR2",
-                              "IL10RA","PRDM1","GATA3","IKZF2","TBX21","EOMES")
+## __Final dotplot__
 
-DotPlot(tcells, features = sevgi_christoph_gene_set,dot.scale = 10,
-        cols = c("gray","purple")) + RotatedAxis()
+```{r fig.height=3, fig.width=9}
+general_tcell_markers <- c("CD4","CD8A", "GZMB", "S100B","PDCD1","CD274")
+exhausted_tcell_markers <- c("LAG3","CTLA4", "IL10RA","GATA3","PRDM1",
+                            "PARK7","TIGIT","HAVCR2","BATF","NFATC3", #also tumor reactivity   
+                             "NFAT5", "NR4A1","KLRG1","VHL","CD244","CD160",
+                             "IKZF2","TBX21","EOMES")
+early_activated_tcell_markers <- c("PTPRC","CD27","CD36")
+late_activated_tcell_markers <- c("CD69","CCR7")
 
-sevgi2024
+# version 1
+final_dotplot <- DotPlot(tcells, features = c(general_tcell_markers,
+                                              exhausted_tcell_markers,
+                                              early_activated_tcell_markers, 
+                                              late_activated_tcell_markers), 
+                         dot.scale = 8, cols = c("gray","purple4")) + RotatedAxis()
 
-pdf(paste0(params$out,"figures/Tcell_exhustion_markers_fromSevgi-CCRI_dotPlot.pdf"))
-sevgi2024
+final_dotplot 
+
+pdf(paste0(params$out,"figures/fetahu2023_tcells_dotplot.pdf"),
+    width = 9, height = 3)
+final_dotplot
 dev.off()
 
-```
+# version 2
+exhausted_tcell_markers <- c(
+                             )
 
-## __T-cell exhustion markers from Mei et al., 2024__
+final_dotplot_v2 <- DotPlot(tcells, features = c(general_tcell_markers,
+                                              exhausted_tcell_markers,
+                                              early_activated_tcell_markers, 
+                                              late_activated_tcell_markers), 
+                         dot.scale = 8, cols = c("gray","purple4")) + RotatedAxis()
 
-```{r Mei et al., 2024}
-gene_list_mei2024 <- c("TOX", "NR4A1","NR4A2","NR4A3","PDCD1","CTLA4","TIGIT",
-                       "HAVCR2","LAG3","BTLA","CD244","TBX21","EOMES",
-                       "BATF","VHL","FOXO1", "FOXO3", "FOXO4",  "FOXO6","FOXP1",
-                       "ENTPD1","CXCL13",
-                       "MYO1E","PRDM1","WARS","CREM","LAYN","PHLDA1",
-                       "SNAP47","CD38","MYO7A","PARK7",
-                       "NFATC1", "NFATC2", "NFATC3", "NFATC4", "NFAT5")
+final_dotplot_v2
 
-mei2024 <- DotPlot(tcells, features = gene_list_mei2024) + RotatedAxis()
-mei2024_pd1 <- DotPlot(tcells_pd1, features = gene_list_mei2024) + RotatedAxis()
-
-mei2024
-mei2024_pd1
-
-pdf(paste0(params$out,"figures/Tcell_exhustion_markers_fromMei2024_dotPlot.pdf"))
-mei2024
+pdf(paste0(params$out,"figures/fetahu2023_tcells_dotplot_v2.pdf"),
+    width = 11, height = 3)
+final_dotplot_v2
 dev.off()
-
-```
-
-## __Violin plot for PD1 and exhustion marker expression in T cell clusters__
-
-```{r Violin plot}
-features <- "PDCD1"
-tcells <- tcells_pd1 %>%
-  NormalizeData(normalization.method = "LogNormalize") %>%
-  ScaleData()
-
-VlnPlot(tcells,features,log = TRUE)
-DoHeatmap(tcells,features)
-
-
-# PD1+ T cells only
-tcells_pd1 <- tcells_pd1 %>%
-  NormalizeData(normalization.method = "LogNormalize") %>%
-  ScaleData()
-
-VlnPlot(tcells_pd1,features,log = TRUE)
-RidgePlot(tcells_pd1,features,log=TRUE)
-```
-
-## __T-cell exhustion module score__
-
-```{r}
-# Gene module score
-features <- c("PDCD1","CTLA4","BATF","VHL",
-              "LAG3","CD244","CD160","HAVCR2",
-              "IL10RA","PRDM1","GATA3","IKZF2","TBX21","EOMES")
-
-tcells <- AddModuleScore(tcells, features,
-                         name = "exhustion_markers_set", seed = 28)
-
-tcells_pd1 <- AddModuleScore(tcells_pd1, features,
-                         name = "exhustion_markers_set", seed = 28)
-
-# Plot scores
-FeaturePlot(tcells,
-            features = "exhustion_markers_set1", label = TRUE, repel = TRUE, 
-            order = TRUE, pt.size = 1) +
-            scale_colour_gradientn(colours = brewer.pal(n = 20, name = "RdPu"))
-
-
-VlnPlot(tcells,features = "exhustion_markers_set1", log = TRUE,pt.size = 0)
-
-VlnPlot(tcells_pd1,features = "exhustion_markers_set1", log = TRUE,pt.size = 0)
-
-RidgePlot(tcells_pd1, features = "exhustion_markers_set1", log = TRUE)
 ```
 
 
@@ -4115,17 +4578,38 @@ df.path.lazic <- subsetCommunication(cellchat_predict,
 
 ## __Cell type abundance per patient__
 
+```{r}
+# load the combined object
+rna <- readRDS(file = paste0(params$out,"Rds/fetahu.scRNA.TME.and.tumor.clusters.combined.Rds"))
+
+levels(rna$new_clusters)
+
+"NB" %in% rna$new_clusters
+
+rna$new_clusters_col <- rna$new_clusters
+rna$new_clusters == "NB*"
+
+
+```
+
+
 ```{r barplot}
-pt <- table(rna$original_celltype,rna$sample)
+pt <- table(rna$new_clusters,rna$sample)
 pt <- as.data.frame(pt)
 pt$Var1 <- as.character(pt$Var1)
 
-ggplot(pt, aes(x = Var2, y = Freq, fill = Var1)) +
+pt <- pt[order(pt$Var2),]
+
+ggplot(pt, aes(x = Var2, y = Freq, fill = factor(Var1))) +
   theme_bw(base_size = 15) +
   geom_col(position = "fill", width = 0.5) +
-  xlab("Sample") +
-  ylab("Proportion") +
-  theme(legend.title = element_blank())
+  xlab("Patient") +
+  ylab("Proportion of cells [%]") +
+  theme(legend.title = element_blank()) + 
+  scale_fill_manual(values = COLOR_CODE_RNA) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  ggtitle("Cell type composition per patient") +
+  theme(axis.text.x = element_text(face = HIGHLIGHT_PATIENTS))
 ```
 
 ## __Cell type abundance per group__

@@ -60,7 +60,7 @@ CD4/CD8/S100B/GZMB expression per T-cell cluster. Second, as the CD4 RNA
 expression is known to be low, we also do a label transfer based on closest
 expression profile (with SingleR). 
 <br>
-Analysis done in R v4.3.2 in a docker (mapmet_v2024-01-19.Dockerfile) container
+Analysis done in R v4.2.3 in a docker (mapmet_v2024-01-19.Dockerfile) container2
 <br>
 docker exec -it --user root d04b26a70393 /bin/bash
 <br>
@@ -106,7 +106,7 @@ install.packages("magick")
 BiocManager::install("SpatialExperiment",force = TRUE)
 ```
 
-```{r R packages: load, include=FALSE}
+```{r R packages: load, include=FALSE, echo=FALSE}
 library("Seurat")
 library("SingleCellExperiment")
 library("tidyverse")
@@ -119,7 +119,6 @@ library("monocle3")
 library("SpatialExperiment")
 library("SingleR")
 library("magrittr")
-library("CellChat")
 library("RColorBrewer")
 library("DElegate")
 library("dplyr")
@@ -128,8 +127,8 @@ library("NMF")
 library("clusterProfiler")
 library("org.Hs.eg.db")
 library("DOSE")
-library("ReactomePA")
 library("meshes")
+library("ReactomePA")
 ```
 
 # __Input data__
@@ -175,13 +174,13 @@ expr_data
 ```{r input data Lazic et al}
 protein2gene <- read.csv("/home/data/MapMet/lazic.imc.2024/gene_list/protein2gene.csv", 
                          sep=";", header = TRUE)
-imc_data <- readRDS("/home/data/MapMet/lazic.imc.2024/Rds/imc_seurat.rds")
-
-head(protein2gene)
+#imc_data <- readRDS("/home/data/MapMet/lazic.imc.2024/Rds/imc_seurat.rds")
 
 IMC_markers <- protein2gene %>% filter(used_for_clustering == "yes")
 
 gene.list <- IMC_markers$gene_name
+
+gene.list 
 ```
 
 
@@ -189,11 +188,19 @@ gene.list <- IMC_markers$gene_name
 # Filter gene expression matrix by the 42 genes used in IMC
 expr_data_39markers <- expr_data[rownames(expr_data) %in% gene.list, ]
 
-saveRDS(expr_data_39markers, 
+expr_data_39markers <- readRDS( 
         file = "/home/out/MapMet/Rds/fetahu2023.expr_data.39markers.IMC.Rds")
 
 expr_data_39markers <- as.matrix(expr_data_39markers)
+
+expr_data_39markers <- CreateSeuratObject(expr_data_39markers)
 ```
+
+```{r}
+clustering
+```
+
+
 
 # __CCC analysis__
 
@@ -484,7 +491,7 @@ ggsave(paste0(params$out,"figures/3c_dots.png"), height = 3.4, width = 7)
 
 # __Clustering based on IMC markers__
 
-```{r heatmap: all cell types}
+```{r heatmap: all cell types - heatmap}
 # Plotting the gene expression
 fetahu.39.IMC.markers <- CreateSeuratObject(counts = expr_data_39markers, 
                                             meta.data = nb_metadata)
@@ -547,6 +554,110 @@ pdf(file = paste0(params$out,"/figures/fetahu.exp.IMC.markers.v2.pdf"))
 marker.expression.v2
 dev.off()
 ```
+
+```{r}
+# IMC markers
+# Remove GD2 "genes" and CD74 gene, as they are not informative and may
+# only make the clustering worse, not better
+gene.list.short <- gene.list[-6:-7]
+gene.list.short <- gene.list.short[-19]
+
+rna.IMC.clust <- rna
+
+rna.IMC.clust[["percent.mt"]] <- 
+  PercentageFeatureSet(object = rna, pattern = "^MT-")
+
+DefaultAssay(rna.IMC.clust) <- "RNA"
+
+rna.IMC.clust <- rna.IMC.clust %>%
+    NormalizeData() %>%
+    ScaleData() 
+
+# Calculate PCs using IMC markers
+rna.IMC.clust <- RunPCA(rna.IMC.clust, 
+                        seed.use = 28, 
+                        npcs = 50,
+                        features = gene.list.short)
+PCAPlot(object = rna.IMC.clust)
+
+rna.IMC.clust <- FindNeighbors(rna.IMC.clust, 
+                               reduction = "pca", 
+                               dims = 1:10,
+                               k.param = 50,
+                               features = gene.list.short)
+
+rna.IMC.clust <- FindClusters(rna.IMC.clust, 
+                              resolution = 0.3,
+                              random.seed = 28,
+                              group.singletons = TRUE) 
+
+rna.IMC.clust <- RunUMAP(rna.IMC.clust, 
+                     reduction = "pca", 
+                     dims = 1:10,
+                     n.epochs = 500,
+                     n.neighbors = 50,
+                     min.dist = 0.1,
+                     seed.use = 28)
+
+# set cell type annotation to the new seurat clusters
+Idents(rna.IMC.clust) <- rna.IMC.clust@meta.data$seurat_clusters
+
+# Visualization
+p1 <- DimPlot(rna.IMC.clust, 
+              reduction = "umap", 
+              shuffle = TRUE, 
+              group.by = "sample")
+p2 <- DimPlot(rna.IMC.clust, 
+              reduction = "umap",
+              shuffle = TRUE, 
+              group.by = "group",)
+p3 <- DimPlot(rna.IMC.clust, 
+              reduction = "umap", 
+              repel = TRUE, 
+              shuffle = TRUE,
+              group.by = "seurat_clusters")
+p4 <- DimPlot(rna.IMC.clust, 
+              reduction = "umap", 
+              cols = COLOR_CODE_RNA_v2, 
+              repel = TRUE, 
+              shuffle = TRUE, 
+              group.by = "original_celltype")
+p5 <- DimPlot(rna.IMC.clust, 
+              reduction = "umap", 
+              cols = COLOR_CODE_IMC,
+              repel = TRUE, 
+              shuffle = TRUE, 
+              group.by = "predicted_celltype")
+
+p1 
+p2
+p3
+p4
+p5
+
+Idents(rna.IMC.clust) <- rna.IMC.clust@meta.data$original_celltype
+
+tumor_cells_only <- WhichCells(object = rna.IMC.clust,idents = "NB (8)")
+tumor_cells_only <- WhichCells(object = rna.IMC.clust,idents = "7")
+
+DimPlot(rna.IMC.clust, 
+        cells = tumor_cells_only, 
+        reduction = "umap", 
+        cols = COLOR_CODE_RNA, 
+        repel = TRUE, 
+        shuffle = TRUE, 
+        group.by = "original_celltype")
+DimPlot(rna.IMC.clust, 
+        cells = tumor_cells_only,
+        reduction = "umap", 
+        cols = COLOR_CODE_IMC,
+        repel = TRUE, 
+        shuffle = TRUE, 
+        group.by = "predicted_celltype")
+
+```
+
+
 
 # __Label transfer__
 
@@ -1702,6 +1813,7 @@ rna@meta.data
 ```
 
 
+
 # __Tumor cells only__
 
 ```{r sub-cluster the tumor cluster}
@@ -1784,16 +1896,59 @@ p1 + p2 + p3
 saveRDS(fetahu.NB, 
         file = paste0(params$out,"Rds/fetahu2023.scRNA.tumor.clusters_2024-03-25.Rds"))
 
+
+# CD44 expression per sample, per group, per cluster
 VlnPlot(fetahu.NB, features = "CD44",group.by = "sample",
-        pt.size = 0,log = TRUE)
+        pt.size = 0, log = TRUE)
 
 VlnPlot(fetahu.NB, features = "CD44",group.by = "group",
-        pt.size = 0,log = TRUE)
+        pt.size = 0, log = TRUE)
 
 VlnPlot(fetahu.NB, features = "CD44",
-        pt.size = 0,log = TRUE)
+        pt.size = 0, log = TRUE)
 
+# IMC marker expression per cluster
+Idents(fetahu.NB) <- fetahu.NB@meta.data$seurat_clusters
+DoHeatmap(fetahu.NB, features = gene.list) # IMC markers
+
+DotPlot(fetahu.NB,features = gene.list)
 ```
+
+```{r}
+raw_counts <- fetahu.NB[["RNA"]]@counts
+
+# Filter gene expression matrix by the 42 genes used in IMC
+expr_data_39markers <- raw_counts[rownames(raw_counts) %in% gene.list, ]
+
+expr_data_39markers <- CreateSeuratObject(expr_data_39markers)
+
+expr_data_39markers <- expr_data_39markers %>% 
+    NormalizeData() %>%
+    ScaleData()
+
+expr_data_39markers <- RunPCA(expr_data_39markers, 
+                              features = gene.list, 
+                              npcs = 5)
+expr_data_39markers <- FindNeighbors(expr_data_39markers, reduction = "pca", 
+                           dims = 1:5,
+                           k.param = 500)
+
+expr_data_39markers <- FindClusters(expr_data_39markers, 
+                                    resolution = 0.5,
+                                    random.seed = 28,
+                                    group.singletons = FALSE) 
+
+expr_data_39markers <- RunUMAP(expr_data_39markers, 
+                     reduction = "pca", 
+                     dims = 1:5,
+                     n.epochs = 100,
+                     min.dist = 0.1,
+                     seed.use = 28)
+
+DimPlot(expr_data_39markers)
+```
+
+
 
 ## __Tumor cluster re-integration__
 
@@ -2212,6 +2367,27 @@ fetahu.NB.filt <- subset(fetahu.NB,
 
 fetahu.NB.filt
 
+# bar plot of cell type composition per patient
+# with highlighted patients, which are common between IMC and fetahu.NB.filt data
+pt <- table(fetahu.NB.filt$predicted_celltype,fetahu.NB.filt$sample)
+pt <- as.data.frame(pt)
+pt$Var1 <- as.character(pt$Var1)
+
+pt <- pt[order(pt$Var2),]
+
+ggplot(pt, aes(x = Var2, y = Freq, fill = factor(Var1))) +
+  theme_bw(base_size = 15) +
+  geom_col(position = "fill", width = 0.5) +
+  xlab("Patient") +
+  ylab("Proportion of cells [%]") +
+  theme(legend.title = element_blank()) + 
+  scale_fill_manual(values = COLOR_CODE_IMC) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  ggtitle("Cell type composition per patient") +
+  theme(axis.text.x = element_text(face = HIGHLIGHT_PATIENTS_TUMOR_CELLS))
+
+
+# Define cells of interest
 treat_resist_TC <- c("early SYM-like TC", "CD44+ mes-like TC")
 
 treat_resist_TC_cells <- fetahu.NB.filt@meta.data %>%
@@ -2230,17 +2406,16 @@ treat_resist_TC_MES_like_col = rgb(27,158,119, maxColorValue = 255)
 treat_resist_TC_early_SYM_col = rgb(204,235,197, maxColorValue = 255)
 
 # Visualization of early SYM and + tumor cells
-
 DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "seurat_clusters")
 DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "sample")
 DimPlot(fetahu.NB.filt, reduction = "umap", group.by = "group")
 DimPlot(fetahu.NB.filt, reduction = "umap",  label = TRUE, repel = TRUE)
-DimPlot(fetahu.NB.filt, reduction = "umap", repel = TRUE,
+DimPlot(fetahu.NB.filt, reduction = "umap", repel = TRUE, order = TRUE,
         cells.highlight = list("early SYM-like TC" = treat_resist_TC_early_SYM, 
                                "CD44+ MES-like TC" = treat_resist_TC_MES_like), 
         cols.highlight = c(treat_resist_TC_early_SYM_col,
                            treat_resist_TC_MES_like_col), 
-        cols= "grey")
+        cols= "grey", pt.size = 0.1)
 
 
 DimPlot(fetahu.NB.filt, reduction = "umap", repel = TRUE,
@@ -3184,6 +3359,19 @@ CD44_TC
 dev.off()
 ```
 
+```{r}
+# IMC marker expression per cluster
+Idents(rna) <- rna@meta.data$new_clusters
+
+# mean expression per cluster for IMC markers
+DotPlot(rna,features = gene.list)  + coord_flip() 
+
+
+rna <- ScaleData(rna,do.center = TRUE,do.scale = TRUE)
+DoHeatmap(rna, features = gene.list,slot = "scale.data") # IMC markers
+
+
+```
 
 ### __CCC analysis on combined TC and TME cells__
 
@@ -4579,6 +4767,33 @@ df.path.lazic <- subsetCommunication(cellchat_predict,
 ## __Cell type abundance per patient__
 
 ```{r}
+# Cell type annotation predicted from IMC data
+Idents(rna) <- rna@meta.data$predicted_celltype
+
+# bar plot of cell type composition per patient
+# with highlighted patients, which are common between IMC and fetahu.NB.filt data
+pt <- table(rna$predicted_celltype,rna$sample)
+pt <- as.data.frame(pt)
+pt$Var1 <- as.character(pt$Var1)
+
+pt <- pt[order(pt$Var2),]
+
+barplot <- ggplot(pt, aes(x = Var2, y = Freq, fill = factor(Var1))) +
+  theme_bw(base_size = 15) +
+  geom_col(position = "fill", width = 0.5) +
+  xlab("Patient") +
+  ylab("Proportion of cells [%]") +
+  theme(legend.title = element_blank()) + 
+  scale_fill_manual(values = COLOR_CODE_IMC) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +
+  ggtitle("Cell type composition per patient") +
+  theme(axis.text.x = element_text(face = HIGHLIGHT_PATIENTS))
+
+barplot
+```
+
+
+```{r}
 # load the combined object
 rna <- readRDS(file = paste0(params$out,"Rds/fetahu.scRNA.TME.and.tumor.clusters.combined.Rds"))
 
@@ -4588,8 +4803,6 @@ levels(rna$new_clusters)
 
 rna$new_clusters_col <- rna$new_clusters
 rna$new_clusters == "NB*"
-
-
 ```
 
 

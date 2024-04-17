@@ -1,12 +1,41 @@
 
 # scRNA-seq color code
 
+
+PATIENT_GROUPS = c("I" = "Control",
+                   "II" = "MYCNamp",
+                   "III" = "ATRXmut",
+                   "IV" = "MYCNwt/ATRXwt")
+
+COLOR_CODE_RNA_v2 = c("NB (8)" = "#e31a1c",
+                   "T (5)" = "#1f78b4",   
+                   "T (6)" = "#1f78b4", 
+                   "T (9)" = "#39BEB1",   
+                   "T (18)" = "#1f78b4",  
+                   "NK (4)" = "#a6cee3",   
+                   "B (3)" = "#33a02c",   
+                   "B (7)" = "#33a02c",   
+                   "B (11)" = "#33a02c",   
+                   "B (16)" = "#33a02c",   
+                   "B (19)" = "#33a02c",  
+                   "M (1)" = "#ee6363", 
+                   "M (2)" = "#ff7f00",    
+                   "M (10)" = "#ff7f00",    
+                   "M (15)"= "#ff7f00", 
+                   "pDC (12)" = "#fdbf6f",   
+                   "E (13)" = "#b15928",   
+                   "SC (14)" = "#6a3d9a",  
+                   "SC (17)" = "#6a3d9a",
+                   "SC (20)" = "#6a3d9a",  
+                   "other (21)" = "#000000")
+
 COLOR_CODE_RNA = c("NB (0)" = "#8B0000", 
                "NB (5)" = "#e31a1c",
                "NB (4)" = "#e31a1c",      
                "NB (3)" = "#e31a1c",     
                "NB (2)" = "#e31a1c",     
-               "NB (1)" = "#e31a1c",     
+               "NB (1)" = "#e31a1c", 
+               "NB (8)" = "#e31a1c",
                "T (5)" = "#1f78b4",   
                "T (6)" = "#1f78b4", 
                "T (9)" = "#39BEB1",   
@@ -46,6 +75,10 @@ CELL_TYPE_ABBREVIATIONS <- c(
   NB  = "neuroblastoma cell"
 )
 
+COMMON_SAMPLES_IMC_RNA <- c("2016_4503", # Group II
+                            "2018_1404", # Group II
+                            "2019_5754") # Group II
+
 HIGHLIGHT_PATIENTS <- c("2005_1702" = "plain",
                         "2006_2684" = "plain",
                         "2014_0102" = "plain",
@@ -63,6 +96,17 @@ HIGHLIGHT_PATIENTS <- c("2005_1702" = "plain",
                         "2020_1288" = "plain",
                         "2020_1667" = "plain")
 
+HIGHLIGHT_PATIENTS_TUMOR_CELLS <- c("2005_1702" = "plain",
+                                    "2006_2684" = "plain",
+                                    "2016_3924" = "plain",
+                                    "2016_4503" = "bold",
+                                    "2018_1404" = "bold",
+                                    "2018_1625" = "plain",
+                                    "2018_6056" = "plain",
+                                    "2019_2495" = "plain",
+                                    "2019_5022" = "plain",
+                                    "2019_5754" = "bold",
+                                    "2020_1667" = "plain")
 
 # IMC color code
 

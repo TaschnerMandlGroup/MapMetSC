@@ -1,0 +1,135 @@
+---
+title: "Distribution of tumor marker expression for sample 19-5754 and 22-01713"
+output: html_document
+date: '2024-04-23'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(ggridges)
+```
+
+## Load data
+
+```{r read-data}
+
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+
+spe <- readRDS(file.path(path,"results/Manuscript/spe_clustered.rds"))
+```
+
+## Boxplots
+
+```{r subset-data}
+sample <- "22-01713"
+tumor_markers <- c("CD44_In115_mean", "PRPH_Nd144_mean", "CD24_Eu151_mean", "GD2_Gd155_mean", "CXCR4_Tb159_mean", "CHGA_Dy164_mean", "S100B_Dy161_mean", "SOX10_Dy162_mean", "GATA3_Er168_mean", "Ki-67_Tm169_mean", "CD56_Er170_mean", "ELAVL4_Yb174_mean", "Vimentin_Pt196_mean")
+
+mat <- assay(spe, "exprs")[rownames(spe)%in%tumor_markers,spe$fm_id==sample & spe$metacluster=="tumor"]
+
+if (ncol(mat)>200){
+set.seed(123) 
+rand_cells <- sample(seq_len(ncol(mat)), 200)
+mat <- mat[,rand_cells]
+}
+
+df <- as.data.frame(mat)
+df$Marker = row.names(df)
+
+df_long <- pivot_longer(df, 
+                        cols = -Marker, # Exclude Marker column from reshaping
+                        names_to = "Cell", 
+                        values_to = "Expression")
+
+```
+
+```{r boxplot}
+
+ggplot(df_long, aes(x = Marker, y = Expression, fill = Marker)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7) +  # Draw boxplots, hide outliers in the boxplot itself
+  geom_jitter(width = 0.25, height=0.05, size = 0.5, alpha = 0.4, color = "black") +  # Add jitter to show individual data points
+  labs(x = "Marker", y = "Expression Level", title=sample) +  # Add labels
+  theme_minimal() +  # Use a minimal theme
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),  # Rotate x-axis labels for better readability
+        legend.position = "none")  # Hide the legend if not needed
+```
+## Ridge plots
+
+```{r subset-data-ridgeplot}
+sample <- c("19-5754")
+tumor_markers <- c("CD44_In115_mean", "PRPH_Nd144_mean", "CD24_Eu151_mean", "GD2_Gd155_mean", "CXCR4_Tb159_mean", "CHGA_Dy164_mean", "S100B_Dy161_mean", "SOX10_Dy162_mean", "GATA3_Er168_mean", "Ki-67_Tm169_mean", "CD56_Er170_mean", "ELAVL4_Yb174_mean", "Vimentin_Pt196_mean")
+
+mat <- assay(spe, "exprs")[rownames(spe)%in%tumor_markers,spe$fm_id%in%sample & spe$metacluster=="tumor"]
+df <- as.data.frame(mat)
+df$Marker = row.names(df)
+
+df_long <- pivot_longer(df, 
+                        cols = -Marker, # Exclude Marker column from reshaping
+                        names_to = "Cell", 
+                        values_to = "Expression")
+```
+
+```{r ridge-plot, fig.height=13, fig.width=7}
+# Generate the ridge plot
+ggplot(df_long, aes(x = Expression, y = Marker, fill = Marker)) +
+  geom_density_ridges(
+    alpha = 0.7,  # Adjust transparency as needed
+    scale = 0.9   # Adjust the overlap of ridges
+  ) +
+  labs(
+    title = sample,
+    x = "Expression Level",
+    y = "Marker",
+  ) +
+  theme_ridges() +  # A specialized theme for ridge plots from ggridges
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "none"  # Hide the legend if colors represent markers directly
+  )
+```
+## Combined ridge plots
+
+```{r subset-data-ridgeplot2}
+sample <- c("19-5754", "22-01713")
+tumor_markers <- c("CD44_In115_mean", "PRPH_Nd144_mean", "CD24_Eu151_mean", "GD2_Gd155_mean", "CXCR4_Tb159_mean", "CHGA_Dy164_mean", "S100B_Dy161_mean", "SOX10_Dy162_mean", "GATA3_Er168_mean", "Ki-67_Tm169_mean", "CD56_Er170_mean", "ELAVL4_Yb174_mean", "Vimentin_Pt196_mean")
+
+mat <- assay(spe, "exprs")[rownames(spe)%in%tumor_markers,spe$fm_id%in%sample & spe$metacluster=="tumor"]
+df <- as.data.frame(mat)
+df$Marker = row.names(df)
+
+df_long <- pivot_longer(df, 
+                        cols = -Marker, # Exclude Marker column from reshaping
+                        names_to = "Cell", 
+                        values_to = "Expression")
+
+pattern <- "^.*?_.*?_(\\d{2}-\\d{4,5})_.*$"
+df_long$Sample <- sub(pattern, "\\1", df_long$Cell)
+```
+
+```{r ridgeplot-sample, fig.height=13, fig.width=13}
+
+ggplot(df_long, aes(x = Expression, y = Marker, fill = Sample)) +
+  geom_density_ridges_gradient(
+    scale = 1,  # Adjust scale to control the overlap of the ridges
+    rel_min_height = 0.01,  # Minimum height of ridges to avoid very thin lines
+    gradient_lwd = 0.75,  # Line width for gradients
+    aes(height = ..density..)  # Map the height to density
+  ) +
+  #scale_fill_manual(values = c("22-01713" = "blue", "19-5754" = "red")) +  # Manual color assignment
+  facet_wrap(~Sample, scales = "fixed") +  # Create facets for each sample
+  labs(
+    title = "19-5754 (DE) and 22-01713 (REL)",
+    x = "Expression Level",
+    y = "Marker"
+  ) +
+  theme_ridges(grid = TRUE) +  # Enable grid to show density scales
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "none"  # Typically not needed as the facets denote samples
+  )
+```
+
+

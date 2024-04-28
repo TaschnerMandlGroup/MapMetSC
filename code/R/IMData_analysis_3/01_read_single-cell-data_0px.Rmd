@@ -59,15 +59,17 @@ The `read_steinbock` function provided by `imcRtools` can now be used to read in
 `?read_steinbock`.
 
 ```{r read-steinbock}
-path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/PT_neighbors"
 
-spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'), intensities_folder = "intensities-0px-ref",regionprops_folder = "refined_regionprops", graphs_folder=NULL) 
+spe <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'), intensities_folder = "intensities-0px-ref",regionprops_folder = "refined_regionprops", graphs_folder="neighbors") 
 
 #Rename third IF channel (CD45 for PT, CD56 for BM)
 rownames(spe)[44] <- "IF3_CD45/56_mean"
 rownames(spe)[88] <- "IF3_CD45/56_mean-80"
 
 spe
+
+colPair(spe, "neighborhood")
 ```
 
 By default, single-cell data is read in as `SpatialExperiment` object. 

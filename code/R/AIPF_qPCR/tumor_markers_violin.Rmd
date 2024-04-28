@@ -22,6 +22,7 @@ spe <- readRDS(file.path(path,"results/Manuscript/spe_clustered.rds"))
 
 ## Boxplots
 
+### One sample 
 ```{r subset-data}
 sample <- "22-01713"
 tumor_markers <- c("CD44_In115_mean", "PRPH_Nd144_mean", "CD24_Eu151_mean", "GD2_Gd155_mean", "CXCR4_Tb159_mean", "CHGA_Dy164_mean", "S100B_Dy161_mean", "SOX10_Dy162_mean", "GATA3_Er168_mean", "Ki-67_Tm169_mean", "CD56_Er170_mean", "ELAVL4_Yb174_mean", "Vimentin_Pt196_mean")
@@ -54,6 +55,59 @@ ggplot(df_long, aes(x = Marker, y = Expression, fill = Marker)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1),  # Rotate x-axis labels for better readability
         legend.position = "none")  # Hide the legend if not needed
 ```
+
+### Multiple samples
+
+```{r prepare-data}
+prep_data <- function(sample){
+  tumor_markers <- c("CD44_In115_mean", "PRPH_Nd144_mean", "CD24_Eu151_mean", "GD2_Gd155_mean", "CXCR4_Tb159_mean", "CHGA_Dy164_mean", "S100B_Dy161_mean", "SOX10_Dy162_mean", "GATA3_Er168_mean",  "Ki-67_Tm169_mean", "CD56_Er170_mean", "ELAVL4_Yb174_mean", "Vimentin_Pt196_mean")
+  mat <- assay(spe, "exprs")[rownames(spe)%in%tumor_markers,spe$fm_id%in%sample & spe$metacluster=="tumor"]
+  
+  if (ncol(mat)>200){
+  set.seed(123) 
+  rand_cells <- sample(seq_len(ncol(mat)), 200)
+  mat <- mat[,rand_cells]
+  }
+  
+  df <- as.data.frame(mat)
+  df$Marker = row.names(df)
+  df_long <- pivot_longer(df, 
+                          cols = -Marker,
+                          names_to = "Cell",
+                          values_to = "Expression")
+  df_long$Sample <- sample  # Add a column to identify the sample
+  return(df_long)
+}
+
+combined_df <- bind_rows(prep_data("19-5754"),prep_data("22-01713"))
+```
+
+```{r boxplot-dodge}
+setEPS()
+postscript(file.path(path, "results/AIPF_qPCR/20240428_boxplot_dodge.eps"), height=4, width=8)
+ggplot(combined_df, aes(x = Marker, y = Expression, fill = Sample)) +
+    geom_boxplot(position = position_dodge(width = 0.8), alpha = 0.75, outlier.size = 0.3, outlier.colour = "black") +  # Dodging boxplots
+    geom_jitter(position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8), alpha = 0.4, color = "black", size=0.3) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Expression Levels by Marker", y = "Expression", x = "Marker")
+```
+
+
+```{r boxplot-facet, fig.width=12, fig.height=8}
+
+setEPS()
+postscript(file.path(path, "results/AIPF_qPCR/20240428_boxplot_facet.eps"), height=5, width=9)
+ggplot(combined_df, aes(x = Marker, y = Expression, fill = Marker)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.7) +
+    geom_jitter(width = 0.2, alpha=0.4, color = "black", size = 0.3) +  # Add jitter with smaller, aligned dots
+    facet_wrap(~Sample, scales = "fixed") +
+    scale_fill_brewer(palette = "Set3") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "bottom") +
+    labs(title = "Expression Levels by Marker", y = "Expression", x = "Marker")
+dev.off()
+```
+
 ## Ridge plots
 
 ```{r subset-data-ridgeplot}

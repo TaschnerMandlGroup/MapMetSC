@@ -1,6 +1,31 @@
+#!/usr/bin/env Rscript
+
+# load R packages
+
+library("Seurat")
+library("SingleCellExperiment")
+library("tidyverse")
+library("ComplexHeatmap")
+library("stringr")
+library("tidyverse")
+library("CellChat")
+library("monocle3")
+library("SpatialExperiment")
+library("SingleR")
+library("magrittr")
+library("RColorBrewer")
+library("DElegate")
+library("dplyr")
+library("ggalluvial")
+library("NMF")
+library("clusterProfiler")
+library("org.Hs.eg.db")
+library("DOSE")
+library("meshes")
+#library("ReactomePA")
+
 
 # scRNA-seq color code
-
 
 PATIENT_GROUPS = c("I" = "Control",
                    "II" = "MYCNamp",

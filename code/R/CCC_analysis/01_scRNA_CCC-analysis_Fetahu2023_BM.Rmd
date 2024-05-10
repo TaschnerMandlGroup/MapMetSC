@@ -30,7 +30,7 @@ library(parallel)
 future::plan(strategy = 'future::multicore', workers = 12)
 options(future.globals.maxSize = 8 * 10^9)
 
-source("/home/sara_wz/MapMet_project/MapMetSC/code/R/CCC_analysis/MapMet_color_code.R")
+source("/home/sara_wz/MapMet_project/MapMetSC/code/R/CCC_analysis/00_MapMet_color_code.R")
 ```
 
 ## __Project description__ 
@@ -110,7 +110,7 @@ BiocManager::install("SpatialExperiment",force = TRUE)
 library("Seurat")
 library("SingleCellExperiment")
 library("tidyverse")
-library("OmnipathR")
+#library("OmnipathR")
 library("ComplexHeatmap")
 library("stringr")
 library("tidyverse")

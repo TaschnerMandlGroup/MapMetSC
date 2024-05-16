@@ -983,7 +983,7 @@ We will now visualize the clusters in a few samples to see if they make sense.
 ```{r visualize-clusters-in-image, message=FALSE, fig.width=15}
 library(cytomapper)
 
-tissue <- "BM"
+tissue <- "TU"
 
 #files <- list.files(file.path(path, "results/in_house/colored_masks/masks_temp", tissue))
 files <- list.files(file.path(path, "masks_temp", tissue))
@@ -1005,9 +1005,9 @@ for(i in 1: length(files)){
             object = spe,
             cell_id = "ObjectNumber", img_id = "sample_id",
             colour_by = "celltype",
-            colour = list(celltype = metadata(spe)$color_vectors$col_celltype),
+            colour = list(celltype = metadata(spe)$color_vectors$col_celltype_2),
             display = "single",
-            save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_m_", files[i], "f"))),
+            save_plot = list(filename = file.path(path, "tmp", tissue, paste0("yellow_", files[i], "f"))),
             #save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
             legend = NULL)
 

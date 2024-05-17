@@ -264,7 +264,7 @@ Next, we can observe per cell type the fraction of CN that they are distributed
 across.
 
 ```{r, fig.width=15, fig.height=6}
-for_plot <- prop.table(table(as.character(spe$cn_celltypes), spe$celltype), margin = 2)
+for_plot <- prop.table(table(as.character(spe$cn_celltypes), spe$celltype_2), margin = 2)
 
 pheatmap(for_plot, 
          color = viridis(100), display_numbers = TRUE, 
@@ -274,7 +274,7 @@ pheatmap(for_plot,
 Similarly, we can visualize the fraction of each CN made up of each cell type.
 
 ```{r, fig.width=15, fig.height=6}
-for_plot <- prop.table(table(as.character(spe$cn_celltypes), spe$metacluster), margin = 1)
+for_plot <- prop.table(table(as.character(spe$cn_celltypes), spe$celltype_2), margin = 1)
 
 pheatmap(for_plot, 
          color = viridis(100), display_numbers = TRUE, 
@@ -296,7 +296,7 @@ using the `regionMap` function of the `lisaClust` package.
 ```{r, fig.height=10, fig.width=5}
 library(lisaClust)
 regionMap(spe, 
-          cellType = "celltype_2",
+          cellType = "celltype",
           region = "cn_celltypes")
 ```
 
@@ -613,7 +613,7 @@ library(ggplot2)
 spe <- patchDetection(spe, 
                       patch_cells = spe$metacluster == "tumor",
                       img_id = "sample_id",
-                      min_patch_size=10,
+                      min_patch_size=20,
                       expand_by=1,
                       colPairName = "neighborhood")
 
@@ -625,10 +625,59 @@ plotSpatial(spe,
     #scale_color_manual(values = rev(colors()))
 ```
 
+We can now plot the proportion of celltypes within these patches.
+```{r immune-infiltration}
+# overall
+spe_red <- spe[, spe$metacluster=="T cell" | spe$metacluster=="B cell" | spe$metacluster=="granulocyte" | spe$metacluster=="MO/DC/NK"]
+counts <- table(spe_red$metacluster)
+plot_colors <- metadata(spe)$color_vectors$col_metacluster[names(counts)]
+
+pie(counts, 
+    col=plot_colors,
+    labels = paste(names(counts), "\n", counts))
+
+# within patches
+spe_red <- spe[, !is.na(spe$patch_id) & (spe$metacluster=="T cell" | spe$metacluster=="B cell" | spe$metacluster=="granulocyte" | spe$metacluster=="MO/DC/NK")]
+counts <- table(spe_red$metacluster)
+plot_colors <- metadata(spe)$color_vectors$col_metacluster[names(counts)]
+
+pie(counts, 
+    col=plot_colors,
+    labels = paste(names(counts), "\n", counts))
+```
+
+We can see that most of the infiltrating immune cells are T cells. Let's see which T cells those are.
+
+```{r immune-infiltration2}
+spe_red <- spe[, !is.na(spe$patch_id) & spe$metacluster=="T cell"]
+counts <- table(spe_red$celltype)
+plot_colors <- metadata(spe)$color_vectors$col_celltype[names(counts)]
+
+pie(counts, 
+    col=plot_colors)
+```
+Let's compare progress versus no progress.
+
+```{r immune-infiltration2}
+spe_red <- spe[, !is.na(spe$patch_id) & spe$metacluster=="T cell" & spe$progression==0]
+counts <- table(spe_red$celltype)
+plot_colors <- metadata(spe)$color_vectors$col_celltype[names(counts)]
+
+pie(counts, 
+    col=plot_colors)
+
+spe_red <- spe[, !is.na(spe$patch_id) & spe$metacluster=="T cell" & spe$progression==1]
+counts <- table(spe_red$celltype)
+plot_colors <- metadata(spe)$color_vectors$col_celltype[names(counts)]
+
+pie(counts, 
+    col=plot_colors)
+```
+
 We can now calculate the fraction of T cells within each tumor patch to roughly
 estimate T cell infiltration.
 
-```{r patchDetection-2, fig.width=20, fig.height=10, message=FALSE}
+```{r patchDetection-2, fig.width=20, fig.height=8, message=FALSE}
 library(tidyverse)
 colData(spe) %>% as_tibble() %>%
     group_by(patch_id, sample) %>%
@@ -643,53 +692,66 @@ colData(spe) %>% as_tibble() %>%
 ```
 
 Now we want to correlate T cell infiltration with progression.
-```{r}
+```{r, fig.width=16, fig.height=15}
 library("ggpubr")
 library(gtools)
 
-variable <- "MYCN_amp"
+variable <- "progression"
+plot_list <- list()
+celltypes <- unique(spe[, spe$metacluster=="T cell" | spe$metacluster=="B cell" | spe$metacluster=="granulocyte" | spe$metacluster=="MO/DC/NK"]$celltype)
+#spe <- spe[, spe$MYCN_amp == 0 | spe$MYCN_amp == 1]
 
-Tcell_freq_per_patch <- colData(spe) %>% as_tibble() %>%
-    group_by(patch_id, sample) %>%
-    summarize(Tcell_count = sum(metacluster == "T cell"),
-              patch_size = n(),
-              Tcell_freq = Tcell_count / patch_size) %>%
-    filter(!is.na(patch_id))
+for(i in 1:length(unique(celltypes))){
   
-mean_tcell_freq_per_sample <- Tcell_freq_per_patch %>%
-  group_by(sample) %>%
-  summarise(mean_Tcell_freq = mean(Tcell_freq, na.rm = TRUE))%>%
-  arrange(desc(mean_Tcell_freq))
-
-df <- data.frame(
-  sample = spe$sample,
-  condition = colData(spe)[,variable]
-)
-
-progression_per_sample <- df %>%
-  group_by(sample) %>%
-  summarise(condition = first(condition))
-
-combined_data <- mean_tcell_freq_per_sample %>%
-  left_join(progression_per_sample, by = "sample")
-
-stats_df <- compare_means(mean_Tcell_freq ~ condition,  
-                          method = "wilcox.test",  
-                          data = combined_data) 
+  c <- celltypes[i]
   
-stats_df$p_adj_signif <- stars.pval(stats_df$p.adj)
-stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
-stats_df$p_long <- paste0(stats_df$p.adj, " (", stats_df$p_adj_signif, ")")
+  cell_freq_per_patch <- colData(spe) %>% as_tibble() %>%
+      group_by(patch_id, sample) %>%
+      summarize(cell_count = sum(celltype == c),
+                patch_size = n(),
+                cell_freq = cell_count / patch_size) %>%
+      filter(!is.na(patch_id)) 
+    
+  mean_cell_freq_per_sample <- cell_freq_per_patch %>%
+    group_by(sample) %>%
+    summarise(mean_cell_freq = mean(cell_freq, na.rm = TRUE))%>%
+    arrange(desc(mean_cell_freq))
+  
+  df <- data.frame(
+    sample = spe$sample,
+    condition = colData(spe)[,variable]
+  )
+  
+  progression_per_sample <- df %>%
+    group_by(sample) %>%
+    summarise(condition = first(condition))
+  
+  combined_data <- mean_cell_freq_per_sample %>%
+    left_join(progression_per_sample, by = "sample")
+  
+  stats_df <- compare_means(mean_cell_freq ~ condition,  
+                            method = "wilcox.test",  
+                            data = combined_data) 
+    
+  stats_df$p_adj_signif <- stars.pval(stats_df$p.adj)
+  stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
+  stats_df$p_long <- paste0(stats_df$p.adj, " (", stats_df$p_adj_signif, ")")
+  
+  color <- unname(metadata(spe)$color_vectors$col_celltype[as.character(c)])
+  
+  plot_list[[c]] <- ggboxplot(combined_data, x = "condition", y = "mean_cell_freq",
+                  color = "condition", palette =c(color, color),
+                  add.params = list(size = 3),
+                  add = "jitter",
+                  title=c) + 
+                  stat_pvalue_manual(stats_df, label = "p_long", y.position = max(combined_data$mean_cell_freq), step.increase = 0.4,) +
+                  theme(aspect.ratio = 1.6, legend.position="none") +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+                  
+  
+}
 
-p <- ggboxplot(combined_data, x = "condition", y = "mean_Tcell_freq",
-                color = "condition", #palette =c("slategray1", "slategray"),
-                add.params = list(size = 3),
-                add = "jitter")+ 
-                stat_pvalue_manual(stats_df, label = "p_long", y.position = max(combined_data$mean_Tcell_freq), step.increase = 0.2,) +
-                theme(aspect.ratio = 1.5, legend.position="none") +
-                ggtitle(variable)
-
-p
+grid.arrange(grobs = plot_list, ncol = 6)
 ```
 
 
@@ -728,10 +790,124 @@ plotSpatial(spe,
     scale_color_gradient2(low = "dark blue", mid = "white", high = "dark red")
 ```
 
+Let's only plot these cells with a distance of 50 pixels from the tumor border to find an appropriate threshold.
+```{r, fig.height=40, fig.width=20}
+threshold <- 100
+
+spe$border <- "no_border"
+spe[, abs(spe$distToCells) <= threshold & spe$sample_id != "20221018_20220906_03-0170_TU_001"]$border <- "border"
+spe_red <- spe[, spe$border == "border"]
+
+
+plotSpatial(spe_red, 
+            node_color_by = "celltype", 
+            img_id = "sample_id", 
+            ncols=6,
+            node_size_fix = 0.5) +
+        scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) 
+```
+
+```{r}
+plotSpatial(spe[,spe$sample_id == "20220926_20220809_16-1927_TU_001"], 
+            node_color_by = "GD2_Gd155_mean", 
+            assay_type = "exprs",
+            img_id = "sample_id", 
+            draw_edges = TRUE, 
+            colPairName = "neighborhood", 
+            nodes_first = FALSE, 
+            node_size_by = "area", 
+            directed = FALSE,
+            edge_color_fix = "grey") + 
+    scale_size_continuous(range = c(0.1, 2)) +
+    ggtitle("GD2")
+
+plotSpatial(spe[,spe$sample_id == "20220926_20220809_16-1927_TU_001"], 
+            node_color_by = "patch_id", 
+            img_id = "sample_id", 
+            node_size_fix = 0.5) +
+    theme(legend.position = "none")
+
+plotSpatial(spe_red[,spe_red$sample_id == "20220926_20220809_16-1927_TU_001"], 
+            node_color_by = "celltype", 
+            img_id = "sample_id", 
+            ncols=6,
+            node_size_fix = 0.5) +
+        scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) 
+```
+
+Next, we plot the composition of cells at the tumor-stroma border in piecharts.
+
+```{r immune-infiltration2}
+
+counts <- table(spe[, spe$border != "border" & spe$metacluster=="MO/DC/NK"]$celltype)
+#counts <- counts[sort(names(counts))]
+plot_colors <- metadata(spe)$color_vectors$col_celltype[names(counts)]
+
+pie(counts, 
+    col=plot_colors,
+    clockwise=T)
+
+counts <- table(spe[, spe$border == "border" & spe$metacluster=="MO/DC/NK"]$celltype)
+#counts <- counts[sort(names(counts))]
+plot_colors <- metadata(spe)$color_vectors$col_celltype[names(counts)]
+
+pie(counts, 
+    col=plot_colors,
+    clockwise=T)
+```
+Let's compare the cell composition at and outside the border on the sample_level.
+
+```{r, fig.width=10, fig.height=10}
+library(tidyr)
+
+df <- as.data.frame(colData(spe)[spe$metacluster =="MO/DC/NK", c("sample", "celltype", "border")])
+
+df_summary <- df %>%
+  group_by(sample, celltype, border) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  ungroup() %>%
+  complete(sample, celltype, border, fill = list(count = 0)) %>%
+  group_by(sample, border) %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  mutate(proportion = if_else(total == 0, 0, count / total))
+
+#adjust the order
+df_summary$border <- factor(df_summary$border, levels = c("no_border", "border"))
+
+# Calculate p-values and log2FC for each cell type
+small_constant <- 1e-10
+
+results <- df_summary %>%
+  group_by(celltype) %>%
+  summarise(
+    mean_border = mean(proportion[border == "border"], na.rm = TRUE),
+    mean_no_border = mean(proportion[border == "no_border"], na.rm = TRUE),
+    log2_fc = log2((mean_border + small_constant) / (mean_no_border + small_constant)),
+    test_results = list(compare_means(proportion ~ border, data = cur_data(), paired = TRUE, method = "wilcox.test", p.adjust.method = "BH")),
+    .groups = 'drop'
+  ) %>%
+  unnest(cols = c(test_results))
+
+plot <- ggplot(df_summary, aes(x = border, y = proportion)) +
+  geom_boxplot(aes(color = celltype), fill = NA, position = position_dodge(0.9), alpha = 0.75) +
+  geom_jitter(aes(color = celltype), position = position_jitterdodge(jitter.width = 0.35, dodge.width = 0.9), size = 2, alpha = 0.5) +
+  facet_wrap(~ celltype, scales = "free_y") +
+  scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) +
+  labs(title = "Comparison of Cell Type Proportions at Border vs No Border",
+       x = "Border Status", y = "Proportion of Cell Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot + geom_text(data = results, aes(x = 1.5, y = max(df_summary$proportion) * 0.95, label = sprintf("log2FC: %.2f (p=%.3f)", log2_fc, p.adj)), 
+                 vjust = 0, hjust = 0.5, color = "black", inherit.aes = FALSE)
+
+```
+
 Finally, we can  observe the minimum distances to tumor patches in a cell type
 specific manner.
 
-```{r celltype-distance, fig.height=15,fig.width=10, message=FALSE}
+```{r celltype-distance, fig.height=15,fig.width=15, message=FALSE}
 library(ggridges)
 
 ggplot(as.data.frame(colData(spe))) + 
@@ -762,7 +938,7 @@ dataset.
 ```{r testInteractions-1, message=FALSE}
 library(scales)
 library(BiocParallel)
-out <- testInteractions(spe, 
+out <- testInteractions(spe[,spe$border=="border"], 
                         group_by = "sample_id",
                         label = "celltype", 
                         colPairName = "neighborhood")

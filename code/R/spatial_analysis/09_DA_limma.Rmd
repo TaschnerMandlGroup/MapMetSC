@@ -25,18 +25,7 @@ library(dplyr)
 library(tidyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-spe <- readRDS(file.path(path,"results/Manuscript/spe_clustered.rds"))
-
-clusternames_ordered <- read.csv(file.path(path, "results/Manuscript/celltypes_ordered_2.csv"), sep=";", colClasses = c("order" = "character"))
-codes <- setNames(paste0(clusternames_ordered$order, "_", clusternames_ordered$celltype), clusternames_ordered$celltype)
-spe$celltype_ordered <- recode(spe$celltype, !!!codes)
-
-metadata(spe)$color_vectors$col_celltype_ordered <- metadata(spe)$color_vectors$col_celltype
-names(metadata(spe)$color_vectors$col_celltype_ordered) <- recode(names(metadata(spe)$color_vectors$col_celltype), !!!codes)
-
-spe$metacluster_2 <- spe$metacluster
-spe[,spe$metacluster_2%in%c("B cell", "granulocyte", "MO/DC/NK", "T cell")]$metacluster_2 <- "immune"
-spe[,spe$metacluster_2!="immune"]$metacluster_2 <- "other"
+spe <- readRDS(file.path(path,"results/spatial_analysis/spe_CNs.rds"))
 ```
 
 ## Subset dataset
@@ -46,12 +35,12 @@ We will first read in the previously generated `SpatialExperiment` object and tr
 ```{r read-data-pheno, message=FALSE}
 
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$celltype != "other" & spe$tissue=="PT" & spe$timepoint=="DE" &  (spe$MYCN_amp==0 | spe$MYCN_amp==1) & spe$metacluster=="tumor"
+keep_cols <- spe$celltype != "other" & spe$timepoint=="DE" & spe$metacluster == "tumor"
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
 sce$control <- factor(spe[keep_rows, keep_cols]$control)
-sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype_ordered)
+sce$cluster_id <- factor(spe[keep_rows, keep_cols]$celltype)
 sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 sce$metacluster <- factor(spe[keep_rows, keep_cols]$metacluster)
@@ -72,12 +61,12 @@ sce$progress <- as.factor(progress)
 
 sce$timepoint <- spe[keep_rows, keep_cols]$timepoint
 sce$timepoint <- factor(sce$timepoint)
-sce$condition <- sce$mna 
+sce$condition <- sce$border 
 
 sce$sample_id <- factor(paste0(sce$progress, "_", sce$mna, "_", spe[keep_rows, keep_cols]$study_id, "_", spe[keep_rows, keep_cols]$fm_id, "_", sce$tissue))
 
 # Add celltype information to metadata
-metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
+metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype))
 
 # Add metadata
 metadata(sce)$experiment_info <- as.data.frame(colData(sce)) %>% group_by(sample_id,patient, mna, condition, progress) %>% 
@@ -109,16 +98,17 @@ Differential analysis of cell population abundance compares the proportions of c
 For each sample, we plot its PBMC cell type composition represented with colored bars, where the size of a given stripe reflects the proportion of the corresponding cell type in a given sample (Figure \@ref(fig:diff-freqs-plot-props-barplot)).
 
 ```{r diff-freqs-plot-props-barplot, fig.cap = "Relative abundance of the 8 PBMC populations in each sample (x-axis), in the PBMC dataset, represented with a barplot. The 8 cell populations are a result of manual merging of the 20 FlowSOM metaclusters", fig.width=20, fig.height=10}
-
+library(RColorBrewer)
 set.seed(20231103)
 p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=T, 
-                    k_pal=metadata(spe)$color_vectors$col_celltype_ordered, 
+                    #k_pal=brewer.pal(6, "Set3"), 
+                    k_pal = metadata(spe)$color_vectors$col_metacluster,
                     linkage="ward.D", distance="manhattan") 
 #Best linkage: ward.D
 #Best distance: manhattan
 
 setEPS()
-postscript(file.path(path, ".eps"), height=12, width=20)
+postscript(file.path(path, "results/spatial_analysis/DA_analysis/barplot_PT_DE_samples_MO-inf_NoProgvsProg.eps"), height=12, width=20)
 p
 dev.off()
 ```
@@ -221,7 +211,8 @@ for(i in 1:length(unique(p$data$cluster_id))){
   stats_df$p_adj_signif[stats_df$p_adj_signif==" "] <- "ns"
   stats_df$p_fc <- paste0(stats_df$logFC, " (", stats_df$p_adj, ")", " (", stats_df$p_adj_signif, ")")
   
-  color <- unname(metadata(spe)$color_vectors$col_celltype_ordered[as.character(cluster_name)])
+  color <- brewer.pal(6, "Set3")[cluster_name]
+  #color <- unname(metadata(spe)$color_vectors$col_metacluster[as.character(cluster_name)])
   
   plot_list_fc[[i]] <- ggboxplot(proportions, x = "condition", y = "Freq", order=c("nMNA", "MNA"),
               color = "condition", palette =c(color, color), 
@@ -241,7 +232,7 @@ for(i in 1:length(unique(p$data$cluster_id))){
 }
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/3_Figure/R/PT_1ploss_ME_metacluster_voom.eps"), height=26, width=20)
+postscript(file.path(path, "results/spatial_analysis/DA_analysis/PT_Prog_metacluster-inf_voom.eps"), height=26, width=20)
 grid.arrange(grobs = plot_list_fc, ncol = 6)
    dev.off()
 ```

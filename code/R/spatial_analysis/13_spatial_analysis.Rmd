@@ -938,7 +938,7 @@ dataset.
 ```{r testInteractions-1, message=FALSE}
 library(scales)
 library(BiocParallel)
-out <- testInteractions(spe[,spe$border=="border"], 
+out <- testInteractions(spe, 
                         group_by = "sample_id",
                         label = "celltype", 
                         colPairName = "neighborhood")
@@ -957,7 +957,7 @@ avoidance was detected (`sigval = 0`).
 These results can be visualized by computing the sum of the `sigval` entries
 across all images:
 
-```{r testInteractions-2, message=FALSE}
+```{r testInteractions-2, fig.width=10, fig.height=10, message=FALSE}
 library(dplyr)
 out %>% as_tibble() %>%
     group_by(from_label, to_label) %>%
@@ -966,6 +966,47 @@ out %>% as_tibble() %>%
         geom_tile(aes(from_label, to_label, fill = sum_sigval)) +
         scale_fill_gradient2(low = muted("blue"), mid = "white", high = muted("red")) +
         theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+Let's plot a heatmap with clustered rows and columns:
+```{r, fig.width=15, fig.height=15}
+library(pheatmap)
+library(tidyverse)
+data <- out %>% as_tibble() %>%
+    group_by(from_label, to_label) %>%
+    summarize(sum_sigval = sum(sigval, na.rm = TRUE))
+
+# Reshaping the data to a wide format suitable for heatmap
+data_wide <- data %>%
+  pivot_wider(
+    names_from = to_label,
+    values_from = sum_sigval,
+    values_fill = list(sum_sigval = 0)  # Fill missing combinations with 0 if any
+  )
+
+data_wide <- tibble::column_to_rownames(data_wide, var = "from_label")
+
+# Define maximum range value for symmetric color scale
+max_range <- max(abs(10), abs(10))  # This would be 30 in your case
+
+# Define breaks, making sure 0 is exactly in the middle
+breaks <- seq(-max_range, max_range, length.out = 101)  # From -30 to 30
+
+# Create a color palette from blue (negative) to white (zero) to red (positive)
+colors <- colorRampPalette(c("blue", "white", "red"))(length(breaks) - 1)
+
+# Plotting the heatmap
+pheatmap(data_wide,
+         color = colors,
+         breaks = breaks,
+         #clustering_distance_rows = "euclidean",
+         #clustering_distance_cols = "euclidean",
+         #clustering_method = "complete",
+         cellwidth = 20,
+         cellheight = 20,
+         fontsize = 10,
+         display_numbers = TRUE  # Optionally display the values in cells
+)
+
 ```
 
 In the plot above the red tiles indicate cell type pairs that were detected to 
@@ -1010,7 +1051,7 @@ as strong when considering CD4$^+$ T cells sitting around myeloid cells.
 Finally, we save the updated `SpatialExperiment` object.
 
 ```{r spatial-save-object}
-saveRDS(spe, "data/spe.rds")
+saveRDS(spe, file.path(path,"results/spatial_analysis/spe_CNs_border.rds"))
 ```
 
 ## Session Info

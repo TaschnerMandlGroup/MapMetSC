@@ -986,7 +986,8 @@ data_wide <- data %>%
 data_wide <- tibble::column_to_rownames(data_wide, var = "from_label")
 
 # Define maximum range value for symmetric color scale
-max_range <- max(abs(10), abs(10))  # This would be 30 in your case
+#max_range <- max(abs(max(data_wide)), abs(min(data_wide)))  # This would be 30 in your case
+max_range <- max(abs(50), abs(50))
 
 # Define breaks, making sure 0 is exactly in the middle
 breaks <- seq(-max_range, max_range, length.out = 101)  # From -30 to 30

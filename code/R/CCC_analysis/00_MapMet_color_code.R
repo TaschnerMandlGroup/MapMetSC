@@ -22,7 +22,6 @@ library("clusterProfiler")
 library("org.Hs.eg.db")
 library("DOSE")
 library("meshes")
-#library("ReactomePA")
 
 
 # scRNA-seq color code
@@ -31,6 +30,16 @@ PATIENT_GROUPS = c("I" = "Control",
                    "II" = "MYCNamp",
                    "III" = "ATRXmut",
                    "IV" = "MYCNwt/ATRXwt")
+
+
+COLOR_CODE_RNA_v3 = c("NB (8)" = "#e31a1c",
+                      "T (5)" = "#1f78b4",   
+                      "T (6)" = "#1f78b4", 
+                      "T (9)" = "#39BEB1",   
+                      "M (1)" = "darkorange4", 
+                      "M (2)" = "#ff7f00",    
+                      "M (10)" = "#ff7f00",    
+                      "M (15)"= "#ff7f00")
 
 COLOR_CODE_RNA_v2 = c("NB (8)" = "#e31a1c",
                    "T (5)" = "#1f78b4",   

@@ -1,0 +1,287 @@
+---
+title: "CCC analysis: MYCNA vs. non-MYCNA"
+author: "Sara Wernig-Zorc"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+    collapsed: false
+    code_folding: hide
+    highlight: pygments
+    theme: spacelab
+    df_print: paged
+params:
+  input: "/home/data/MapMet/"
+  out: "/home/out/MapMet/"
+  GO_db: "/home/sara_wz/annotation/GSEA_GeneSetEnrichments"
+  markers: "/home/sara_wz/annotation/MES_ADRN/"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      tidy = TRUE, 
+                      error = FALSE, 
+                      messages = FALSE,
+                      warning = FALSE)
+
+library(parallel)
+future::plan(strategy = 'future::multicore', workers = 12)
+options(future.globals.maxSize = 8 * 10^9)
+
+source("/home/sara_wz/MapMet_project/MapMetSC/code/R/CCC_analysis/00_MapMet_color_code.R")
+
+print(params)
+```
+
+```{r load Fetahu2023 dataset}
+metadata <- readRDS(paste0(params$input,"/fetahu.scRNA.2023/data/metadata.rds"))
+scrna_data <- readRDS(paste0(params$input,"/fetahu.scRNA.2023/data/rna_decontaminated.rds"))
+
+rna <- as.Seurat(scrna_data, data=NULL)
+rna <- RenameAssays(object = rna, originalexp = 'RNA')
+
+rna@active.ident <- setNames(pull(metadata[match(metadata$cell,colnames(rna)),"cellont_cluster"], "cellont_cluster"),pull(metadata[match(metadata$cell,colnames(rna)), "cell"], "cell"))
+DefaultAssay(rna) <- "RNA"
+
+true_label <- rna@active.ident
+
+rna$original_celltype <- rna@active.ident
+
+rna@meta.data
+```
+
+
+# MYCN amplified vs. non-MYCN amplified
+
+```{r define comparison groups}
+# STEP 1
+Idents(rna) <- rna@meta.data$original_celltype
+
+# define which clusters to compare
+clusters_of_interest <- c("T (5)","T (6)", "T (9)", "M (1)", "M (2)", 
+                            "M (10)", "NB (8)") 
+# Clusters T (18) and M (15) were excluded due to low cell numbers (<100)
+
+rna <- subset(rna, idents = clusters_of_interest, invert = FALSE)
+
+# STEP 2
+Idents(rna) <- rna@meta.data$group
+
+MYCNA_patients <- "II"
+nonMYCNA_patients <- c("III","IV")
+control_patients <- "I"
+
+MYCNA <- subset(rna, idents = MYCNA_patients, invert = FALSE)
+nonMYCNA <- subset(rna, idents = nonMYCNA_patients, invert = FALSE)
+control <- subset(rna, idents = control_patients, invert = FALSE)
+
+MYCNA
+nonMYCNA
+control
+
+# STEP 3
+Idents(MYCNA) <- MYCNA@meta.data$original_celltype
+Idents(nonMYCNA) <- nonMYCNA@meta.data$original_celltype
+Idents(control) <- control@meta.data$original_celltype
+
+# STEP 4
+MYCNA$original_celltype = droplevels(MYCNA$original_celltype, 
+                                     exclude = setdiff(levels(MYCNA$original_celltype),
+                                                       unique(MYCNA$original_celltype)))
+
+nonMYCNA$original_celltype = droplevels(nonMYCNA$original_celltype, 
+                                        exclude = setdiff(levels(nonMYCNA$original_celltype),
+                                                          unique(nonMYCNA$original_celltype)))
+
+control$original_celltype = droplevels(control$original_celltype, 
+                                     exclude = setdiff(levels(control$original_celltype),
+                                                       unique(control$original_celltype)))
+
+```
+
+
+```{r sanity check}
+DimPlot(MYCNA, cols = COLOR_CODE_RNA_v3)
+DimPlot(nonMYCNA, cols = COLOR_CODE_RNA_v3)
+DimPlot(control, cols = COLOR_CODE_RNA_v3)
+```
+
+# __CCC analysis__
+
+To infer the cell state-specific communications, CellChat v2 identifies 
+over-expressed ligands or receptors in one cell group and then identifies 
+over-expressed ligand-receptor interactions if either ligand or receptor are 
+over-expressed.
+
+```{r ccc function}
+ccc.analysis <- function(seurat) {
+  print(seurat)
+  Idents(seurat) <- seurat@meta.data$original_celltype
+  # extract read count matrix
+  mat <- GetAssayData(seurat, assay = "RNA", slot = "data")
+  # create cell chat object
+  cellchat <- createCellChat(
+    mat, meta = seurat@meta.data,
+    group.by = "original_celltype",
+)
+  # define which database to use
+  cellchat@DB <- CellChatDB.human
+  # only keep genes in CellChatDB
+  cellchat <- subsetData(cellchat)
+  # find over expressed ligands/receptors
+  cellchat <- identifyOverExpressedGenes(cellchat)
+  # find over expressed interactions
+  cellchat <- identifyOverExpressedInteractions(cellchat)
+  # calculate communication probability between cell groups
+  cellchat <- computeCommunProb(cellchat, seed.use = 28)
+  # filter communications occurring with less than 100 cells in a cell group
+  cellchat <- filterCommunication(cellchat,min.cells = 100)
+  # calculate communication probability on the signaling pathway level
+  cellchat <- computeCommunProbPathway(cellchat)
+  # calculate aggregated communication network
+  cellchat <- aggregateNet(cellchat)
+  # determine network centrality pathways
+  cellchat <- netAnalysis_computeCentrality(cellchat)
+  # save analysis results
+  df_net_all <-
+  cellchat %>% 
+  subsetCommunication() %>% 
+  as_tibble() %>% 
+  group_by(interaction_name_2) %>% 
+  mutate(prob.norm = prob / max(prob)) %>% # Normalize the probabilities 0-1
+  ungroup() %>% 
+  mutate(
+    source = factor(source, clusters_of_interest),
+    target = factor(target, clusters_of_interest),
+    )
+  results[seurat] <- df_net_all
+  # print results
+  print(df_net_all)
+  # save results in Rds object
+  #cellchat %>% 
+  #saveRDS(paste0(params$out,"Rds/fetahu2023.cellchat",seurat,".Rds"))
+  #df_net_all %>% 
+  #saveRDS(paste0(params$out,"Rds/fetahu2023.signaling",seurat,".Rds"))
+  }
+```
+
+
+```{r Run CCC analysis}
+sample.list <- list(MYCNA, nonMYCNA, control)
+setNames(sample.list, c("MYCNA", "nonMYCNA", "control"))
+
+CCC_analysis <- lapply(sample.list, ccc.analysis)
+```
+
+```{r}
+CCC_analysis
+
+results[MYCNA] 
+```
+
+# ___Differential CCC analysis___
+
+MultiNicheNet analysis MYCNA vs. non-MYCNA
+
+```{r eval=FALSE, include=FALSE}
+install.packages("devtools")
+devtools::install_github("saeyslab/nichenetr")
+devtools::install_github("saeyslab/multinichenetr")
+```
+
+
+```{r}
+library(SingleCellExperiment)
+library(dplyr)
+library(ggplot2)
+library(nichenetr)
+library(multinichenetr)
+
+
+# 1. prepare db
+
+organism = "human"
+options(timeout = 120)
+
+if(organism == "human"){
+  lr_network_all = 
+    readRDS(url(
+      "https://zenodo.org/record/10229222/files/lr_network_human_allInfo_30112033.rds"
+      )) %>% 
+    mutate(
+      ligand = convert_alias_to_symbols(ligand, organism = organism), 
+      receptor = convert_alias_to_symbols(receptor, organism = organism))
+  lr_network_all = lr_network_all  %>% 
+    mutate(ligand = make.names(ligand), receptor = make.names(receptor)) 
+  lr_network = lr_network_all %>% 
+    distinct(ligand, receptor)
+  ligand_target_matrix = readRDS(url(
+    "https://zenodo.org/record/7074291/files/ligand_target_matrix_nsga2r_final.rds"
+    ))
+  colnames(ligand_target_matrix) = colnames(ligand_target_matrix) %>% 
+    convert_alias_to_symbols(organism = organism) %>% make.names()
+  rownames(ligand_target_matrix) = rownames(ligand_target_matrix) %>% 
+    convert_alias_to_symbols(organism = organism) %>% make.names()
+  lr_network = lr_network %>% filter(ligand %in% colnames(ligand_target_matrix))
+  ligand_target_matrix = ligand_target_matrix[, lr_network$ligand %>% unique()]
+  
+} else if(organism == "mouse"){
+  
+  lr_network_all = readRDS(url(
+    "https://zenodo.org/record/10229222/files/lr_network_mouse_allInfo_30112033.rds"
+    )) %>% 
+    mutate(
+      ligand = convert_alias_to_symbols(ligand, organism = organism), 
+      receptor = convert_alias_to_symbols(receptor, organism = organism))
+  
+  lr_network_all = lr_network_all  %>% 
+    mutate(ligand = make.names(ligand), receptor = make.names(receptor)) 
+  lr_network = lr_network_all %>% 
+    distinct(ligand, receptor)
+  
+  ligand_target_matrix = readRDS(url(
+    "https://zenodo.org/record/7074291/files/ligand_target_matrix_nsga2r_final_mouse.rds"
+    ))
+  
+  colnames(ligand_target_matrix) = colnames(ligand_target_matrix) %>% 
+    convert_alias_to_symbols(organism = organism) %>% make.names()
+  rownames(ligand_target_matrix) = rownames(ligand_target_matrix) %>% 
+    convert_alias_to_symbols(organism = organism) %>% make.names()
+  
+  lr_network = lr_network %>% filter(ligand %in% colnames(ligand_target_matrix))
+  ligand_target_matrix = ligand_target_matrix[, lr_network$ligand %>% unique()]
+}
+
+# 2.
+sce = Seurat::as.SingleCellExperiment(rna, assay = "RNA")
+
+# 3.
+sample_id = "sample"
+group_id = "group"
+celltype_id = "original_celltype"
+
+# 4. 
+covariates = NA
+batches = NA
+
+# 5.
+contrasts_oi = c("'II-(III+IV)/2'")
+
+# Note the format to indicate the contrasts! This formatting should be adhered to very strictly, and white spaces are not allowed! Check ?get_DE_info for explanation about how to define this well. The most important points are that: *each contrast is surrounded by single quotation marks *contrasts are separated by a comma without any white space *all contrasts together are surrounded by double quotation marks.
+
+# 6.
+contrast_tbl = tibble(contrast =  c("II-(III+IV)/2"), 
+                      group = c("II","III","IV"))
+
+# 7. Define the sender and receiver cell types of interest
+senders_oi = clusters_of_interest #SummarizedExperiment::colData(sce)[,celltype_id] %>% unique()
+receivers_oi = clusters_of_interest  #SummarizedExperiment::colData(sce)[,celltype_id] %>% unique()
+sce = sce[, SummarizedExperiment::colData(sce)[,celltype_id] %in% 
+            c(senders_oi, receivers_oi)
+          ]
+
+```
+
+

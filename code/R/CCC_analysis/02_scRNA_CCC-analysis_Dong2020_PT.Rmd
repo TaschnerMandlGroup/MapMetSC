@@ -52,7 +52,8 @@ PART I
 # __Input data__
 
 ```{r}
-dong2020 <- readRDS(file = paste0(params$input,"/Dong.scRNA.2020/data/tumor_data_dong.rds"))
+dong2020 <- readRDS(file = paste0(params$input,"/dong2020.2023/data/tumor_data_dong.rds"))
+dong2020@meta.data
 ```
 
 
@@ -69,26 +70,23 @@ gene.list <- IMC_markers$gene_name
 length(gene.list)
 gene.list
 
-# additionally excluding genes that are vastly different on the RNA levels
+# additionally excluding genes that are vastly different on the dong2020 levels
 # and are not predictive. These are CD274 and ST8SIA1/B4GALNT1.
 
-IMC_markers <- protein2gene %>% filter(used.for.clustering.RNA == "yes")
-gene.list.RNA <- IMC_markers$gene_name
+IMC_markers <- protein2gene %>% filter(used.for.clustering.dong2020 == "yes")
+gene.list.dong2020 <- IMC_markers$gene_name
 
-length(gene.list.RNA)
-gene.list.RNA
+length(gene.list.dong2020)
+gene.list.dong2020
 ```
 
 # __Clustering based on IMC markers__
 
-```{r heatmap: all cell types - heatmap}
+```{r heatmap - IMC markers}
 # Convert count data for the 31 markers to a matrix
-mat <- dong2020[["RNA"]]@data %>% as.matrix()
 
 ## scale the rows
 mat <- t(scale(t(mat)))
-
-cluster_anno <- dong2020@meta.data$cellont_abbr
 
 quantile(mat, c(0.1, 0.95))
 
@@ -97,7 +95,6 @@ col_fun = circlize::colorRamp2(c(-1, 0, 1, 1.5), c("purple", "white", "lightgree
 
 marker.expression <- 
   Heatmap(mat, name = "IMC markers gene expression",  
-        column_split = factor(cluster_anno),
         cluster_columns = TRUE,
         show_column_dend = TRUE,
         cluster_column_slices = TRUE,
@@ -142,42 +139,34 @@ dev.off()
 ```
 
 ```{r}
-# IMC markers
-# Remove GD2 "genes" and CD74 gene, as they are not informative and may
-# only make the clustering worse, not better
-gene.list.short <- gene.list[-6:-7]
-gene.list.short <- gene.list.short[-19]
+dong2020[["percent.mt"]] <- 
+  PercentageFeatureSet(object = dong2020, pattern = "^MT-")
 
-rna.IMC.clust <- rna
+DefaultAssay(dong2020) <- "dong2020"
 
-rna.IMC.clust[["percent.mt"]] <- 
-  PercentageFeatureSet(object = rna, pattern = "^MT-")
-
-DefaultAssay(rna.IMC.clust) <- "RNA"
-
-rna.IMC.clust <- rna.IMC.clust %>%
+dong2020 <- dong2020 %>%
     NormalizeData() %>%
     ScaleData() 
 
 # Calculate PCs using IMC markers
-rna.IMC.clust <- RunPCA(rna.IMC.clust, 
-                        seed.use = 28, 
-                        npcs = 50,
-                        features = gene.list.short)
-PCAPlot(object = rna.IMC.clust)
+dong2020 <- RunPCA(dong2020, 
+                   seed.use = 28, 
+                   npcs = 50,
+                   features = gene.list.dong2020)
+PCAPlot(object = dong2020)
 
-rna.IMC.clust <- FindNeighbors(rna.IMC.clust, 
-                               reduction = "pca", 
-                               dims = 1:10,
-                               k.param = 50,
-                               features = gene.list.short)
+dong2020 <- FindNeighbors(dong2020, 
+                          reduction = "pca", 
+                          dims = 1:10,
+                          k.param = 50,
+                          features = gene.list.dong2020)
 
-rna.IMC.clust <- FindClusters(rna.IMC.clust, 
-                              resolution = 0.3,
-                              random.seed = 28,
-                              group.singletons = TRUE) 
+dong2020 <- FindClusters(dong2020, 
+                         resolution = 0.3,
+                         random.seed = 28,
+                         group.singletons = FALSE) 
 
-rna.IMC.clust <- RunUMAP(rna.IMC.clust, 
+dong2020 <- RunUMAP(dong2020, 
                      reduction = "pca", 
                      dims = 1:10,
                      n.epochs = 500,
@@ -186,60 +175,22 @@ rna.IMC.clust <- RunUMAP(rna.IMC.clust,
                      seed.use = 28)
 
 # set cell type annotation to the new seurat clusters
-Idents(rna.IMC.clust) <- rna.IMC.clust@meta.data$seurat_clusters
+Idents(dong2020) <- dong2020@meta.data$seurat_clusters
 
 # Visualization
-p1 <- DimPlot(rna.IMC.clust, 
+p1 <- DimPlot(dong2020, 
               reduction = "umap", 
               shuffle = TRUE, 
               group.by = "sample")
-p2 <- DimPlot(rna.IMC.clust, 
-              reduction = "umap",
-              shuffle = TRUE, 
-              group.by = "group",)
-p3 <- DimPlot(rna.IMC.clust, 
+
+p2 <- DimPlot(dong2020, 
               reduction = "umap", 
               repel = TRUE, 
               shuffle = TRUE,
               group.by = "seurat_clusters")
-p4 <- DimPlot(rna.IMC.clust, 
-              reduction = "umap", 
-              cols = COLOR_CODE_RNA_v2, 
-              repel = TRUE, 
-              shuffle = TRUE, 
-              group.by = "original_celltype")
-p5 <- DimPlot(rna.IMC.clust, 
-              reduction = "umap", 
-              cols = COLOR_CODE_IMC,
-              repel = TRUE, 
-              shuffle = TRUE, 
-              group.by = "predicted_celltype")
 
 p1 
 p2
-p3
-p4
-p5
-
-Idents(rna.IMC.clust) <- rna.IMC.clust@meta.data$original_celltype
-
-tumor_cells_only <- WhichCells(object = rna.IMC.clust,idents = "NB (8)")
-tumor_cells_only <- WhichCells(object = rna.IMC.clust,idents = "7")
-
-DimPlot(rna.IMC.clust, 
-        cells = tumor_cells_only, 
-        reduction = "umap", 
-        cols = COLOR_CODE_RNA, 
-        repel = TRUE, 
-        shuffle = TRUE, 
-        group.by = "original_celltype")
-DimPlot(rna.IMC.clust, 
-        cells = tumor_cells_only,
-        reduction = "umap", 
-        cols = COLOR_CODE_IMC,
-        repel = TRUE, 
-        shuffle = TRUE, 
-        group.by = "predicted_celltype")
 
 ```
 
@@ -249,88 +200,28 @@ DimPlot(rna.IMC.clust,
 
 Transfer cell type annotations from Lazic et al. 2024 to Dong et al. 2020
 
-```{r match colors, message=FALSE, fig.height=17}
-col_clusters <- c("fibroblast/endothel"=rgb(212,89,67, maxColorValue = 255),
-                "schwann cell"=rgb(156,76,24, maxColorValue = 255),
-                "MSC"=rgb(174,129,37, maxColorValue = 255),
-                "HPC"=rgb(212,143,75, maxColorValue = 255),
-                "HSPC"=rgb(253,180,98, maxColorValue = 255),
-                "Ki67+ CXCR4+ cell"=rgb(254,215,0, maxColorValue = 255),
-                "LIN- Ki67+"=rgb(254,217,166, maxColorValue = 255),
-                "B cell"=rgb(168,128,250, maxColorValue = 255),
-                "GZMB+ S100B- DC/NK"=rgb(28,146,255, maxColorValue = 255),
-                "GZMB+ S100B+ DC/NK"=rgb(0,255,255, maxColorValue = 255),
-                "CD8+ naive T cell"=rgb(188,128,189, maxColorValue = 255),
-                "DN GZMB+ T cell"=rgb(190,174,212, maxColorValue = 255),
-                "CD8+ S100B+ T cell"=rgb(253,218,236, maxColorValue = 255),
-                "CD8+ GZMB+ PD1lo T cell"=rgb(251,154,153, maxColorValue = 255),
-                "CD4+ naive T cell"=rgb(242,3,137, maxColorValue = 255),
-                "DN T cell"=rgb(251,128,114, maxColorValue = 255),
-                "CD4+ PD1+ T cell"=rgb(254,142,175, maxColorValue = 255),
-                "CD8+ PDL1lo T cell"=rgb(240,0,240, maxColorValue = 255),
-                "CD4+ S100B+ T cell"=rgb(227,26,28, maxColorValue = 255),
-                "dense T cell region"=rgb(145,2,144, maxColorValue = 255),
-                "CD14+ PDL1- MO"=rgb(104,180,238, maxColorValue = 255),
-                "CD14+ PDL1+ MO"=rgb(51,180,180, maxColorValue = 255),
-                "CD14- PDL1- MO/DC"=rgb(39,130,187, maxColorValue = 255),
-                "CD14- PDL1+ MO/DC"=rgb(166,206,227, maxColorValue = 255),
-                "monoblast-like"=rgb(128,177,211, maxColorValue = 255),
-                "myelocyte"=rgb(217,217,217, maxColorValue = 255),          
-                "myeloblast"=rgb(2,0,138, maxColorValue = 255),
-                "neutrophil"=rgb(113,113,113, maxColorValue = 255),
-                "pDC"=rgb(212,241,240, maxColorValue = 255),
-                "band cell"=rgb(169,189,210, maxColorValue = 255),
-                "CD24+ marker-lo TC"=rgb(230,245,201, maxColorValue = 255),
-                "early SYM-like TC"=rgb(204,235,197, maxColorValue = 255),
-                "bridge-like TC"=rgb(198,255,72, maxColorValue = 255),
-                "GATA3hi TC"=rgb(65,208,57, maxColorValue = 255),
-                "CD24- marker-lo TC"=rgb(60,119,97, maxColorValue = 255),
-                "CHGAhi TC"=rgb(102,166,30, maxColorValue = 255),
-                "Ki67hi TC"=rgb(149,144,89, maxColorValue = 255),
-                "CXCR4hi TC"=rgb(210,205,126, maxColorValue = 255),
-                "CD44+ mes-like TC"=rgb(27,158,119, maxColorValue = 255),
-                "GD2lo TC"=rgb(102,194,165, maxColorValue = 255),
-                "neural progenitor"=rgb(238,118,0, maxColorValue = 255),
-                "other"=rgb(255,255,209, maxColorValue = 255))
-
-pie(rep(1, length(col_clusters)), col=col_clusters, labels=names(col_clusters))
-col_clusters
-```
-
 ```{r label transfer - two ways}
 library(BiocParallel)
 library(SingleR)
 library(tidyr)
 
-metadata <- readRDS("/home/data/MapMet/Dong.scRNA.2020/data/metadata.rds")
-scrna_data <- readRDS("/home/data/MapMet/Dong.scRNA.2020/data/rna_decontaminated.rds")
 
-rna <- as.Seurat(scrna_data, data=NULL)
-rna <- RenameAssays(object = rna, originalexp = 'RNA')
+dong2020_clusters <- dong2020@active.ident
+common_genes_dong2020 <- rownames(dong2020_mat) %in% gene.list
 
-
-rna@active.ident <- setNames(pull(metadata[match(metadata$cell,colnames(rna)),"cellont_cluster"], "cellont_cluster"),pull(metadata[match(metadata$cell,colnames(rna)), "cell"], "cell"))
-DefaultAssay(rna) <- "RNA"
-
-
-rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")
-
-rna_clusters <- rna@active.ident
-common_genes_rna <- rownames(rna_mat) %in% gene.list
-
-rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")[common_genes_rna,]
+dong2020_mat <- GetAssayData(dong2020, assay = "dong2020", slot = "data")[common_genes_dong2020,]
 
 protein_mat <- GetAssayData(imc_data, assay = "originalexp", slot = "counts")
-common_genes_protein <- rownames(protein_mat) %in% rownames(rna_mat)
+common_genes_protein <- rownames(protein_mat) %in% rownames(dong2020_mat)
 protein_mat <- GetAssayData(imc_data, assay = "originalexp", slot = "counts")[common_genes_protein,]
 imc_clusters <- imc_data@meta.data$celltype
-predicted_labels <- SingleR(test = rna_mat, # Transfer labels to RNA data
+predicted_labels <- SingleR(test = dong2020_mat, # Transfer labels to dong2020 data
                             ref = protein_mat, # Original cell types from IMC data
                             labels = imc_clusters, # Cell types defined by IMC data
                             BPPARAM = MulticoreParam(workers=10, RNGseed=20201030)) 
 
 saveRDS(predicted_labels,
-        file = paste0(params$out,"Rds/20240126_predicted_labels_IMCtoRNA.rds"))
+        file = paste0(params$out,"Rds/20240126_predicted_labels_IMCtodong2020.rds"))
 
 ################################################################################
 
@@ -340,16 +231,16 @@ imc_BM <- subset(imc_data, tissue == "BM")
 imc_BM 
 
 protein_mat <- GetAssayData(imc_BM, assay = "originalexp", slot = "counts")
-common_genes_protein <- rownames(protein_mat) %in% rownames(rna_mat)
+common_genes_protein <- rownames(protein_mat) %in% rownames(dong2020_mat)
 protein_mat <- GetAssayData(imc_BM, assay = "originalexp", slot = "counts")[common_genes_protein,]
 imc_clusters <- imc_BM@meta.data$celltype
-predicted_labels <- SingleR(test = rna_mat, # Transfer labels to RNA data
+predicted_labels <- SingleR(test = dong2020_mat, # Transfer labels to dong2020 data
                             ref = protein_mat, # Original cell types from IMC data
                             labels = imc_clusters, # Cell types defined by IMC data
                             BPPARAM = MulticoreParam(workers=10, RNGseed=20201030)) 
 
 saveRDS(predicted_labels,
-        file = paste0(params$out,"Rds/20240126_predicted_labels_IMC-BMtoRNA.rds"))
+        file = paste0(params$out,"Rds/20240126_predicted_labels_IMC-BMtodong2020.rds"))
 
 ```
 
@@ -360,7 +251,7 @@ library(viridis)
 library(RColorBrewer)
 set.seed(20200517)
 
-predicted_labels <- readRDS(file = paste0(params$out,"Rds/20240126_predicted_labels_IMCtoRNA.rds"))
+predicted_labels <- readRDS(file = paste0(params$out,"Rds/20240126_predicted_labels_IMCtodong2020.rds"))
 
 plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),], 
                  annotation_legend=T, treeheight_row=0) 
@@ -370,7 +261,7 @@ plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),
                  annotation_legend=T, treeheight_row=0) 
 dev.off()
 
-true_label <- rna@active.ident
+true_label <- dong2020@active.ident
 predicted_label <- predicted_labels$labels
 
 n <- length(unique(predicted_label))
@@ -380,62 +271,44 @@ table(predicted_label)
 
 ### downsample
 
-rna <- SetIdent(rna, value = "predicted_celltype")
-rna.small <- subset(rna, downsample = 5000)
-rna_mat.small <- GetAssayData(rna.small, assay = "RNA", slot = "data")[common_genes_rna,]
+dong2020.small <- subset(dong2020, downsample = 1000)
+dong2020_mat <- GetAssayData(dong2020.small, slot = "data")[gene.list.RNA,]
 
-rna_mat_scaled <-  t(scale(rna_mat.small))
+dong2020_mat_scaled <-  t(scale(dong2020_mat))
 
 # replace all non-finite values with 0
-rna_mat_scaled[!is.finite(rna_mat_scaled)] <- 0
+dong2020_mat_scaled[!is.finite(dong2020_mat_scaled)] <- 0
 
-qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
-col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
-col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
-
-col_predicted_labels = setNames(sample(col_vector_433, length(unique(predicted_label))), unique(predicted_label))
-col_true_labels <- metadata$cellont_abbr
-
-column_ha = HeatmapAnnotation(predicted_label = predicted_label[rna_mat_scaled],
-                              true_cluster = true_label[rna_mat_scaled],
-                              col=list(predicted_label=col_predicted_labels, 
-                                       true_label=col_true_labels
-                                       ), 
-                              show_legend=T)
-
-
-cluster_anno <- rna.small@meta.data$predicted_celltype
-
-quantile(rna_mat_scaled, c(0.1, 0.95))
+quantile(dong2020_mat_scaled, c(0.1, 0.95))
 
 ## make the white color map to 0. the green map to highest and the purle map to the lowest
-col_fun = circlize::colorRamp2(c(-0.5, 0, 0.5, 1), 
+col_fun = circlize::colorRamp2(c(-0.5, 0, 1.5, 2.5), 
                                c("purple", "white", "lightgreen", "darkgreen"))
 
+heatmap(as.matrix(dong2020_mat), 
+             labCol = NA,
+             scale = "row", 
+             Colv = FALSE, 
+             col = col_fun, 
+             xlab = "Cell IDs", 
+             ylab = "Genes", 
+             main = "Hierarhical clustering on IMC markers, Dong2020",
+             cexRow = 1)
 
-x <- Heatmap(rna_mat_scaled, name = "IMC markers gene expression",  
-             #column_split = factor(cluster_anno),
-             cluster_columns = TRUE,
-             show_column_dend = TRUE,
-             cluster_column_slices = TRUE,
-             column_title_gp = gpar(fontsize = 8),
-             column_gap = unit(0.5, "mm"),
-             cluster_rows = TRUE,
-             show_row_dend = TRUE,
-             col = col_fun,
-             row_names_gp = gpar(fontsize = 4),
-             column_title_rot = 90,
-             top_annotation = HeatmapAnnotation(foo = anno_block(gp = gpar(fill = scales::hue_pal()(9)))),
-             show_column_names = FALSE,
-             use_raster = TRUE,
-             raster_quality = 4)
-
-pdf(paste0(params$out,"figures/labeltransfer_expression_heatmap.pdf"))
-x
+pdf(paste0(params$out,"figures/Dong2020_IMC_markers_geneExpression_heatmap.pdf"))
+heatmap(as.matrix(dong2020_mat), 
+             labCol = NA,
+             scale = "row", 
+             Colv = FALSE, 
+             col = col_fun, 
+             xlab = "Cell IDs", 
+             ylab = "Genes", 
+             main = "Hierarhical clustering on IMC markers, Dong2020",
+             cexRow = 1)
 dev.off()
 
-pdf(paste0(params$out,"figures/labeltransfer_IMC_marker_expression_dotplot.pdf"))
-DotPlot(rna, features = gene.list) + RotatedAxis()
+pdf(paste0(params$out,"figures/Dong2020_IMC_markers_geneExpression_dotplot.pdf"))
+DotPlot(dong2020.small, features = gene.list.RNA) + RotatedAxis()
 dev.off()
 
 
@@ -444,13 +317,8 @@ tumor_markers <- c("ELAVL4", "CXCR4", "MME", "CD74", "HLA-A", "CD274", "GATA3",
                    "CHGA", "SOX10", "S100B")
 
 pdf(paste0(params$out,"figures/labeltransfer_tumor_marker_expression_dotplot.pdf"))
-DotPlot(rna, features = tumor_markers) + RotatedAxis()
+DotPlot(dong2020, features = tumor_markers) + RotatedAxis()
 dev.off()
-
-DoHeatmap(subset(rna, downsample = 500), 
-          features = gene.list, 
-          size = 3, 
-          slot = "counts")
 
 
 # Plot in the UMAP published and predicted cell types (based on IMC protein data)
@@ -461,7 +329,7 @@ library(cowplot)
 library(viridis)
 
 data <- data.frame(IMC_markers=predicted_label, 
-                   original_clusters=rna@active.ident)
+                   original_clusters=dong2020@active.ident)
 
 data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("original_clusters"), 
@@ -493,8 +361,8 @@ assignments <- as.data.frame(cbind("original_clusters" = original_clusters,
 
 assignments
 
-rna$original_celltype <- rna@active.ident
-rna$predicted_celltype <- predicted_label
+dong2020$original_celltype <- dong2020@active.ident
+dong2020$predicted_celltype <- predicted_label
 
 bar_plot <- ggplot(data_long, aes(fill=IMC_markers, y=count, x=original_clusters)) + 
   ggtitle("") +
@@ -509,7 +377,7 @@ dev.off()
 
 
 ## UMAP colored by cell type and expression
-p1 <- DimPlot(rna, 
+p1 <- DimPlot(dong2020, 
              reduction = "UMAP", 
              pt.size = 0.3, 
              seed = 28, 
@@ -523,16 +391,16 @@ p1
 dev.off()
 
 
-table(rna$predicted_celltype)
-table(rna$orig.ident)
+table(dong2020$predicted_celltype)
+table(dong2020$orig.ident)
 
-rna$original_celltype
+dong2020$original_celltype
 
-compare_cell_types <- cbind(rna$orig.ident,rna$predicted_celltype)
+compare_cell_types <- cbind(dong2020$orig.ident,dong2020$predicted_celltype)
 
 
 write.table(compare_cell_types, 
-             file = paste0(params$out,"tables/Dong.scRNA.original.vs.predicted.celltypes.csv"),
+             file = paste0(params$out,"tables/Dong.2020.original.vs.predicted.celltypes.csv"),
              sep = "\t", quote = F)
 
 ```
@@ -545,7 +413,7 @@ library(RColorBrewer)
 set.seed(20200517)
 
 predicted_labels <- 
-  readRDS(file = paste0(params$out,"Rds/20240126_predicted_labels_IMC-BMtoRNA.rds"))
+  readRDS(file = paste0(params$out,"Rds/20240126_predicted_labels_IMC-BMtodong2020.rds"))
 
 plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),], 
                  annotation_legend=T, treeheight_row=0) 
@@ -555,18 +423,18 @@ plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),
                  annotation_legend=T, treeheight_row=0) 
 dev.off()
 
-rna@meta.data$original_celltype <- rna@active.ident
-true_label <- rna@meta.data$original_celltype
+dong2020@meta.data$original_celltype <- dong2020@active.ident
+true_label <- dong2020@meta.data$original_celltype
 
 predicted_label <- predicted_labels$labels
-rna@meta.data$predicted_celltype <- predicted_label
+dong2020@meta.data$predicted_celltype <- predicted_label
 
 
 n <- length(unique(predicted_label))
 
 table(predicted_label)
 
-rna_mat_scaled <-  t(scale(t(rna_mat)))
+dong2020_mat_scaled <-  t(scale(t(dong2020_mat)))
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -575,8 +443,8 @@ col_vector_433 = colors()[grep('gr(a|e)y', grDevices::colors(), invert = T)]
 col_predicted_labels = setNames(sample(col_vector_433, length(unique(predicted_label))), unique(predicted_label))
 col_true_labels <- metadata$cellont_abbr
 
-column_ha = HeatmapAnnotation(predicted_label = predicted_label[rna_mat_scaled],
-                              true_cluster = true_label[rna_mat_scaled],
+column_ha = HeatmapAnnotation(predicted_label = predicted_label[dong2020_mat_scaled],
+                              true_cluster = true_label[dong2020_mat_scaled],
                               col=list(predicted_label=col_predicted_labels, 
                                        true_label=col_true_labels
                                        ), 
@@ -584,15 +452,15 @@ column_ha = HeatmapAnnotation(predicted_label = predicted_label[rna_mat_scaled],
 
 
 
-quantile(rna_mat_scaled, c(0.1, 0.95))
+quantile(dong2020_mat_scaled, c(0.1, 0.95))
 
 ## make the white color map to 0. the green map to highest and the purle map to the lowest
 col_fun = circlize::colorRamp2(c(-0.5, 0, 0.5, 1), 
                                c("purple", "white", "lightgreen", "darkgreen"))
 
-rna <- SetIdent(rna, value = "predicted_celltype")
+dong2020 <- SetIdent(dong2020, value = "predicted_celltype")
 
-x <- Heatmap(rna_mat_scaled, name = "IMC markers gene expression",  
+x <- Heatmap(dong2020_mat_scaled, name = "IMC markers gene expression",  
              #column_split = factor(predicted_label),
              cluster_columns = TRUE,
              show_column_dend = TRUE,
@@ -609,14 +477,14 @@ x <- Heatmap(rna_mat_scaled, name = "IMC markers gene expression",
              use_raster = TRUE,
              raster_quality = 4)
 
-pdf(paste0(params$out,"figures/labeltransfer_IMC-BM_expression_heatmap.pdf"))
+pdf(paste0(params$out,"figures/dong2020_labeltransfer_IMC-BM_expression_heatmap.pdf"))
 x
 dev.off()
 
-DotPlot(rna, features = gene.list) + RotatedAxis()
+DotPlot(dong2020, features = gene.list) + RotatedAxis()
 
-pdf(paste0(params$out,"figures/labeltransfer_IMC-BM_marker_expression_dotplot.pdf"))
-DotPlot(rna, features = gene.list) + RotatedAxis()
+pdf(paste0(params$out,"figures/dong2020_labeltransfer_IMC-BM_marker_expression_dotplot.pdf"))
+DotPlot(dong2020, features = gene.list) + RotatedAxis()
 dev.off()
 
 
@@ -624,11 +492,11 @@ tumor_markers <- c("ELAVL4", "CXCR4", "MME", "CD74", "HLA-A", "CD274", "GATA3",
                    "VIM", "MKI67", "CD44", "NCAM1", "ST8SIA1", "PRPH", "LUM", 
                    "CHGA", "SOX10", "S100B")
 
-pdf(paste0(params$out,"figures/labeltransfer_IMC-BM_tumor_marker_expression_dotplot.pdf"))
-DotPlot(rna, features = tumor_markers) + RotatedAxis()
+pdf(paste0(params$out,"figures/dong2020_labeltransfer_IMC-BM_tumor_marker_expression_dotplot.pdf"))
+DotPlot(dong2020, features = tumor_markers) + RotatedAxis()
 dev.off()
 
-DoHeatmap(subset(rna, downsample = 500), 
+DoHeatmap(subset(dong2020, downsample = 500), 
           features = gene.list, 
           size = 3, 
           slot = "counts")
@@ -642,7 +510,7 @@ library(cowplot)
 library(viridis)
 
 data <- data.frame(IMC_cell_types=predicted_label, 
-                   original_clusters=rna@meta.data$original_celltype)
+                   original_clusters=dong2020@meta.data$original_celltype)
 
 data$freq <- 1
 data_wide <- data %>% pivot_wider(names_from = c("original_clusters"), 
@@ -675,7 +543,7 @@ assignments <- as.data.frame(cbind("original_clusters" = original_clusters,
 assignments
 
 
-#rna <- SetIdent(rna, value = "predicted_celltype")
+#dong2020 <- SetIdent(dong2020, value = "predicted_celltype")
 
 
 bar_plot <- ggplot(data_long, aes(fill=IMC_cell_types, y=count, x=original_clusters)) + 
@@ -693,7 +561,7 @@ dev.off()
 
 
 ## UMAP colored by cell type and expression - dittoDimPlot
-p1 <- DimPlot(rna, 
+p1 <- DimPlot(dong2020, 
              reduction = "UMAP", 
              pt.size = 0.3, 
              seed = 28, 
@@ -707,14 +575,14 @@ p1
 dev.off()
 
 
-table(rna$predicted_celltype)
-table(rna$orig.ident)
+table(dong2020$predicted_celltype)
+table(dong2020$orig.ident)
 
-rna$original_celltype
+dong2020$original_celltype
 
-compare_cell_types <- c(rna$orig.ident,rna$predicted_celltype)
+compare_cell_types <- c(dong2020$orig.ident,dong2020$predicted_celltype)
 
-saveRDS(object = rna, file="/home/out/MapMet/Rds/Dong2020_AfterLabelTransfer.Rds")
+saveRDS(object = dong2020, file="/home/out/MapMet/Rds/Dong2020_AfterLabelTransfer.Rds")
 ```
 
 # __CCC analysis__
@@ -727,13 +595,12 @@ ligand-receptor interactions if either ligand or receptor are over-expressed.
 
 ```{r CellChat: sub-clusters}
 
-Idents(rna) <- rna@meta.data$predicted_celltype
-rna_mat <- GetAssayData(rna, assay = "RNA", slot = "data")
+dong2020_mat <- GetAssayData(dong2020, assay = "dong2020", slot = "data")
 
 # New analysis with CellChat v2.1.1
 cellchat <- createCellChat(
-  rna_mat,
-  meta = rna@meta.data,
+  dong2020_mat,
+  meta = dong2020@meta.data,
   group.by = "predicted_celltype",
 )
 cellchat@DB <- CellChatDB.human
@@ -853,7 +720,7 @@ df_net_int %>%
 
 ```{r CellChat figures: sub-clusters}
 library(latex2exp)
-source("/home/data/MapMet/Dong.scRNA.2020/scripts/csbg-neuroblastoma-d976641/styling.R")
+source("/home/data/MapMet/Dong.scdong2020.2020/scripts/csbg-neuroblastoma-d976641/styling.R")
 
 #cellchat <- readRDS(paste0(params$out,"Rds/Dong2020.signaling.predictedCellTypes.fromIMC.TreatResistCellsOnly.rds"))
 #sig_data <- readRDS(paste0(params$out,"Rds/Dong2020.cellchat.predictedCellTypes.fromIMC.rds"))
@@ -1378,164 +1245,66 @@ PART II
 # __Load data__
 
 ```{r load previous analysis}
-metadata <- readRDS(paste0(params$input,"/Dong.scRNA.2020/data/metadata.rds"))
-<<<<<<< HEAD
-scrna_data <- readRDS(paste0(params$input,"/Dong.scRNA.2020/data/rna_decontaminated.rds"))
-=======
-scrna_data <- readRDS(paste0(params$input,"/home/data/MapMet/Dong.scRNA.2020/data/rna_decontaminated.rds"))
+metadata <- readRDS(paste0(params$input,"/Dong.scdong2020.2020/data/metadata.rds"))
+
+scdong2020_data <- readRDS(paste0(params$input,"/Dong.scdong2020.2020/data/dong2020_decontaminated.rds"))
+
+scdong2020_data <- readRDS(paste0(params$input,"/home/data/MapMet/Dong.scdong2020.2020/data/dong2020_decontaminated.rds"))
 
                       
-predicted_labels <- readRDS(file = paste0(params$out,"Rds/20240313_predicted_labels_IMC-BMtoRNA.rds"))
+predicted_labels <- readRDS(file = paste0(params$out,"Rds/20240313_predicted_labels_IMC-BMtodong2020.rds"))
 
-rna <- as.Seurat(scrna_data, data=NULL)
-rna <- RenameAssays(object = rna, originalexp = 'RNA')
+dong2020 <- as.Seurat(scdong2020_data, data=NULL)
+dong2020 <- RenameAssays(object = dong2020, originalexp = 'dong2020')
 
-rna@active.ident <- setNames(pull(metadata[match(metadata$cell,colnames(rna)),"cellont_cluster"], "cellont_cluster"),pull(metadata[match(metadata$cell,colnames(rna)), "cell"], "cell"))
-DefaultAssay(rna) <- "RNA"
+dong2020@active.ident <- setNames(pull(metadata[match(metadata$cell,colnames(dong2020)),"cellont_cluster"], "cellont_cluster"),pull(metadata[match(metadata$cell,colnames(dong2020)), "cell"], "cell"))
+DefaultAssay(dong2020) <- "dong2020"
 
-true_label <- rna@active.ident
+true_label <- dong2020@active.ident
 predicted_label <- predicted_labels$labels
 
-rna$original_celltype <- rna@active.ident
-rna$predicted_celltype <- predicted_label
+dong2020$original_celltype <- dong2020@active.ident
+dong2020$predicted_celltype <- predicted_label
 
-rna@meta.data
+dong2020@meta.data
 ```
 
 
 
 # __Tumor cells only__
 
-```{r sub-cluster the tumor cluster}
-# set cell type annotation to the original annotation
-Idents(rna) <- rna@meta.data$original_celltype
-
-# subset metadata
-filter <- nb_metadata$cellont_abbr == "NB"
-tumor.metadata <- nb_metadata[filter,]
-
-# subset scRNA-seq data 
-# tumor cells only
-
-tumor_cells <- "NB (8)"
-Dong.NB <- subset(rna, idents = tumor_cells, invert = FALSE)
-Dong.NB <- AddMetaData(Dong.NB,metadata = tumor.metadata)
-Dong.NB
-Dong.NB[["percent.mt"]] <- PercentageFeatureSet(object = Dong.NB, 
-                                                  pattern = "^MT-")
-
-DefaultAssay(Dong.NB) <- "RNA"
-
-Dong.NB <- Dong.NB %>%
-    NormalizeData() %>%
-    FindVariableFeatures(selection.method = "vst", nfeatures = 2000) %>% 
-    ScaleData() %>%
-    SCTransform(vars.to.regress = c("percent.mt"))
-
-# Calculate PCs using variable features determined by SCTransform
-Dong.NB <- RunPCA(Dong.NB, assay = "SCT", seed.use = 28, npcs = 50)
-PCAPlot(object = Dong.NB)
-
-# the idea here is that top 2000 variable genes for the whole dataset, won't
-# reflect the heterpgeneity of the tumor cells (might be masked by the immune 
-# cell markers)
-
-top2000 <- head(VariableFeatures(Dong.NB), 2000)
-Dong.NB <- Dong.NB[top2000]
-
-Dong.NB <- RunPCA(Dong.NB, assay = "SCT", npcs = 10)
-Dong.NB <- FindNeighbors(Dong.NB, reduction = "pca", 
-                           dims = 1:5,
-                           k.param = 50)
-
-# tested k nearest neighbors: 10, 50, 80
-# tested number fo dimensions: 5, 10, 20, 50
-
-# define neighbors based on gene expression rather than dimensionality reduction
-# Compute an SNN on the gene expression level
-
-#Dong.NB <- FindNeighbors(Dong.NB, 
-#                           features = VariableFeatures(object = Dong.NB))
-
-Dong.NB <- FindClusters(Dong.NB, resolution = 0.2,
-                          random.seed = 28,
-                          group.singletons = FALSE) # 4 = Leiden, default = Louvain 
-
-Dong.NB <- RunUMAP(Dong.NB, 
-                     reduction = "pca", 
-                     dims = 1:5,
-                     n.epochs = 500,
-                     min.dist = 0.1,
-                     seed.use = 28)
-
-# Tested minimum distance 0.5, 0.1, 0.01, 0.001
-
-# set cell type annotation to the new seurat clusters
-Idents(Dong.NB) <- Dong.NB@meta.data$seurat_clusters
-
-# Visualization
-p1 <- DimPlot(Dong.NB, reduction = "umap", 
-              group.by = "sample")
-p2 <- DimPlot(Dong.NB, reduction = "umap",
-              group.by = "group")
-p3 <- DimPlot(Dong.NB, reduction = "umap", 
-              label = TRUE, repel = TRUE)
-
-p1 + p2 + p3
-
-saveRDS(Dong.NB, 
-        file = paste0(params$out,"Rds/Dong2020.scRNA.tumor.clusters_2024-03-25.Rds"))
-
-
-# CD44 expression per sample, per group, per cluster
-VlnPlot(Dong.NB, features = "CD44",group.by = "sample",
-        pt.size = 0, log = TRUE)
-
-VlnPlot(Dong.NB, features = "CD44",group.by = "group",
-        pt.size = 0, log = TRUE)
-
-VlnPlot(Dong.NB, features = "CD44",
-        pt.size = 0, log = TRUE)
-
-# IMC marker expression per cluster
-Idents(Dong.NB) <- Dong.NB@meta.data$seurat_clusters
-DoHeatmap(Dong.NB, features = gene.list) # IMC markers
-
-DotPlot(Dong.NB,features = gene.list)
-```
-
 ```{r}
-raw_counts <- Dong.NB[["RNA"]]@counts
+raw_counts <- dong2020[["RNA"]]@counts
 
 # Filter gene expression matrix by the 42 genes used in IMC
-expr_data_39markers <- raw_counts[rownames(raw_counts) %in% gene.list, ]
+expr_data_31markers <- raw_counts[rownames(raw_counts) %in% gene.list.RNA, ]
 
-expr_data_39markers <- CreateSeuratObject(expr_data_39markers)
+expr_data_31markers <- CreateSeuratObject(expr_data_31markers)
 
-expr_data_39markers <- expr_data_39markers %>% 
+expr_data_31markers <- expr_data_31markers %>% 
     NormalizeData() %>%
     ScaleData()
 
-expr_data_39markers <- RunPCA(expr_data_39markers, 
+expr_data_31markers <- RunPCA(expr_data_31markers, 
                               features = gene.list, 
                               npcs = 5)
-expr_data_39markers <- FindNeighbors(expr_data_39markers, reduction = "pca", 
+expr_data_31markers <- FindNeighbors(expr_data_31markers, reduction = "pca", 
                            dims = 1:5,
                            k.param = 500)
 
-expr_data_39markers <- FindClusters(expr_data_39markers, 
+expr_data_31markers <- FindClusters(expr_data_31markers, 
                                     resolution = 0.5,
                                     random.seed = 28,
                                     group.singletons = FALSE) 
 
-expr_data_39markers <- RunUMAP(expr_data_39markers, 
+expr_data_31markers <- RunUMAP(expr_data_31markers, 
                      reduction = "pca", 
                      dims = 1:5,
                      n.epochs = 100,
                      min.dist = 0.1,
                      seed.use = 28)
 
-DimPlot(expr_data_39markers)
+DimPlot(expr_data_31markers)
 ```
 
 
@@ -1637,7 +1406,7 @@ DoHeatmap(Dong.NB.integrated, features = top10$gene) + NoLegend()
 ## __clustering from 08.03.2024__
 
 ```{r markers 1}
-Dong.NB <- readRDS(file = paste0(params$out,"Rds/Dong.scRNA.tumor.cluster.Rds"))
+Dong.NB <- readRDS(file = paste0(params$out,"Rds/Dong.scdong2020.tumor.cluster.Rds"))
 
 # set cell type annotation to the new seurat clusters
 Idents(Dong.NB) <- Dong.NB@meta.data$seurat_clusters
@@ -1680,15 +1449,15 @@ marker_results %>%
 DEG_tumor <- DoHeatmap(Dong.NB, features = top10$feature) + NoLegend()
 DEG_tumor
 
-pdf(paste0(params$out,"figures/Dong2020.scRNA.markers.heatmap_2024-03-08.pdf"))
+pdf(paste0(params$out,"figures/Dong2020.scdong2020.markers.heatmap_2024-03-08.pdf"))
 DEG_tumor
 dev.off()
 
 saveRDS(marker_results, 
-        file = paste0(params$out,"Rds/Dong2020.scRNA.tumor.clusters.markers_2024-03-08.Rds"))
+        file = paste0(params$out,"Rds/Dong2020.scdong2020.tumor.clusters.markers_2024-03-08.Rds"))
 
 saveRDS(Dong.NB, 
-        file = paste0(params$out,"Rds/Dong2020.scRNA.tumor.clusters_2024-03-08.Rds"))
+        file = paste0(params$out,"Rds/Dong2020.scdong2020.tumor.clusters_2024-03-08.Rds"))
 
 # Visualization
 p1 <- DimPlot(Dong.NB, reduction = "umap", 
@@ -1706,7 +1475,7 @@ p1 + p2 + p3
 NB.marker.genes <- c("NCAM1", "B4GALNT1", "L1CAM", "MYCN", "GATA2", 
                      "DBH", "CHGB", "CHGA", "SYP", "TH", "PHOX2A", "PHOX2B")
 
-DoHeatmap(Dong.NB, features = NB.marker.genes, assay = "RNA")
+DoHeatmap(Dong.NB, features = NB.marker.genes, assay = "dong2020")
 
 top100 <- head(VariableFeatures(Dong.NB), 100)
 top100
@@ -1721,7 +1490,7 @@ overlap
 # in the tumor cluster
 ```
 
-<<<<<<< HEAD
+
 
 ```{r CD44}
 Dong.NB@active.ident <- factor(Dong.NB@meta.data$sample)
@@ -1749,7 +1518,7 @@ VlnPlot(Dong.NB, features = "CD44", pt.size = 0,
 Markers from Boeva et al., 2021 and Van Groeningen et al., 2017
 
 ```{r ADR/MES, fig.height=5, fig.width=5, warning=FALSE}
-#Dong.NB <- readRDS(file = paste0(params$out,"Rds/Dong.scRNA.tumor.cluster.Rds"))
+#Dong.NB <- readRDS(file = paste0(params$out,"Rds/Dong.scdong2020.tumor.cluster.Rds"))
 # Gene module score
 # Gene list from Boeva et al., 2021
 ADR.gene.list <- list(c("PHOX2B","GATA3","HAND2","HAND1","KLF7","ISL1","PHOX2A"))
@@ -1786,7 +1555,7 @@ MES.gene.list2 <- read.csv("/home/sara_wz/annotation/MES_ADRN/vangroningen2017_M
                           header = FALSE, quote = "")
 
 # Check how many cells express gene X
-rowSums(Dong.NB[['RNA']]["PHOX2B",]>0)
+rowSums(Dong.NB[['dong2020']]["PHOX2B",]>0)
 
 
 Dong.NB <- AddModuleScore(Dong.NB, list(ADR.gene.list2$V1),
@@ -1819,7 +1588,7 @@ RidgePlot(Dong.NB, features = "mesenchymal_signature_set1", log = TRUE)
 Markers from Thirant et al., 2020
 
 ```{r ADR/MES2, fig.height=5, fig.width=5, warning=FALSE}
-#Dong.NB <- readRDS(file = paste0(params$out,"Rds/Dong.scRNA.tumor.cluster.Rds"))
+#Dong.NB <- readRDS(file = paste0(params$out,"Rds/Dong.scdong2020.tumor.cluster.Rds"))
 # Gene module score
 # Gene list from Thirant et al., 2020
 
@@ -1837,7 +1606,7 @@ MES.gene.list.pdx <- read.csv("/home/sara_wz/annotation/MES_ADRN/thirant2020_MES
                               header = FALSE, quote = "")
 
 # Check how many cells express gene X
-rowSums(Dong.NB[['RNA']]["PHOX2B",]>0)
+rowSums(Dong.NB[['dong2020']]["PHOX2B",]>0)
 
 
 #1. gene signatures derived from patients
@@ -1942,7 +1711,7 @@ VlnPlot(Dong.NB,features = MES_features, log = TRUE, pt.size = 0,
 
 
 ### __Predicted cell types based on IMC data__
-=======
+
 #### __Module score__
 
 ```{r}
@@ -2080,14 +1849,14 @@ marker_results %>%
     top_n(n = 10, wt = log_fc) -> top10
 ```
 
-### __Predicted cell types based on RNA data__
+### __Predicted cell types based on dong2020 data__
 
 original cell types published in Dong et al., 2020
 
 ```{r}
 Idents(Dong.NB) <- Dong.NB@meta.data$seurat_clusters
 
-DoHeatmap(Dong.NB, features = NB.marker.genes, assay = "RNA")
+DoHeatmap(Dong.NB, features = NB.marker.genes, assay = "dong2020")
 
 # find cluster markers with DElegate 
 de_results <- DElegate::findDE(object = Dong.NB,
@@ -2096,7 +1865,7 @@ marker_results <- DElegate::FindAllMarkers2(object = Dong.NB,
                                             group_column = "seurat_clusters")
 top_10 <- dplyr::filter(marker_results, feature_rank < 11)
 
-DoHeatmap(Dong.NB, features = top_10$feature, assay = "RNA")
+DoHeatmap(Dong.NB, features = top_10$feature, assay = "dong2020")
 ```
 
 
@@ -2518,12 +2287,12 @@ for (x in gene.list) {
   # visualization
 }
 
-<<<<<<< HEAD
+
 ```
 
 
 ### __CD44 expression plot__
-=======
+
 marker_results %>%
     group_by(group1) %>%
     slice_max(n = 10, order_by = log_fc)
@@ -2535,7 +2304,7 @@ marker_results %>%
 DEG_tumor <- DoHeatmap(Dong.NB, features = top10$feature) + NoLegend()
 DEG_tumor
 
-pdf(paste0(params$out,"figures/Dong2020.scRNA.markers.heatmap_2024-03-25.pdf"))
+pdf(paste0(params$out,"figures/Dong2020.scdong2020.markers.heatmap_2024-03-25.pdf"))
 DEG_tumor
 dev.off()
 
@@ -2558,24 +2327,24 @@ dev.off()
 
 ```{r original labels}
 
-true_label <- rna@active.ident
+true_label <- dong2020@active.ident
 predicted_label <- predicted_labels$labels
 
-rna$original_celltype <- rna@active.ident
-rna$predicted_celltype <- predicted_label
+dong2020$original_celltype <- dong2020@active.ident
+dong2020$predicted_celltype <- predicted_label
 
-Idents(rna) <- rna@meta.data$original_celltype
+Idents(dong2020) <- dong2020@meta.data$original_celltype
 
 
 # CellChat infers the biologically significant cell-cell communication by 
 # assigning each interaction with a probability value and peforming a permutation test. 
 pathway <- c("TWEAK", "PSAP")
-treat_resist_Dong_lables <- subset(x = rna, 
+treat_resist_Dong_lables <- subset(x = dong2020, 
                                      idents = c("T (5)","T (6)","T (9)","T (18)",
                                                 "NB (8)", 
                                                 "M (1)","M (2)","M (10)","M (15)"))
 cellchat <- createCellChat(object = treat_resist_Dong_lables, 
-                           group.by = "ident", assay = "RNA")
+                           group.by = "ident", assay = "dong2020")
 
 # set the used database in the object
 cellchat@DB <- CellChatDB
@@ -2772,17 +2541,17 @@ subset(T9, pathway_name == "PSAP")
 # Do we see a differential gene expression of the above genes (pathways) between
 # MYCNA and sporadic NB sub-types?
 
-rna$group_celltype <- paste(rna$original_celltype, rna$group, sep = "_")
-Idents(rna) <- "group_celltype"
-rna.de <- FindMarkers(rna, ident.1 = "T (9)_II", ident.2 = "T (9)_IV", verbose = FALSE)
-head(rna.de, n = 10)
+dong2020$group_celltype <- paste(dong2020$original_celltype, dong2020$group, sep = "_")
+Idents(dong2020) <- "group_celltype"
+dong2020.de <- FindMarkers(dong2020, ident.1 = "T (9)_II", ident.2 = "T (9)_IV", verbose = FALSE)
+head(dong2020.de, n = 10)
 
 # TOP DEGs in cluster 9, between MYNCA and non-MYNCA tumors
-rna.de <- rna.de %>% filter(p_val_adj < 0.01) %>% filter(abs(avg_log2FC) > 1)
-rna.de 
+dong2020.de <- dong2020.de %>% filter(p_val_adj < 0.01) %>% filter(abs(avg_log2FC) > 1)
+dong2020.de 
 
-DoHeatmap(rna.de,
-  features = rownames(rna.de),
+DoHeatmap(dong2020.de,
+  features = rownames(dong2020.de),
   group.by = "group_celltype")
 
 # Probability of CCC between all cells
@@ -2810,10 +2579,10 @@ treat_resist <- c("CD14- PDL1+ MO/DC",
 #treat_resist <- c("early SYM-like TC","CD44+ mes-like TC",
 #                 "CD14+ PDL1+ MO","CD4+ PD1+ T cell")
 
-treat_resist_lazic_lables <- subset(x = rna, 
+treat_resist_lazic_lables <- subset(x = dong2020, 
                                      idents = treat_resist) #5814  cells
 cellchat_predict <- createCellChat(object = treat_resist_lazic_lables, 
-                           group.by = "ident", assay = "RNA")
+                           group.by = "ident", assay = "dong2020")
 
 table(treat_resist_lazic_lables$predicted_celltype)
 
@@ -2959,38 +2728,38 @@ cluster3 <- WhichCells(Dong.NB, ident = "3")
 cluster4 <- WhichCells(Dong.NB, ident = "4")
 cluster5 <- WhichCells(Dong.NB, ident = "5")
 
-# Here we switch to the integrated object (named rna), which contains the whole
+# Here we switch to the integrated object (named dong2020), which contains the whole
 # dataset (TME and tumor cells)
 
 # re-label the NB cells to the corresponding tumor cluster number
-Idents(object = rna, cells = cluster0) <- "NB (0)"
-Idents(object = rna, cells = cluster1) <- "NB (1)"
-Idents(object = rna, cells = cluster2) <- "NB (2)"
-Idents(object = rna, cells = cluster3) <- "NB (3)"
-Idents(object = rna, cells = cluster4) <- "NB (4)"
-Idents(object = rna, cells = cluster5) <- "NB (5)"
+Idents(object = dong2020, cells = cluster0) <- "NB (0)"
+Idents(object = dong2020, cells = cluster1) <- "NB (1)"
+Idents(object = dong2020, cells = cluster2) <- "NB (2)"
+Idents(object = dong2020, cells = cluster3) <- "NB (3)"
+Idents(object = dong2020, cells = cluster4) <- "NB (4)"
+Idents(object = dong2020, cells = cluster5) <- "NB (5)"
 
-rna@meta.data
+dong2020@meta.data
 
 # Add active identities to metadata column new_clusters
-rna$new_clusters <- rna@active.ident
+dong2020$new_clusters <- dong2020@active.ident
 
 # sanity check that the catagories make sense
 # and that the catagory NB (8) is no longer present in the metadata
-levels(rna@meta.data$new_clusters)
+levels(dong2020@meta.data$new_clusters)
 
-# set cell type annotation of the rna object to the new seurat clusters
-Idents(rna) <- rna@meta.data$new_clusters
+# set cell type annotation of the dong2020 object to the new seurat clusters
+Idents(dong2020) <- dong2020@meta.data$new_clusters
 
 
-saveRDS(rna, file = 
-          paste0(params$out,"Rds/Dong.scRNA.TME.and.tumor.clusters.combined.Rds"))
+saveRDS(dong2020, file = 
+          paste0(params$out,"Rds/Dong.scdong2020.TME.and.tumor.clusters.combined.Rds"))
 
-tumor_cells <- WhichCells(rna, ident = c("NB (0)","NB (1)","NB (2)", 
+tumor_cells <- WhichCells(dong2020, ident = c("NB (0)","NB (1)","NB (2)", 
                                          "NB (3)", "NB (4)", "NB (5)"))
 
-DimPlot(rna,order = TRUE,seed = 28,cells = tumor_cells)
-CD44_TC <- FeaturePlot(rna, cells = tumor_cells, features = "CD44",
+DimPlot(dong2020,order = TRUE,seed = 28,cells = tumor_cells)
+CD44_TC <- FeaturePlot(dong2020, cells = tumor_cells, features = "CD44",
             order = T, cols = c("gray","red"), pt.size = 1)
 CD44_TC
 
@@ -3001,14 +2770,14 @@ dev.off()
 
 ```{r}
 # IMC marker expression per cluster
-Idents(rna) <- rna@meta.data$new_clusters
+Idents(dong2020) <- dong2020@meta.data$new_clusters
 
 # mean expression per cluster for IMC markers
-DotPlot(rna,features = gene.list)  + coord_flip() 
+DotPlot(dong2020,features = gene.list)  + coord_flip() 
 
 
-rna <- ScaleData(rna,do.center = TRUE,do.scale = TRUE)
-DoHeatmap(rna, features = gene.list,slot = "scale.data") # IMC markers
+dong2020 <- ScaleData(dong2020,do.center = TRUE,do.scale = TRUE)
+DoHeatmap(dong2020, features = gene.list,slot = "scale.data") # IMC markers
 
 
 ```
@@ -3019,21 +2788,21 @@ Cell type annotation based on: Dong et al., 2020 and additional sub-clustering
 of the tumor cluster (NB, cluster 8) - using clustering from 08.03.2024
 
 ```{r CCC}
-# set cell type annotation of the rna object to the new seurat clusters
-Idents(rna) <- rna@meta.data$new_clusters
+# set cell type annotation of the dong2020 object to the new seurat clusters
+Idents(dong2020) <- dong2020@meta.data$new_clusters
 
 
 # CellChat infers the biologically significant cell-cell communication by 
 # assigning each interaction with a probability value and peforming a permutation test. 
 pathway <- c("TWEAK", "PSAP")
-treat_resist_Dong_lables <- subset(x = rna, 
+treat_resist_Dong_lables <- subset(x = dong2020, 
                                      idents = c("T (5)","T (6)","T (9)","T (18)",
                                                 "NB (0)", "NB (1)", "NB (2)",
                                                 "NB (3)", "NB (4)", "NB (5)",
                                                 "M (1)","M (2)","M (10)","M (15)"))
 
 cellchat <- createCellChat(object = treat_resist_Dong_lables, 
-                           group.by = "ident", assay = "RNA")
+                           group.by = "ident", assay = "dong2020")
 
 # Prepare DB
 CellChatDB <- CellChatDB.human 
@@ -3384,17 +3153,17 @@ subset(T9, pathway_name == "PSAP")
 # Do we see a differential gene expression of the above genes (pathways) between
 # MYCNA and sporadic NB sub-types?
 
-rna$group_celltype <- paste(rna$original_celltype, rna$group, sep = "_")
-Idents(rna) <- "group_celltype"
-rna.de <- FindMarkers(rna, ident.1 = "T (9)_II", ident.2 = "T (9)_IV", verbose = FALSE)
-head(rna.de, n = 10)
+dong2020$group_celltype <- paste(dong2020$original_celltype, dong2020$group, sep = "_")
+Idents(dong2020) <- "group_celltype"
+dong2020.de <- FindMarkers(dong2020, ident.1 = "T (9)_II", ident.2 = "T (9)_IV", verbose = FALSE)
+head(dong2020.de, n = 10)
 
 # TOP DEGs in cluster 9, between MYNCA and non-MYNCA tumors
-rna.de <- rna.de %>% filter(p_val_adj < 0.01) %>% filter(abs(avg_log2FC) > 1)
-rna.de 
+dong2020.de <- dong2020.de %>% filter(p_val_adj < 0.01) %>% filter(abs(avg_log2FC) > 1)
+dong2020.de 
 
-DoHeatmap(rna,
-  features = rownames(rna.de),
+DoHeatmap(dong2020,
+  features = rownames(dong2020.de),
   group.by = "group_celltype")
 
 # Probability of CCC between all cells
@@ -3407,7 +3176,7 @@ cellchat@netP$prob
 using the new label transfer (BM samples only)
 
 ```{r markers 2}
-Dong.NB <- readRDS(file = paste0(params$out,"Rds/Dong2020.scRNA.tumor.clusters_2024-03-25.Rds"))
+Dong.NB <- readRDS(file = paste0(params$out,"Rds/Dong2020.scdong2020.tumor.clusters_2024-03-25.Rds"))
 
 # set cell type annotation to the new seurat clusters
 Idents(Dong.NB) <- Dong.NB@meta.data$seurat_clusters
@@ -3448,21 +3217,21 @@ marker_results %>%
 DEG_tumor <- DoHeatmap(Dong.NB, features = top10$feature) + NoLegend()
 DEG_tumor
 
-pdf(paste0(params$out,"figures/Dong2020.scRNA.markers.heatmap_2024-03-25.pdf"))
+pdf(paste0(params$out,"figures/Dong2020.scdong2020.markers.heatmap_2024-03-25.pdf"))
 DEG_tumor
 dev.off()
 
 DoHeatmap(Dong.NB, features = top10$gene) + NoLegend()
 
 saveRDS(Dong.NB, 
-        file = paste0(params$out,"Rds/Dong2020.scRNA.tumor.clusters_2024-03-25.Rds"))
+        file = paste0(params$out,"Rds/Dong2020.scdong2020.tumor.clusters_2024-03-25.Rds"))
 ```
 
 ```{r tumor markers 2}
 NB.marker.genes <- c("NCAM1", "B4GALNT1", "L1CAM", "MYCN", "GATA2", 
                      "DBH", "CHGB", "CHGA", "SYP", "TH", "PHOX2A", "PHOX2B")
 
-DoHeatmap(Dong.NB, features = NB.marker.genes, assay = "RNA")
+DoHeatmap(Dong.NB, features = NB.marker.genes, assay = "dong2020")
 
 top100 <- head(VariableFeatures(Dong.NB), 100)
 top100
@@ -3554,7 +3323,7 @@ marker_results %>%
     top_n(n = 10, wt = log_fc) 
 
 #saveRDS(Dong.NB, 
-#       file = paste0(params$out,"Rds/Dong2020.scRNA.tumor.clusters_2024-03-25.Rds"))
+#       file = paste0(params$out,"Rds/Dong2020.scdong2020.tumor.clusters_2024-03-25.Rds"))
 ```
 
 
@@ -3568,19 +3337,19 @@ pal <- viridis(n = 10, option = "C", direction = -1)
 
 # CD274 gene encodes for the Programmed death-ligand 1 (PDL-1)
 pdf(paste0(params$out,"figures/CD274_expression.pdf"))
-FeaturePlot(rna, label = TRUE,
+FeaturePlot(dong2020, label = TRUE,
             features = "CD274", 
             order = T, cols = pal)
 dev.off()
 
 
-FeaturePlot(rna, label = TRUE,
+FeaturePlot(dong2020, label = TRUE,
             features = "CD274", 
             order = T, cols = pal)
 
 # PDCD1 gene encodes for the Programmed cell death protein 1 (PD-1)
 pdf(paste0(params$out,"figures/PDCD1_expression.pdf"))
-FeaturePlot(rna, label = TRUE,
+FeaturePlot(dong2020, label = TRUE,
             features = "PDCD1", 
             order = T, cols = pal)
 dev.off()
@@ -3594,20 +3363,20 @@ Here is gated for PD1 and S100B expressing T-cells and check the co-expression
 
 ```{r PD1+ T-cells}
 # Change cell type annotation to the original annotation
-Idents(rna) <- rna@meta.data$original_celltype
+Idents(dong2020) <- dong2020@meta.data$original_celltype
 
 # T-cells
-tcells <- subset(x = rna, idents = c("T (6)","T (9)","T (5)")) # 19126 cells
+tcells <- subset(x = dong2020, idents = c("T (6)","T (9)","T (5)")) # 19126 cells
 # with "T (18)" -> 19428  cells
 
 # PD1+ T cells
-tcells_pd1 <- subset(x = rna, idents = c("T (6)","T (9)","T (5)"),
+tcells_pd1 <- subset(x = dong2020, idents = c("T (6)","T (9)","T (5)"),
                  subset = PDCD1 > 0.1, ) 
 # with "T (18)" -> 552 cells
 
 
 # S100B+ cells
-tcells_s100b <- subset(x = rna, idents = c("T (6)","T (9)","T (5)"),
+tcells_s100b <- subset(x = dong2020, idents = c("T (6)","T (9)","T (5)"),
                  subset = S100B > 0.1, ) # 897 cells
 
 
@@ -3627,12 +3396,12 @@ immune_evasion <- c("PDCD1","CTLA4","HAVCR2","LAG3","TIGIT","CD244","CD160",
                     "CD80","CD86","CD274","PDCD1LG2","LGALS9")
 
 
-rowSums(tcells[['RNA']]["TIGIT",]>0)
+rowSums(tcells[['dong2020']]["TIGIT",]>0)
 
 
 Dong.NB <- AddModuleScore(tcells, immune_evasion,
                             name = "immune_evasion_set", seed = 28, 
-                            assay = 'RNA')
+                            assay = 'dong2020')
 
 # Plot score
 FeaturePlot(tcells,
@@ -3655,37 +3424,37 @@ and are the cells also positive for GZNB?
 
 ```{r CD4, CD8 and GZMB expression in T-cells, fig.height=5, fig.width=5}
 pdf(paste0(params$out,"figures/FeaturePlot_CD274.pdf"))
-FeaturePlot(rna, label = TRUE,
+FeaturePlot(dong2020, label = TRUE,
             features = "CD274",  # PDL-1
             order = T, cols = c("gray","red3"), pt.size = 2)
 dev.off()
 
 pdf(paste0(params$out,"figures/FeaturePlot_PDCD1.pdf"))
-FeaturePlot(rna, label = TRUE,
+FeaturePlot(dong2020, label = TRUE,
             features = "PDCD1",  # PD-1
             order = T, cols = c("gray","red"), pt.size = 1)
 dev.off()
 
 pdf(paste0(params$out,"figures/FeaturePlot_CD8A.pdf"))
-FeaturePlot(rna, label = TRUE,
+FeaturePlot(dong2020, label = TRUE,
             features = "CD8A", # CD8
             order = T, cols = c("gray","red"), pt.size = 1)
 dev.off()
 
 pdf(paste0(params$out,"figures/FeaturePlot_CD4.pdf"))
-FeaturePlot(rna, label = TRUE,
+FeaturePlot(dong2020, label = TRUE,
             features = "CD4", 
             order = T, cols = c("gray","red"), pt.size = 1)
 dev.off()
 
 pdf(paste0(params$out,"figures/FeaturePlot_S100B.pdf"))
-FeaturePlot(rna, label = TRUE,
+FeaturePlot(dong2020, label = TRUE,
             features = "S100B", 
             order = T, cols = c("gray","red"), pt.size = 1)
 dev.off()
 
 pdf(paste0(params$out,"figures/FeaturePlot_GZMB.pdf"))
-FeaturePlot(rna, label = TRUE,
+FeaturePlot(dong2020, label = TRUE,
             features = "GZMB", 
             order = T, cols = c("gray","red"), pt.size = 1)
 dev.off()
@@ -3873,12 +3642,12 @@ features <- c("PDCD1","CTLA4", "LAG3", "HAVCR2", "CSF1", "CD38",
               "OSM", "IL10RA","CCL4","CCL5","CCL16",
                "CCR3", "CCR4", "CCR5", "CCR6", "PTPRC")
 
-#RidgePlot(rna, features = features, ncol = 2)
-#VlnPlot(rna, features = features)
-#FeaturePlot(rna, features = features)
+#RidgePlot(dong2020, features = features, ncol = 2)
+#VlnPlot(dong2020, features = features)
+#FeaturePlot(dong2020, features = features)
 
 
-x <- DotPlot(rna, features = features) + RotatedAxis()
+x <- DotPlot(dong2020, features = features) + RotatedAxis()
 x
 
 DotPlot(tcells, features = features) + RotatedAxis()
@@ -3898,24 +3667,24 @@ tumor_reactivity_genes_2 <- c("PDCD1", "LAG3", "HAVCR2", "CTLA4" ,
 # IL-8 receptors
 IL8_receptors <- c("IL18","IL18BP", "IL1A", "IL1B", "IL1F10", "IL1F3","IL1RA", "IL1F5", "IL1F6",
  "IL1F7", "IL1F8", "IL1RL2", "IL1F9", "IL33")
-DotPlot(rna, features = IL8_receptors) + RotatedAxis()
+DotPlot(dong2020, features = IL8_receptors) + RotatedAxis()
 
 # IL-1 Receptors
 IL1_receptors <- c("IL18R1", "IL18RAP", "IL1R1", "IL1R2", "IL1R3", "IL1R8", "IL1R9", "IL1RL1", "SIGIRR")
-DotPlot(rna, features = IL1_receptors) + RotatedAxis()
+DotPlot(dong2020, features = IL1_receptors) + RotatedAxis()
 
 # Interferon (IFN)
 IFN_receptors <- c("IFNA1", "IFNA10", "IFNA13", "IFNA14", "IFNA2", "IFNA4", 
                    "IFNA7", "IFNB1", "IFNE", "IFNG", "IFNZ", "IFNA8", "IFNA5", 
                    "IFNW1","IFNAR1" ,"IFNAR2", "IFNGR1", "IFNGR2")
-DotPlot(rna, features = IFN_receptors) + RotatedAxis()
+DotPlot(dong2020, features = IFN_receptors) + RotatedAxis()
 
 # IFN Receptor
 
 # IL6 Family & Receptors
 IL6_family_receptors <- c("CLCF1", "CNTF", "IL11", "IL31", "IL6", "Leptin" ,"LIF", 
                    "OSM","CNTFR", "IL11RA", "IL6R", "LEPR", "LIFR", "OSMR", "IL31RA")
-DotPlot(rna, features = IL6_family_receptors) + RotatedAxis()
+DotPlot(dong2020, features = IL6_family_receptors) + RotatedAxis()
 
 
 # IL10 Family & Receptors
@@ -3923,7 +3692,7 @@ IL10_family_receptors <- c("IL10", "IL19", "IL20", "IL22", "IL24", "IL28B",
                            "IL28A", "IL29", "IL10RA", "IL10RB", "IL20RA", 
                            "IL20RB", "IL22RA2", "IL22R")
 
-DotPlot(rna, features = IL10_family_receptors) + RotatedAxis()
+DotPlot(dong2020, features = IL10_family_receptors) + RotatedAxis()
 
 # TGF beta Family
 #TGF-beta 1/TGFB1TGF-beta 2/TGFB2TGF-beta 3/TGFB3
@@ -3939,19 +3708,19 @@ Chemokines <- c("CCL1","CCL11","CCL12","CCL13","CCL14","CCL15","CCL16","CCL17",
                 "CXCL2","CXCL3","CXCL4","CXCL5","CXCL6","CXCL7","CXCL9IL8",
                 "CXCL8","XCL1","XCL2","FAM19A1","FAM19A2","FAM19A3","FAM19A4",
                 "FAM19A5")
-DotPlot(rna, features = Chemokines) + RotatedAxis()
+DotPlot(dong2020, features = Chemokines) + RotatedAxis()
 
 # Chemokine Receptor
 Chemokine_receptors <- c("CCR1", "CCR2", "CCR3", "CCR4", "CCR5", "CCR6", "CCR7",
                          "CCR8", "CCRL1", "CXCR3", "CXCR4", "CXCR5", "CXCR6",
                          "CXCR7", "CXCR1", "CXCR2")
-DotPlot(rna, features = Chemokine_receptors) + RotatedAxis()
+DotPlot(dong2020, features = Chemokine_receptors) + RotatedAxis()
 
 
-y <- DotPlot(rna, features = tumor_reactivity_genes) + RotatedAxis()
+y <- DotPlot(dong2020, features = tumor_reactivity_genes) + RotatedAxis()
 y
 
-DotPlot(rna, features = tumor_reactivity_genes_2) + RotatedAxis()
+DotPlot(dong2020, features = tumor_reactivity_genes_2) + RotatedAxis()
 
 pdf(paste0(params$out,"figures/Tcell_tumor_reactivity_markers_dotPlot.pdf"))
 y
@@ -3959,7 +3728,7 @@ dev.off()
 ```
 
 
-<<<<<<< HEAD
+
 
 ## __Final dotplot__
 
@@ -3971,7 +3740,7 @@ exhausted_tcell_markers <- c("LAG3","CTLA4", "IL10RA","GATA3","PRDM1",
                              "IKZF2","TBX21","EOMES")
 early_activated_tcell_markers <- c("PTPRC","CD27","CD36")
 late_activated_tcell_markers <- c("CD69","CCR7")
-=======
+
 VlnPlot(tcells_pd1,features,log = TRUE)
 RidgePlot(tcells_pd1,features,log=TRUE)
 ```
@@ -4024,24 +3793,24 @@ dev.off()
 
 ```{r original labels}
 
-true_label <- rna@active.ident
+true_label <- dong2020@active.ident
 predicted_label <- predicted_labels$labels
 
-rna$original_celltype <- rna@active.ident
-rna$predicted_celltype <- predicted_label
+dong2020$original_celltype <- dong2020@active.ident
+dong2020$predicted_celltype <- predicted_label
 
-Idents(rna) <- rna@meta.data$original_celltype
+Idents(dong2020) <- dong2020@meta.data$original_celltype
 
 
 # CellChat infers the biologically significant cell-cell communication by 
 # assigning each interaction with a probability value and peforming a permutation test. 
 pathway <- c("TWEAK", "PSAP")
-treat_resist_Dong_lables <- subset(x = rna, 
+treat_resist_Dong_lables <- subset(x = dong2020, 
                                      idents = c("T (5)","T (6)","T (9)","T (18)",
                                                 "NB (8)", 
                                                 "M (1)","M (2)","M (10)","M (15)"))
 cellchat <- createCellChat(object = treat_resist_Dong_lables, 
-                           group.by = "ident", assay = "RNA")
+                           group.by = "ident", assay = "dong2020")
 
 # set the used database in the object
 cellchat@DB <- CellChatDB
@@ -4165,9 +3934,9 @@ df.path.Dong <- subsetCommunication(cellchat,
 # Signalling source: T-cells, Cluster 9
 filt <- df.path.Dong$source == "T (9)"
 T9 <- df.path.Dong[filt,]
-<<<<<<< HEAD
+
 T9 <- T9 %>% arrange(desc(prob))
-=======
+
 T9 <- T9 %>% arrange(prob)
 
 
@@ -4176,9 +3945,9 @@ T9 <- T9 %>% arrange(prob)
 
 filt <- T9$target == "M (1)"
 T9_M1 <- T9[filt,]
-<<<<<<< HEAD
+
 T9_M1 <- T9_M1 %>% arrange(desc(prob))
-=======
+
 T9_M1 <- T9_M1 %>% arrange(prob)
 
 T9_M1
@@ -4192,18 +3961,18 @@ T9_M1
 # Signalling source: T-cells, Cluster 5
 filt <- df.path.Dong$source == "T (5)"
 T5 <- df.path.Dong[filt,]
-<<<<<<< HEAD
+
 T5 <- T5 %>% arrange(desc(prob))
-=======
+
 T5 <- T5 %>% arrange(prob)
 
 
 # Signalling source: T-cells, Cluster 6
 filt <- df.path.Dong$source == "T (6)"
 T6 <- df.path.Dong[filt,]
-<<<<<<< HEAD
+
 T6 <- T6 %>% arrange(desc(prob))
-=======
+
 T6 <- T6 %>% arrange(prob)
 
 
@@ -4283,17 +4052,17 @@ subset(T9, pathway_name == "PSAP")
 # Do we see a differential gene expression of the above genes (pathways) between
 # MYCNA and sporadic NB sub-types?
 
-rna$group_celltype <- paste(rna$original_celltype, rna$group, sep = "_")
-Idents(rna) <- "group_celltype"
-rna.de <- FindMarkers(rna, ident.1 = "T (9)_II", ident.2 = "T (9)_IV", verbose = FALSE)
-head(rna.de, n = 10)
+dong2020$group_celltype <- paste(dong2020$original_celltype, dong2020$group, sep = "_")
+Idents(dong2020) <- "group_celltype"
+dong2020.de <- FindMarkers(dong2020, ident.1 = "T (9)_II", ident.2 = "T (9)_IV", verbose = FALSE)
+head(dong2020.de, n = 10)
 
 # TOP DEGs in cluster 9, between MYNCA and non-MYNCA tumors
-rna.de <- rna.de %>% filter(p_val_adj < 0.01) %>% filter(abs(avg_log2FC) > 1)
-rna.de 
+dong2020.de <- dong2020.de %>% filter(p_val_adj < 0.01) %>% filter(abs(avg_log2FC) > 1)
+dong2020.de 
 
-DoHeatmap(rna.de,
-  features = rownames(rna.de),
+DoHeatmap(dong2020.de,
+  features = rownames(dong2020.de),
   group.by = "group_celltype")
 
 # Probability of CCC between all cells
@@ -4306,13 +4075,13 @@ cellchat@netP$prob
 ```{r predicted labels}
 # Change the cell type annotation to predicted labels
 
-true_label <- rna@active.ident
+true_label <- dong2020@active.ident
 predicted_label <- predicted_labels$labels
 
-rna$original_celltype <- rna@active.ident
-rna$predicted_celltype <- predicted_label
+dong2020$original_celltype <- dong2020@active.ident
+dong2020$predicted_celltype <- predicted_label
 
-Idents(rna) <- rna@meta.data$predicted_celltype
+Idents(dong2020) <- dong2020@meta.data$predicted_celltype
 
 
 
@@ -4332,10 +4101,10 @@ treat_resist <- c("CD14- PDL1+ MO/DC",
 #treat_resist <- c("early SYM-like TC","CD44+ mes-like TC",
 #                 "CD14+ PDL1+ MO","CD4+ PD1+ T cell")
 
-treat_resist_lazic_lables <- subset(x = rna, 
+treat_resist_lazic_lables <- subset(x = dong2020, 
                                      idents = treat_resist) #5814  cells
 cellchat_predict <- createCellChat(object = treat_resist_lazic_lables, 
-                           group.by = "ident", assay = "RNA")
+                           group.by = "ident", assay = "dong2020")
 
 table(treat_resist_lazic_lables$predicted_celltype)
 
@@ -4473,11 +4242,11 @@ df.path.lazic <- subsetCommunication(cellchat_predict,
 
 ```{r}
 # Cell type annotation predicted from IMC data
-Idents(rna) <- rna@meta.data$predicted_celltype
+Idents(dong2020) <- dong2020@meta.data$predicted_celltype
 
 # bar plot of cell type composition per patient
 # with highlighted patients, which are common between IMC and Dong.NB.filt data
-pt <- table(rna$predicted_celltype,rna$sample)
+pt <- table(dong2020$predicted_celltype,dong2020$sample)
 
 ```
 
@@ -4502,49 +4271,49 @@ library("patchwork")
 # For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
 # This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
 
-rna_milo <- Milo(as.SingleCellExperiment(rna))
-rna_milo
+dong2020_milo <- Milo(as.SingleCellExperiment(dong2020))
+dong2020_milo
 
 
-reducedDim(rna_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(rna), "UMAP")
+reducedDim(dong2020_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(dong2020), "UMAP")
 
-plotUMAP(rna_milo, colour_by="group") + plotUMAP(rna_milo, colour_by="sample")
+plotUMAP(dong2020_milo, colour_by="group") + plotUMAP(dong2020_milo, colour_by="sample")
 
 # We need to add the KNN graph to the Milo object. This is stored in the graph slot, in igraph format.
-rna_milo <- buildGraph(rna_milo, k = 30, d = 30, reduced.dim = "PCA")
+dong2020_milo <- buildGraph(dong2020_milo, k = 30, d = 30, reduced.dim = "PCA")
 
 # test k = 10
 
 # Defining representative neighbourhoods on the KNN graph
-rna_milo <- makeNhoods(rna_milo, prop = 0.1, k = 30, d=30, 
+dong2020_milo <- makeNhoods(dong2020_milo, prop = 0.1, k = 30, d=30, 
                        refined = TRUE, 
                        reduced_dims = "PCA") # (faster) refinement_scheme="graph"
 
 # plot the distribution of neighbourhood sizes (i.e. how many cells form each neighborhood) 
 # to evaluate whether the value of k used for graph building was appropriate
-plotNhoodSizeHist(rna_milo)
+plotNhoodSizeHist(dong2020_milo)
 
 # Counting cells in neighbourhoods
-rna_milo <- countCells(rna_milo, 
-                       meta.data = as.data.frame(colData(rna_milo)), 
+dong2020_milo <- countCells(dong2020_milo, 
+                       meta.data = as.data.frame(colData(dong2020_milo)), 
                        sample="sample")
-head(nhoodCounts(rna_milo))
+head(nhoodCounts(dong2020_milo))
 
 #1. If comparing two samples use normal DA testing
 
 # Defining experimental design
-rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
-rna_design <- distinct(rna_design)
-rownames(rna_design) <- rna_design$sample
-rna_design
+dong2020_design <- data.frame(colData(dong2020_milo))[,c("sample", "group")]
+dong2020_design <- distinct(dong2020_design)
+rownames(dong2020_design) <- dong2020_design$sample
+dong2020_design
 
 # Computing neighborhood connectivity
-rna_milo <- calcNhoodDistance(rna_milo, d = 30, reduced.dim = "PCA")
+dong2020_milo <- calcNhoodDistance(dong2020_milo, d = 30, reduced.dim = "PCA")
 
 
 # DA testing
-da_results <- testNhoods(rna_milo, design = ~ group, 
-                         design.df = rna_design, 
+da_results <- testNhoods(dong2020_milo, design = ~ group, 
+                         design.df = dong2020_design, 
                          reduced.dim="PCA")
 head(da_results)
 
@@ -4552,12 +4321,12 @@ da_results %>%
   arrange(SpatialFDR) %>%
   head() 
 
-rna_milo <- buildNhoodGraph(rna_milo)
+dong2020_milo <- buildNhoodGraph(dong2020_milo)
 
 # QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
 
 # Plot single-cell UMAP
-umap_pl <- plotReducedDim(rna_milo, 
+umap_pl <- plotReducedDim(dong2020_milo, 
                           dimred = "UMAP", 
                           colour_by = "group", 
                           text_by = "original_celltype", 
@@ -4565,12 +4334,12 @@ umap_pl <- plotReducedDim(rna_milo,
   guides(fill = "none")
 
 # Plot neighbourhood graph
-nh_graph_pl <- plotNhoodGraphDA(rna_milo, da_results, layout="UMAP", alpha=0.05) 
+nh_graph_pl <- plotNhoodGraphDA(dong2020_milo, da_results, layout="UMAP", alpha=0.05) 
 
 umap_pl + nh_graph_pl +
   plot_layout(guides = "collect")
 
-da_results <- annotateNhoods(rna_milo, da_results, 
+da_results <- annotateNhoods(dong2020_milo, da_results, 
                              coldata_col = "original_celltype")
 
 da_results$original_celltype <- ifelse(da_results$original_celltype_fraction < 0.7, 
@@ -4587,19 +4356,19 @@ plotDAbeeswarm(da_results, group.by = "original_celltype")
 # For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
 # This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
 
-rna_milo <- Milo(as.SingleCellExperiment(rna))
-rna_milo
+dong2020_milo <- Milo(as.SingleCellExperiment(dong2020))
+dong2020_milo
 
-reducedDim(rna_milo, "UMAP") <- reducedDim(rna_milo, "UMAP")
+reducedDim(dong2020_milo, "UMAP") <- reducedDim(dong2020_milo, "UMAP")
 
-plotUMAP(rna_milo, colour_by="group") + plotUMAP(rna_milo, colour_by="sample")
+plotUMAP(dong2020_milo, colour_by="group") + plotUMAP(dong2020_milo, colour_by="sample")
 
 
 # Define cell neighbourhoods
-rna_milo <- buildGraph(rna_milo, k = 10, d = 30)
+dong2020_milo <- buildGraph(dong2020_milo, k = 10, d = 30)
 
 ## Constructing kNN graph with k = 10
-rna_milo <- makeNhoods(rna_milo, 
+dong2020_milo <- makeNhoods(dong2020_milo, 
                        prop = 0.1, 
                        k = 10, 
                        d = 30, 
@@ -4607,30 +4376,30 @@ rna_milo <- makeNhoods(rna_milo,
                        refinement_scheme = "graph") # make nhoods using graph-only as this is faster
 
 # metadata
-colData(rna_milo)$sample <- paste(colData(rna_milo)$group, colData(rna_milo)$sample, sep="_")
+colData(dong2020_milo)$sample <- paste(colData(dong2020_milo)$group, colData(dong2020_milo)$sample, sep="_")
 
 # Counting cells in neighbourhoods
-rna_milo <- countCells(rna_milo, meta.data = data.frame(colData(rna_milo)), samples="sample") # make the nhood X sample counts matrix
+dong2020_milo <- countCells(dong2020_milo, meta.data = data.frame(colData(dong2020_milo)), samples="sample") # make the nhood X sample counts matrix
 
 # Differential abundance testing with contrasts
-rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
-rna_design <- distinct(rna_design)
-rownames(rna_design) <- rna_design$sample
+dong2020_design <- data.frame(colData(dong2020_milo))[,c("sample", "group")]
+dong2020_design <- distinct(dong2020_design)
+rownames(dong2020_design) <- dong2020_design$sample
 
 # Reorder rownames to match columns of nhoodCounts(milo)
-rna_design <- rna_design[colnames(nhoodCounts(rna_milo)), , drop=FALSE]
-table(rna_design$group)
+dong2020_design <- dong2020_design[colnames(nhoodCounts(dong2020_milo)), , drop=FALSE]
+table(dong2020_design$group)
 
 # Comparisons
 
 #A. ATRXmut vs. MYCNA
-rownames(rna_design) <- rna_design$sample
+rownames(dong2020_design) <- dong2020_design$sample
 contrast.1 <- c("groupIII - groupII") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsMYCNA <- testNhoods(rna_milo, 
+da_results_ATRXmutvsMYCNA <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.1, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -4638,7 +4407,7 @@ da_results_ATRXmutvsMYCNA <- testNhoods(rna_milo,
 table(da_results_ATRXmutvsMYCNA$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_ATRXmutvsMYCNA <- annotateNhoods(rna_milo, da_results_ATRXmutvsMYCNA, 
+da_results_ATRXmutvsMYCNA <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsMYCNA, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -4660,9 +4429,9 @@ plotDAbeeswarm(da_results_ATRXmutvsMYCNA, group.by = "original_celltype")
 contrast.2 <- c("groupIII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsSporadic <- testNhoods(rna_milo, 
+da_results_ATRXmutvsSporadic <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.2, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -4670,7 +4439,7 @@ da_results_ATRXmutvsSporadic <- testNhoods(rna_milo,
 table(da_results_ATRXmutvsSporadic$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_ATRXmutvsSporadic <- annotateNhoods(rna_milo, da_results_ATRXmutvsSporadic, 
+da_results_ATRXmutvsSporadic <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsSporadic, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -4690,9 +4459,9 @@ plotDAbeeswarm(da_results_ATRXmutvsSporadic, group.by = "original_celltype")
 contrast.3 <- c("groupII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_MYCNAvsSporadic <- testNhoods(rna_milo, 
+da_results_MYCNAvsSporadic <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.3, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -4700,7 +4469,7 @@ da_results_MYCNAvsSporadic <- testNhoods(rna_milo,
 table(da_results_MYCNAvsSporadic$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_MYCNAvsSporadic <- annotateNhoods(rna_milo, da_results_MYCNAvsSporadic, 
+da_results_MYCNAvsSporadic <- annotateNhoods(dong2020_milo, da_results_MYCNAvsSporadic, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -4719,20 +4488,20 @@ plotDAbeeswarm(da_results_MYCNAvsSporadic, group.by = "original_celltype")
 
 #D. ATRXmut vs. MYCNA and sporadic
 
-model <- model.matrix(~ 0 + group, data = rna_design)
+model <- model.matrix(~ 0 + group, data = dong2020_design)
 ave.contrast <- c("groupIII - (groupII + groupIV) / 2")
 mod.constrast <- makeContrasts(contrasts = ave.contrast, levels = model)
 mod.constrast
 
-da_results_ATRXmutvsAll <- testNhoods(rna_milo, design = ~ 0 + group, 
-                         design.df = rna_design, 
+da_results_ATRXmutvsAll <- testNhoods(dong2020_milo, design = ~ 0 + group, 
+                         design.df = dong2020_design, 
                          model.contrasts = ave.contrast, 
                          fdr.weighting = "graph-overlap")
 
 table(da_results_ATRXmutvsAll$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_ATRXmutvsAll <- annotateNhoods(rna_milo, da_results_ATRXmutvsAll, 
+da_results_ATRXmutvsAll <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsAll, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -4753,9 +4522,9 @@ plotDAbeeswarm(da_results_ATRXmutvsAll, group.by = "original_celltype")
 contrast.4 <- c("groupIII - groupI") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsCtrl <- testNhoods(rna_milo, 
+da_results_ATRXmutvsCtrl <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.4, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -4763,7 +4532,7 @@ da_results_ATRXmutvsCtrl <- testNhoods(rna_milo,
 table(da_results_ATRXmutvsCtrl$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_ATRXmutvsCtrl <- annotateNhoods(rna_milo, da_results_ATRXmutvsCtrl, 
+da_results_ATRXmutvsCtrl <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsCtrl, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -4778,8 +4547,6 @@ results <- da_results_ATRXmutvsCtrl %>%
 results
 
 plotDAbeeswarm(results, group.by = "original_celltype")
-<<<<<<< HEAD
-=======
 ```
 
 ```{r miloR - many groups}
@@ -4805,19 +4572,19 @@ library("patchwork")
 # For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
 # This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
 
-rna_milo <- Milo(as.SingleCellExperiment(rna))
-rna_milo
+dong2020_milo <- Milo(as.SingleCellExperiment(dong2020))
+dong2020_milo
 
-reducedDim(rna_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(rna), "UMAP")
+reducedDim(dong2020_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(dong2020), "UMAP")
 
-plotUMAP(rna_milo, colour_by="group") + plotUMAP(rna_milo, colour_by="sample")
+plotUMAP(dong2020_milo, colour_by="group") + plotUMAP(dong2020_milo, colour_by="sample")
 
 
 # Define cell neighbourhoods
-rna_milo <- buildGraph(rna_milo, k = 10, d = 30)
+dong2020_milo <- buildGraph(dong2020_milo, k = 10, d = 30)
 
 ## Constructing kNN graph with k = 10
-rna_milo <- makeNhoods(rna_milo, 
+dong2020_milo <- makeNhoods(dong2020_milo, 
                        prop = 0.1, 
                        k = 10, 
                        d = 30, 
@@ -4825,15 +4592,15 @@ rna_milo <- makeNhoods(rna_milo,
                        refinement_scheme = "graph") # make nhoods using graph-only as this is faster
 
 # metadata
-colData(rna_milo)$sample <- paste(colData(rna_milo)$group, colData(rna_milo)$sample, sep="_")
+colData(dong2020_milo)$sample <- paste(colData(dong2020_milo)$group, colData(dong2020_milo)$sample, sep="_")
 
 # Counting cells in neighbourhoods
-rna_milo <- countCells(rna_milo, meta.data = data.frame(colData(rna_milo)), samples="sample") # make the nhood X sample counts matrix
+dong2020_milo <- countCells(dong2020_milo, meta.data = data.frame(colData(dong2020_milo)), samples="sample") # make the nhood X sample counts matrix
 
 # QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
 
 # Plot single-cell UMAP
-umap_pl <- plotReducedDim(rna_milo, 
+umap_pl <- plotReducedDim(dong2020_milo, 
                           dimred = "UMAP", 
                           colour_by = "group", 
                           text_by = "original_celltype", 
@@ -4841,30 +4608,30 @@ umap_pl <- plotReducedDim(rna_milo,
   guides(fill = "none")
 
 # Plot neighbourhood graph
-nh_graph_pl <- plotNhoodGraphDA(rna_milo, da_results, layout="UMAP", alpha=0.05) 
+nh_graph_pl <- plotNhoodGraphDA(dong2020_milo, da_results, layout="UMAP", alpha=0.05) 
 
 umap_pl + nh_graph_pl +
   plot_layout(guides = "collect")
 
 # Differential abundance testing with contrasts
-rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
-rna_design <- distinct(rna_design)
-rownames(rna_design) <- rna_design$sample
+dong2020_design <- data.frame(colData(dong2020_milo))[,c("sample", "group")]
+dong2020_design <- distinct(dong2020_design)
+rownames(dong2020_design) <- dong2020_design$sample
 
 # Reorder rownames to match columns of nhoodCounts(milo)
-rna_design <- rna_design[colnames(nhoodCounts(rna_milo)), , drop=FALSE]
-table(rna_design$group)
+dong2020_design <- dong2020_design[colnames(nhoodCounts(dong2020_milo)), , drop=FALSE]
+table(dong2020_design$group)
 
 # Comparisons
 
 #A. ATRXmut vs. MYCNA
-rownames(rna_design) <- rna_design$sample
+rownames(dong2020_design) <- dong2020_design$sample
 contrast.1 <- c("groupIII - groupII") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsMYCNA <- testNhoods(rna_milo, 
+da_results_ATRXmutvsMYCNA <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.1, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -4872,7 +4639,7 @@ da_results_ATRXmutvsMYCNA <- testNhoods(rna_milo,
 table(da_results_ATRXmutvsMYCNA$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_ATRXmutvsMYCNA <- annotateNhoods(rna_milo, da_results_ATRXmutvsMYCNA, 
+da_results_ATRXmutvsMYCNA <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsMYCNA, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -4894,9 +4661,9 @@ plotDAbeeswarm(da_results_ATRXmutvsMYCNA, group.by = "original_celltype")
 contrast.2 <- c("groupIII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsSporadic <- testNhoods(rna_milo, 
+da_results_ATRXmutvsSporadic <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.2, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -4904,7 +4671,7 @@ da_results_ATRXmutvsSporadic <- testNhoods(rna_milo,
 table(da_results_ATRXmutvsSporadic$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_ATRXmutvsSporadic <- annotateNhoods(rna_milo, da_results_ATRXmutvsSporadic, 
+da_results_ATRXmutvsSporadic <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsSporadic, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -4924,9 +4691,9 @@ plotDAbeeswarm(da_results_ATRXmutvsSporadic, group.by = "original_celltype")
 contrast.3 <- c("groupII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_MYCNAvsSporadic <- testNhoods(rna_milo, 
+da_results_MYCNAvsSporadic <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.3, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -4934,7 +4701,7 @@ da_results_MYCNAvsSporadic <- testNhoods(rna_milo,
 table(da_results_MYCNAvsSporadic$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_MYCNAvsSporadic <- annotateNhoods(rna_milo, da_results_MYCNAvsSporadic, 
+da_results_MYCNAvsSporadic <- annotateNhoods(dong2020_milo, da_results_MYCNAvsSporadic, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -4953,20 +4720,20 @@ plotDAbeeswarm(da_results_MYCNAvsSporadic, group.by = "original_celltype")
 
 #D. ATRXmut vs. MYCNA and sporadic
 
-model <- model.matrix(~ 0 + group, data = rna_design)
+model <- model.matrix(~ 0 + group, data = dong2020_design)
 ave.contrast <- c("groupIII - (groupII + groupIV) / 2")
 mod.constrast <- makeContrasts(contrasts = ave.contrast, levels = model)
 mod.constrast
 
-da_results_ATRXmutvsAll <- testNhoods(rna_milo, design = ~ 0 + group, 
-                         design.df = rna_design, 
+da_results_ATRXmutvsAll <- testNhoods(dong2020_milo, design = ~ 0 + group, 
+                         design.df = dong2020_design, 
                          model.contrasts = ave.contrast, 
                          fdr.weighting = "graph-overlap")
 
 table(da_results_ATRXmutvsAll$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_ATRXmutvsAll <- annotateNhoods(rna_milo, da_results_ATRXmutvsAll, 
+da_results_ATRXmutvsAll <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsAll, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -4987,9 +4754,9 @@ plotDAbeeswarm(da_results_ATRXmutvsAll, group.by = "original_celltype")
 contrast.4 <- c("groupIII - groupI") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsCtrl <- testNhoods(rna_milo, 
+da_results_ATRXmutvsCtrl <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.4, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -4997,7 +4764,7 @@ da_results_ATRXmutvsCtrl <- testNhoods(rna_milo,
 table(da_results_ATRXmutvsCtrl$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_ATRXmutvsCtrl <- annotateNhoods(rna_milo, da_results_ATRXmutvsCtrl, 
+da_results_ATRXmutvsCtrl <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsCtrl, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -5034,19 +4801,19 @@ library("patchwork")
 # For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
 # This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
 
-rna_milo <- Milo(as.SingleCellExperiment(rna))
-rna_milo
+dong2020_milo <- Milo(as.SingleCellExperiment(dong2020))
+dong2020_milo
 
-reducedDim(rna_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(rna), "UMAP")
+reducedDim(dong2020_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(dong2020), "UMAP")
 
-plotUMAP(rna_milo, colour_by="group") + plotUMAP(rna_milo, colour_by="sample")
+plotUMAP(dong2020_milo, colour_by="group") + plotUMAP(dong2020_milo, colour_by="sample")
 
 
 # Define cell neighbourhoods
-rna_milo <- buildGraph(rna_milo, k = 10, d = 30)
+dong2020_milo <- buildGraph(dong2020_milo, k = 10, d = 30)
 
 ## Constructing kNN graph with k = 10
-rna_milo <- makeNhoods(rna_milo, 
+dong2020_milo <- makeNhoods(dong2020_milo, 
                        prop = 0.1, 
                        k = 10, 
                        d = 30, 
@@ -5054,15 +4821,15 @@ rna_milo <- makeNhoods(rna_milo,
                        refinement_scheme = "graph") # make nhoods using graph-only as this is faster
 
 # metadata
-colData(rna_milo)$sample <- paste(colData(rna_milo)$group, colData(rna_milo)$sample, sep="_")
+colData(dong2020_milo)$sample <- paste(colData(dong2020_milo)$group, colData(dong2020_milo)$sample, sep="_")
 
 # Counting cells in neighbourhoods
-rna_milo <- countCells(rna_milo, meta.data = data.frame(colData(rna_milo)), samples="sample") # make the nhood X sample counts matrix
+dong2020_milo <- countCells(dong2020_milo, meta.data = data.frame(colData(dong2020_milo)), samples="sample") # make the nhood X sample counts matrix
 
 # QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
 
 # Plot single-cell UMAP
-umap_pl <- plotReducedDim(rna_milo, 
+umap_pl <- plotReducedDim(dong2020_milo, 
                           dimred = "UMAP", 
                           colour_by = "group", 
                           text_by = "original_celltype", 
@@ -5070,30 +4837,30 @@ umap_pl <- plotReducedDim(rna_milo,
   guides(fill = "none")
 
 # Plot neighbourhood graph
-nh_graph_pl <- plotNhoodGraphDA(rna_milo, da_results, layout="UMAP", alpha=0.05) 
+nh_graph_pl <- plotNhoodGraphDA(dong2020_milo, da_results, layout="UMAP", alpha=0.05) 
 
 umap_pl + nh_graph_pl +
   plot_layout(guides = "collect")
 
 # Differential abundance testing with contrasts
-rna_design <- data.frame(colData(rna_milo))[,c("sample", "group")]
-rna_design <- distinct(rna_design)
-rownames(rna_design) <- rna_design$sample
+dong2020_design <- data.frame(colData(dong2020_milo))[,c("sample", "group")]
+dong2020_design <- distinct(dong2020_design)
+rownames(dong2020_design) <- dong2020_design$sample
 
 # Reorder rownames to match columns of nhoodCounts(milo)
-rna_design <- rna_design[colnames(nhoodCounts(rna_milo)), , drop=FALSE]
-table(rna_design$group)
+dong2020_design <- dong2020_design[colnames(nhoodCounts(dong2020_milo)), , drop=FALSE]
+table(dong2020_design$group)
 
 # Comparisons
 
 #A. ATRXmut vs. MYCNA
-rownames(rna_design) <- rna_design$sample
+rownames(dong2020_design) <- dong2020_design$sample
 contrast.1 <- c("groupIII - groupII") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsMYCNA <- testNhoods(rna_milo, 
+da_results_ATRXmutvsMYCNA <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.1, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -5101,7 +4868,7 @@ da_results_ATRXmutvsMYCNA <- testNhoods(rna_milo,
 table(da_results_ATRXmutvsMYCNA$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_ATRXmutvsMYCNA <- annotateNhoods(rna_milo, da_results_ATRXmutvsMYCNA, 
+da_results_ATRXmutvsMYCNA <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsMYCNA, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -5123,9 +4890,9 @@ plotDAbeeswarm(da_results_ATRXmutvsMYCNA, group.by = "original_celltype")
 contrast.2 <- c("groupIII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsSporadic <- testNhoods(rna_milo, 
+da_results_ATRXmutvsSporadic <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.2, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -5133,7 +4900,7 @@ da_results_ATRXmutvsSporadic <- testNhoods(rna_milo,
 table(da_results_ATRXmutvsSporadic$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_ATRXmutvsSporadic <- annotateNhoods(rna_milo, da_results_ATRXmutvsSporadic, 
+da_results_ATRXmutvsSporadic <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsSporadic, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -5153,9 +4920,9 @@ plotDAbeeswarm(da_results_ATRXmutvsSporadic, group.by = "original_celltype")
 contrast.3 <- c("groupII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
 
 # we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_MYCNAvsSporadic <- testNhoods(rna_milo, 
+da_results_MYCNAvsSporadic <- testNhoods(dong2020_milo, 
                          design = ~ 0 + group, 
-                         design.df = rna_design, 
+                         design.df = dong2020_design, 
                          model.contrasts = contrast.3, 
                          fdr.weighting="graph-overlap")
 ## Using TMM normalisation
@@ -5163,7 +4930,7 @@ da_results_MYCNAvsSporadic <- testNhoods(rna_milo,
 table(da_results_MYCNAvsSporadic$SpatialFDR < 0.1)
 
 # annotate hood with original cell type annotation
-da_results_MYCNAvsSporadic <- annotateNhoods(rna_milo, da_results_MYCNAvsSporadic, 
+da_results_MYCNAvsSporadic <- annotateNhoods(dong2020_milo, da_results_MYCNAvsSporadic, 
                              coldata_col = "original_celltype")
 
 # remove hoods that contained mixed cell type populations
@@ -5179,351 +4946,6 @@ results
 
 plotDAbeeswarm(da_results_MYCNAvsSporadic, group.by = "original_celltype")
 ```
-
-
-# __Gene set enrichment analysis__
-
-
-```{r GSEA function}
-# from: https://bioinformaticsbreakdown.com/how-to-gsea/
-
-GSEA = function(gene_list, GO_file, pval) {
-  set.seed(54321)
-  library(dplyr)
-  library(fgsea)
-
-  if ( any( duplicated(names(gene_list)) )  ) {
-    warning("Duplicates in gene names")
-    gene_list = gene_list[!duplicated(names(gene_list))]
-  }
-  if  ( !all( order(gene_list, decreasing = TRUE) == 1:length(gene_list)) ){
-    warning("Gene list not sorted")
-    gene_list = sort(gene_list, decreasing = TRUE)
-  }
-  myGO = fgsea::gmtPathways(GO_file)
-
-  fgRes <- fgsea::fgsea(pathways = myGO,
-                           stats = gene_list,
-                           minSize=15, ## minimum gene set size
-                           maxSize=400) ## maximum gene set size) 
-  fgRes <-as.data.frame(fgRes) %>% filter(padj < 0.1) %>% arrange(desc(NES))
-  message(paste("Number of signficant gene sets =", nrow(fgRes)))
-
-  message("Collapsing Pathways -----")
-  concise_pathways = collapsePathways(data.table::as.data.table(fgRes),
-                                      pathways = myGO,
-                                      stats = gene_list)
-  fgRes = fgRes[fgRes$pathway %in% concise_pathways$mainPathways, ]
-  message(paste("Number of gene sets after collapsing =", nrow(fgRes)))
-
-  fgRes$Enrichment = ifelse(fgRes$NES > 0, "Up-regulated", "Down-regulated")
-  filtRes = rbind(head(fgRes, n = 10),
-                  tail(fgRes, n = 10 ))
-
-  total_up = sum(fgRes$Enrichment == "Up-regulated")
-  total_down = sum(fgRes$Enrichment == "Down-regulated")
-  header = paste0("Top 10 (Total pathways: Up=", total_up,", Down=", total_down, ")")
-
-  colos = setNames(c("firebrick2", "dodgerblue2"),
-                 c("Up-regulated", "Down-regulated"))
-
-g1= ggplot(filtRes, aes(reorder(pathway, NES), NES)) +
-  geom_point( aes(fill = Enrichment, size = size), shape=21) +
-  scale_fill_manual(values = colos ) +
-  scale_size_continuous(range = c(2,10)) +
-  geom_hline(yintercept = 0) +
-  coord_flip() +
-  labs(x="Pathway", y="Normalized Enrichment Score",
-       title=header) 
-
-  output = list("Results" = fgRes, "Plot" = g1)
-  return(output)
-}
-```
-
-```{r Gene enrichment analysis - all, fig.height=10, fig.width=20}
-#BiocManager::install("fgsea")
-
-library("fgsea")
-
-# All gene sets: msigdb.v2020.2.Hs.symbols.gmt
-# H: Hallmark gene sets
-# C5: ontology gene sets
-# C6: oncogenic signature gene sets
-# C7: immunologic signature gene sets
-# C8: cell type signature gene sets
-# 3CA: Curated Cancer Cell Atlas gene sets
-
-# Set the GO file to all gene sets from GSEA database
-GO_file = paste0(params$GO_db,"/msigdb.v2020.2.Hs.symbols.gmt")
-
-# using here the tumor clusters from 08.03.2024
-de_results <- de_results %>% filter(padj < 0.01)
-
-#1. CLUSTER 0
-clust0 <- de_results %>% filter(group1 == "0") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-
-#2. CLUSTER 1
-clust0 <- de_results %>% filter(group1 == "1") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-
-#3. CLUSTER 2 (sporadic NBs all cluster here)
-clust0 <- de_results %>% filter(group1 == "2") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-
-#4. CLUSTER 3
-clust0 <- de_results %>% filter(group1 == "3") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-
-#5. CLUSTER 4
-clust0 <- de_results %>% filter(group1 == "4") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-
-#6. CLUSTER 5
-clust0 <- de_results %>% filter(group1 == "5") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-```
-
-```{r Gene enrichment analysis - hallmarks, fig.height=5, fig.width=10}
-#BiocManager::install("fgsea")
-
-library("fgsea")
-
-# All gene sets: msigdb.v2020.2.Hs.symbols.gmt
-# H: Hallmark gene sets
-# C5: ontology gene sets
-# C6: oncogenic signature gene sets
-# C7: immunologic signature gene sets
-# C8: cell type signature gene sets
-# 3CA: Curated Cancer Cell Atlas gene sets
-
-# Set the GO file to all gene sets from GSEA database
-GO_file = paste0(params$GO_db,"/h.all.v2020.2.Hs.symbols.gmt")
-
-# using here the tumor clusters from 08.03.2024
-de_results <- de_results %>% filter(padj < 0.01)
-
-#1. CLUSTER 0
-clust0 <- de_results %>% filter(group1 == "0") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-
-#2. CLUSTER 1
-clust0 <- de_results %>% filter(group1 == "1") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-
-#3. CLUSTER 2 (sporadic NBs all cluster here)
-clust0 <- de_results %>% filter(group1 == "2") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-
-#4. CLUSTER 3
-clust0 <- de_results %>% filter(group1 == "3") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-
-#5. CLUSTER 4
-clust0 <- de_results %>% filter(group1 == "4") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-
-#6. CLUSTER 5
-clust0 <- de_results %>% filter(group1 == "5") %>% arrange(log_fc)
-
-gene_list = clust0$log_fc
-names(gene_list) = clust0$feature
-gene_list = sort(gene_list, decreasing = TRUE)
-gene_list = gene_list[!duplicated(names(gene_list))]
-head(gene_list)
-
-# Run GSEA analysis
-res = GSEA(gene_list, GO_file, pval = 0.1)
-dim(res$Results)
-res$Plot
-```
-
-
-
-```{r}
-#D. ATRXmut vs. MYCNA and sporadic
-
-model <- model.matrix(~ 0 + group, data = rna_design)
-ave.contrast <- c("groupIII - (groupII + groupIV) / 2")
-mod.constrast <- makeContrasts(contrasts = ave.contrast, levels = model)
-mod.constrast
-
-da_results_ATRXmutvsAll <- testNhoods(rna_milo, design = ~ 0 + group, 
-                         design.df = rna_design, 
-                         model.contrasts = ave.contrast, 
-                         fdr.weighting = "graph-overlap")
-
-table(da_results_ATRXmutvsAll$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsAll <- annotateNhoods(rna_milo, da_results_ATRXmutvsAll, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsAll$original_celltype <- 
-  ifelse(da_results_ATRXmutvsAll$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsAll$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsAll %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_ATRXmutvsAll, group.by = "original_celltype")
-
-#E. ATRXmut vs. control
-
-contrast.4 <- c("groupIII - groupI") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsCtrl <- testNhoods(rna_milo, 
-                         design = ~ 0 + group, 
-                         design.df = rna_design, 
-                         model.contrasts = contrast.4, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction with graph-overlap weighting
-table(da_results_ATRXmutvsCtrl$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsCtrl <- annotateNhoods(rna_milo, da_results_ATRXmutvsCtrl, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsCtrl$original_celltype <- 
-  ifelse(da_results_ATRXmutvsCtrl$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsCtrl$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsCtrl %>% 
-  arrange(FDR) %>% filter(FDR < 0.5 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(results, group.by = "original_celltype")
-```
-
-
--------------------------------------------------------------------------------
-
-PART III
-
-
-# __DEG analysis__
-
-
 
 
 # __Session Info__

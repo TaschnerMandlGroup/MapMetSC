@@ -423,176 +423,6 @@ In this case, CN 1 and 4 contain tumor cells but no CN is forming the
 tumor/stroma interface. CN 3 represents TLS. CN 2 indicates T cell
 subtypes and plasma cells are aggregated to CN 5.
 
-## Spatial context analysis
-
-Downstream of CN assignments, we will analyze the spatial context (SC)
-of each cell using three functions from the `imcRtools` package.
-
-While CNs can represent sites of unique local processes, the term SC was
-coined by Bhate and colleagues [@Bhate2022] and describes tissue regions
-in which distinct CNs may be interacting. Hence, SCs may be interesting
-regions of specialized biological events.
-
-Here, we will first detect SCs using the `detectSpatialContext` function. This
-function relies on CN fractions for each cell in a spatial interaction
-graph (originally a KNN graph), which we will calculate using
-`buildSpatialGraph` and `aggregateNeighbors`. We will focus on the CNs
-derived from cell type fractions but other CN assignments are possible.
-
-**Of note**, the window size (k for KNN) for `buildSpatialGraph` should
-reflect a length scale on which biological signals can be exchanged and
-depends, among others, on cell density and tissue area. In view of their
-divergent functionality, we recommend to use a larger window size for SC
-(interaction between local processes) than for CN (local processes)
-detection. Since we used a 20-nearest neighbor graph for CN assignment,
-we will use a 40-nearest neighbor graph for SC detection. As before,
-different parameters should be tested.
-
-Subsequently, the CN fractions are sorted from high-to-low and the SC of
-each cell is assigned as the minimal combination of SCs that additively
-surpass a user-defined threshold. The default threshold of 0.9 aims to
-represent the dominant CNs, hence the most prevalent signals, in a given
-window.
-
-For more details and biological validation, please refer to
-[@Bhate2022].
-
-```{r detectSpatialContext, fig.height=12, fig.width=15, message=FALSE}
-library(circlize)
-library(RColorBrewer)
-
-# Construct a 40-nearest neighbor graph
-spe <- buildSpatialGraph(spe, 
-                         img_id = "sample_id", 
-                         type = "knn", 
-                         name = "knn_spatialcontext_graph", 
-                         k = 40)
-
-# Compute the fraction of cellular neighborhoods around each cell
-spe <- aggregateNeighbors(spe, 
-                          colPairName = "knn_spatialcontext_graph",
-                          aggregate_by = "metadata",
-                          count_by = "cn_celltypes",
-                          name = "aggregatedNeighborhood")
-
-# Detect spatial contexts
-spe <- detectSpatialContext(spe, 
-                            entry = "aggregatedNeighborhood",
-                            threshold = 0.90,
-                            name = "spatial_context")
-
-# Define SC color scheme
-n_SCs <- length(unique(spe$spatial_context))
-col_SC <- setNames(colorRampPalette(brewer.pal(9, "Paired"))(n_SCs), 
-                   sort(unique(spe$spatial_context)))
-
-# Visualize spatial contexts on images
-plotSpatial(spe[, spe$sample%in%unique(spe$sample)[5:9]], 
-            node_color_by = "spatial_context", 
-            img_id = "sample_id", 
-            node_size_fix = 0.5) +
-    scale_color_manual(values = col_SC)
-```
-
-We detect a total of `r length(unique(spe$spatial_context))` distinct
-SCs across this dataset.
-
-For ease of interpretation, we will directly compare the CN and SC
-assignments for `Patient3_001`.
-
-```{r compare cn sc, fig.height=5, fig.width=10}
-library(patchwork)
-
-# Compare CN and SC for one patient 
-p1 <- plotSpatial(spe[,spe$sample_id == "20220926_20220809_16-1927_TU_001"], 
-            node_color_by = "cn_celltypes", 
-            img_id = "sample_id", 
-            node_size_fix = 0.5) +
-    scale_color_brewer(palette = "Set3")
-
-p2 <- plotSpatial(spe[,spe$sample_id == "20220926_20220809_16-1927_TU_001"], 
-            node_color_by = "spatial_context", 
-            img_id = "sample_id", 
-            node_size_fix = 0.5) +
-    scale_color_manual(values = col_SC, limits = force)
-
-p1 + p2
-```
-
-As expected, we can observe that interfaces between different CNs make
-up distinct SCs. For instance, interface between CN 3 (TLS region
-consisting of B and BnT cells) and CN 5 (Plasma- and T-cell dominated)
-turns to SC 3_5. On the other hand, the core of CN 3 becomes SC 3, since
-the most abundant CN of the neighborhood for these cells is just the CN
-itself.
-
-Next, we filter the SCs based on user-defined thresholds for number of
-group entries (here at least 3 patients) and/or total number of cells
-(here minimum of 100 cells) per SC using the `filterSpatialContext` function.
-
-```{r filterSpatialContext, fig.height=12, fig.width=13}
-## Filter spatial contexts
-# By number of group entries
-spe <- filterSpatialContext(spe, 
-                            entry = "spatial_context",
-                            group_by = "sample_id", 
-                            group_threshold = 3,
-                            name = "spatial_context_filtered")
-
-plotSpatial(spe[, spe$sample%in%unique(spe$sample)[5:9]], 
-            node_color_by = "spatial_context_filtered", 
-            img_id = "sample_id", 
-            node_size_fix = 0.5) +
-    scale_color_manual(values = col_SC, limits = force)
-
-# Filter out small and infrequent spatial contexts
-spe <- filterSpatialContext(spe, 
-                            entry = "spatial_context",
-                            group_by = "sample_id", 
-                            group_threshold = 3,
-                            cells_threshold = 100,
-                            name = "spatial_context_filtered")
-
-plotSpatial(spe[, spe$sample%in%unique(spe$sample)[5:9]], 
-            node_color_by = "spatial_context_filtered", 
-            img_id = "sample_id", 
-            node_size_fix = 0.5) +
-    scale_color_manual(values = col_SC, limits = force)
-```
-
-Lastly, we can use the `plotSpatialContext` function to generate *SC
-graphs*, analogous to *CN combination maps* in [@Bhate2022]. Returned
-objects are `ggplots`, which can be easily modified further. We will
-create a SC graph for the filtered SCs here.
-
-```{r plotSpatialContext}
-## Plot spatial context graph 
-
-# Colored by name, size by n_cells
-plotSpatialContext(spe, 
-                   entry = "spatial_context_filtered",
-                   group_by = "sample_id",
-                   node_color_by = "name",
-                   node_size_by = "n_cells",
-                   node_label_color_by = "name")
-
-# Colored by n_cells, size by n_group                   
-plotSpatialContext(spe, 
-                   entry = "spatial_context_filtered",
-                   group_by = "sample_id",
-                   node_color_by = "n_cells",
-                   node_size_by = "n_group",
-                   node_label_color_by = "n_cells") +
-  scale_color_viridis()
-```
-
-SC 1 (Tumor-dominated), SC 1_6 (Tumor and Tumor-Stroma interface) and SC
-4_5 (Plasma/T cell and Myeloid/Neutrophil interface) are the most
-frequent SCs in this dataset. Moreover, we may compare the degree of the
-different nodes in the SC graph. For example, we can observe that SC 1
-has only one degree (directed to SC 1_6), while SC 5 (T cells and plasma cells) has
-a much higher degree (n = 4) and potentially more CN interactions.
-
 ## Patch detection
 
 The previous section focused on detecting cellular neighborhoods in a rather
@@ -629,21 +459,24 @@ We can now plot the proportion of celltypes within these patches.
 ```{r immune-infiltration}
 # overall
 spe_red <- spe[, spe$metacluster=="T cell" | spe$metacluster=="B cell" | spe$metacluster=="granulocyte" | spe$metacluster=="MO/DC/NK"]
-counts <- table(spe_red$metacluster)
-plot_colors <- metadata(spe)$color_vectors$col_metacluster[names(counts)]
+counts <- as.data.frame(table(spe_red$celltype))
 
-pie(counts, 
-    col=plot_colors,
-    labels = paste(names(counts), "\n", counts))
+ggplot(counts, aes(x = "", y = Freq, fill = Var1)) +
+  geom_col(position = "fill") + 
+  coord_polar(theta = "y") +
+  xlab(NULL) +
+  scale_fill_manual(values=metadata(spe)$color_vectors$col_celltype)
 
 # within patches
 spe_red <- spe[, !is.na(spe$patch_id) & (spe$metacluster=="T cell" | spe$metacluster=="B cell" | spe$metacluster=="granulocyte" | spe$metacluster=="MO/DC/NK")]
-counts <- table(spe_red$metacluster)
-plot_colors <- metadata(spe)$color_vectors$col_metacluster[names(counts)]
+counts <- table(spe_red$celltype)
+counts <- as.data.frame(table(spe_red$celltype))
 
-pie(counts, 
-    col=plot_colors,
-    labels = paste(names(counts), "\n", counts))
+ggplot(counts, aes(x = "", y = Freq, fill = Var1)) +
+  geom_col(position = "fill") + 
+  coord_polar(theta = "y") +
+  xlab(NULL) +
+  scale_fill_manual(values=metadata(spe)$color_vectors$col_celltype)
 ```
 
 We can see that most of the infiltrating immune cells are T cells. Let's see which T cells those are.
@@ -794,9 +627,11 @@ Let's only plot these cells with a distance of 50 pixels from the tumor border t
 ```{r, fig.height=40, fig.width=20}
 threshold <- 100
 
-spe$border <- "no_border"
+spe$border <- "stroma"
 spe[, abs(spe$distToCells) <= threshold & spe$sample_id != "20221018_20220906_03-0170_TU_001"]$border <- "border"
-spe_red <- spe[, spe$border == "border"]
+spe[,spe$border != "border" & spe$distToCells<0 & spe$sample_id != "20221018_20220906_03-0170_TU_001"]$border <- "core"
+
+spe_red <- spe[, spe$border == "stroma"]
 
 
 plotSpatial(spe_red, 
@@ -839,7 +674,7 @@ Next, we plot the composition of cells at the tumor-stroma border in piecharts.
 
 ```{r immune-infiltration2}
 
-counts <- table(spe[, spe$border != "border" & spe$metacluster=="MO/DC/NK"]$celltype)
+counts <- table(spe[, spe$border == "core" & spe$metacluster=="T cell"]$celltype)
 #counts <- counts[sort(names(counts))]
 plot_colors <- metadata(spe)$color_vectors$col_celltype[names(counts)]
 
@@ -847,7 +682,15 @@ pie(counts,
     col=plot_colors,
     clockwise=T)
 
-counts <- table(spe[, spe$border == "border" & spe$metacluster=="MO/DC/NK"]$celltype)
+counts <- table(spe[, spe$border == "border" & spe$metacluster=="T cell"]$celltype)
+#counts <- counts[sort(names(counts))]
+plot_colors <- metadata(spe)$color_vectors$col_celltype[names(counts)]
+
+pie(counts, 
+    col=plot_colors,
+    clockwise=T)
+
+counts <- table(spe[, spe$border == "stroma" & spe$metacluster=="T cell"]$celltype)
 #counts <- counts[sort(names(counts))]
 plot_colors <- metadata(spe)$color_vectors$col_celltype[names(counts)]
 
@@ -857,6 +700,63 @@ pie(counts,
 ```
 Let's compare the cell composition at and outside the border on the sample_level.
 
+```{r, fig.width=10, fig.height=10}
+library(tidyr)
+
+df <- as.data.frame(colData(spe)[spe$metacluster =="tumor", c("sample", "celltype", "border")])
+
+df_summary <- df %>%
+  group_by(sample, celltype, border) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  ungroup() %>%
+  complete(sample, celltype, border, fill = list(count = 0)) %>%
+  group_by(sample, border) %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  mutate(proportion = if_else(total == 0, 0, count / total))
+
+#adjust the order
+df_summary$border <- factor(df_summary$border, levels = c("core", "border", "stroma"))
+
+# Calculate p-values and log2FC for each cell type
+small_constant <- 1e-10
+
+results <- df_summary %>%
+  group_by(celltype) %>%
+  summarise(
+    test_results = list(compare_means(proportion ~ border, data = cur_data(), paired = TRUE, method = "wilcox.test", p.adjust.method = "BH")),
+    .groups = 'drop'
+  ) %>%
+  unnest(cols = c(test_results))
+
+#results <- add_y_position(data=df_summary, formula=proportion ~ border, test=results, scales="free_y")
+
+# Custom function to adjust y positions for each celltype and comparison
+adjust_y_positions <- function(results, df_summary) {
+  results <- results %>%
+    group_by(celltype) %>%
+    mutate(y.position = seq(from = max(df_summary$proportion[df_summary$celltype == unique(celltype)]) * 1.0,
+                            length.out = n(),
+                            by = max(df_summary$proportion[df_summary$celltype == unique(celltype)]) * 0.08)) %>%
+    ungroup()
+  return(results)
+}
+
+# Adjust the y.position in the results data frame
+results <- adjust_y_positions(results, df_summary)
+
+ggplot(df_summary, aes(x = border, y = proportion)) +
+  geom_boxplot(aes(color = celltype), fill = NA, position = position_dodge(0.9), alpha = 0.75) +
+  geom_jitter(aes(color = celltype), position = position_jitterdodge(jitter.width = 0.35, dodge.width = 0.9), size = 2, alpha = 0.5) +
+  stat_pvalue_manual(results, tip.length=0) +
+  facet_wrap(~ celltype, scales = "free_y") +
+  scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) +
+  labs(title = "Comparison of Cell Type Proportions at Border vs No Border",
+       x = "Border Status", y = "Proportion of Cell Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
 ```{r, fig.width=10, fig.height=10}
 library(tidyr)
 
@@ -873,34 +773,67 @@ df_summary <- df %>%
   mutate(proportion = if_else(total == 0, 0, count / total))
 
 #adjust the order
-df_summary$border <- factor(df_summary$border, levels = c("no_border", "border"))
+df_summary$border <- factor(df_summary$border, levels = c("core", "border", "stroma"))
 
 # Calculate p-values and log2FC for each cell type
 small_constant <- 1e-10
 
+# Custom function to calculate log2FC for each pair of conditions
+calculate_log2FC <- function(df, condition1, condition2, celltype) {
+  mean1 <- mean(df$proportion[df$border == condition1 & df$celltype == celltype] + small_constant)
+  mean2 <- mean(df$proportion[df$border == condition2 & df$celltype == celltype] + small_constant)
+  log2FC <- log2(mean1 / mean2)
+  return(log2FC)
+}
+
+# Calculate p-values and log2FC for each cell type
 results <- df_summary %>%
   group_by(celltype) %>%
   summarise(
-    mean_border = mean(proportion[border == "border"], na.rm = TRUE),
-    mean_no_border = mean(proportion[border == "no_border"], na.rm = TRUE),
-    log2_fc = log2((mean_border + small_constant) / (mean_no_border + small_constant)),
-    test_results = list(compare_means(proportion ~ border, data = cur_data(), paired = TRUE, method = "wilcox.test", p.adjust.method = "BH")),
+    comparisons = list(compare_means(proportion ~ border, data = cur_data(), paired = TRUE, method = "wilcox.test", p.adjust.method = "BH")),
     .groups = 'drop'
   ) %>%
-  unnest(cols = c(test_results))
+  unnest(cols = c(comparisons)) %>%
+  rowwise() %>%
+  mutate(
+    log2FC = case_when(
+      group1 == "core" & group2 == "border" ~ calculate_log2FC(df_summary, "border", "core", celltype),
+      group1 == "core" & group2 == "stroma" ~ calculate_log2FC(df_summary, "stroma", "core", celltype),
+      group1 == "border" & group2 == "stroma" ~ calculate_log2FC(df_summary, "stroma", "border", celltype),
+      TRUE ~ NA_real_
+    )
+  ) %>%
+  ungroup()
 
-plot <- ggplot(df_summary, aes(x = border, y = proportion)) +
+# Add custom labels with log2FC and p-value
+results <- results %>%
+  mutate(label = paste0(round(log2FC, 2), " (", format.pval(p.adj, digits = 3), ")"))
+
+# Custom function to adjust y positions for each celltype and comparison
+adjust_y_positions <- function(results, df_summary) {
+  results <- results %>%
+    group_by(celltype) %>%
+    mutate(y.position = seq(from = max(df_summary$proportion[df_summary$celltype == unique(celltype)]) * 1.1,
+                            length.out = n(),
+                            by = max(df_summary$proportion[df_summary$celltype == unique(celltype)]) * 0.1)) %>%
+    ungroup()
+  return(results)
+}
+
+# Adjust the y.position in the results data frame
+results <- adjust_y_positions(results, df_summary)
+
+# Plot with custom labels
+ggplot(df_summary, aes(x = border, y = proportion)) +
   geom_boxplot(aes(color = celltype), fill = NA, position = position_dodge(0.9), alpha = 0.75) +
   geom_jitter(aes(color = celltype), position = position_jitterdodge(jitter.width = 0.35, dodge.width = 0.9), size = 2, alpha = 0.5) +
+  stat_pvalue_manual(results, label = "label", tip.length = 0) +
   facet_wrap(~ celltype, scales = "free_y") +
   scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) +
   labs(title = "Comparison of Cell Type Proportions at Border vs No Border",
        x = "Border Status", y = "Proportion of Cell Type") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-plot + geom_text(data = results, aes(x = 1.5, y = max(df_summary$proportion) * 0.95, label = sprintf("log2FC: %.2f (p=%.3f)", log2_fc, p.adj)), 
-                 vjust = 0, hjust = 0.5, color = "black", inherit.aes = FALSE)
 
 ```
 

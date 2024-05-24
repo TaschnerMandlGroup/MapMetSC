@@ -143,6 +143,7 @@ ggplot(df_long, aes(x = Expression, y = Marker, fill = Marker)) +
     legend.position = "none"  # Hide the legend if colors represent markers directly
   )
 ```
+
 ## Combined ridge plots
 
 ```{r subset-data-ridgeplot2}

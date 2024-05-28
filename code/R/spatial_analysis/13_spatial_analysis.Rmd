@@ -228,12 +228,12 @@ library(ggplot2)
 spe <- aggregateNeighbors(spe, 
                           colPairName = "neighborhood", 
                           aggregate_by = "metadata", 
-                          count_by = "celltype")
+                          count_by = "celltype_2")
 
 set.seed(220705)
 
 cn_1 <- kmeans(spe$aggregatedNeighbors, centers = 6)
-spe$cn_celltypes <- as.factor(cn_1$cluster)
+spe$cn_celltypes_2 <- as.factor(cn_1$cluster)
 
 plotSpatial(spe, 
             node_color_by = "cn_celltypes", 
@@ -253,7 +253,7 @@ number of cells per cell type and CN.
 library(pheatmap)
 library(viridis)
 
-for_plot <- table(as.character(spe$cn_celltypes), spe$celltype)
+for_plot <- table(as.character(spe$cn_celltypes_2), spe$celltype_2)
 
 pheatmap(for_plot, 
          color = viridis(100), display_numbers = TRUE, 
@@ -264,7 +264,7 @@ Next, we can observe per cell type the fraction of CN that they are distributed
 across.
 
 ```{r, fig.width=15, fig.height=6}
-for_plot <- prop.table(table(as.character(spe$cn_celltypes), spe$celltype_2), margin = 2)
+for_plot <- prop.table(table(as.character(spe$cn_celltypes_2), spe$celltype_2), margin = 2)
 
 pheatmap(for_plot, 
          color = viridis(100), display_numbers = TRUE, 
@@ -274,7 +274,7 @@ pheatmap(for_plot,
 Similarly, we can visualize the fraction of each CN made up of each cell type.
 
 ```{r, fig.width=15, fig.height=6}
-for_plot <- prop.table(table(as.character(spe$cn_celltypes), spe$celltype_2), margin = 1)
+for_plot <- prop.table(table(as.character(spe$cn_celltypes_2), spe$celltype_2), margin = 1)
 
 pheatmap(for_plot, 
          color = viridis(100), display_numbers = TRUE, 
@@ -293,11 +293,11 @@ pheatmap(for_plot,
 Lastly, we can visualize the enrichment of cell types within cellular neighborhoods
 using the `regionMap` function of the `lisaClust` package.
 
-```{r, fig.height=10, fig.width=5}
+```{r, fig.height=6, fig.width=5}
 library(lisaClust)
 regionMap(spe, 
-          cellType = "celltype",
-          region = "cn_celltypes")
+          cellType = "celltype_2",
+          region = "cn_celltypes_2")
 ```
 
 It is also recommended to visualize some images to confirm the interpretation of
@@ -525,13 +525,13 @@ colData(spe) %>% as_tibble() %>%
 ```
 
 Now we want to correlate T cell infiltration with progression.
-```{r, fig.width=16, fig.height=15}
+```{r}
 library("ggpubr")
 library(gtools)
 
 variable <- "progression"
 plot_list <- list()
-celltypes <- unique(spe[, spe$metacluster=="T cell" | spe$metacluster=="B cell" | spe$metacluster=="granulocyte" | spe$metacluster=="MO/DC/NK"]$celltype)
+celltypes <- unique(spe[, spe$metacluster=="T cell" | spe$metacluster=="B cell" | spe$metacluster=="granulocyte" | spe$metacluster=="MO/DC/NK"]$celltype_3)
 #spe <- spe[, spe$MYCN_amp == 0 | spe$MYCN_amp == 1]
 
 for(i in 1:length(unique(celltypes))){
@@ -540,7 +540,7 @@ for(i in 1:length(unique(celltypes))){
   
   cell_freq_per_patch <- colData(spe) %>% as_tibble() %>%
       group_by(patch_id, sample) %>%
-      summarize(cell_count = sum(celltype == c),
+      summarize(cell_count = sum(celltype_3 == c),
                 patch_size = n(),
                 cell_freq = cell_count / patch_size) %>%
       filter(!is.na(patch_id)) 
@@ -573,7 +573,7 @@ for(i in 1:length(unique(celltypes))){
   color <- unname(metadata(spe)$color_vectors$col_celltype[as.character(c)])
   
   plot_list[[c]] <- ggboxplot(combined_data, x = "condition", y = "mean_cell_freq",
-                  color = "condition", palette =c(color, color),
+                  color = "condition", #palette =c(color, color),
                   add.params = list(size = 3),
                   add = "jitter",
                   title=c) + 
@@ -631,7 +631,7 @@ spe$border <- "stroma"
 spe[, abs(spe$distToCells) <= threshold & spe$sample_id != "20221018_20220906_03-0170_TU_001"]$border <- "border"
 spe[,spe$border != "border" & spe$distToCells<0 & spe$sample_id != "20221018_20220906_03-0170_TU_001"]$border <- "core"
 
-spe_red <- spe[, spe$border == "stroma"]
+spe_red <- spe[, spe$border == "border"]
 
 
 plotSpatial(spe_red, 
@@ -643,7 +643,7 @@ plotSpatial(spe_red,
 ```
 
 ```{r}
-plotSpatial(spe[,spe$sample_id == "20220926_20220809_16-1927_TU_001"], 
+plotSpatial(spe[,spe$sample_id == "20220926_20220809_16-1934_TU_003"], 
             node_color_by = "GD2_Gd155_mean", 
             assay_type = "exprs",
             img_id = "sample_id", 
@@ -656,18 +656,18 @@ plotSpatial(spe[,spe$sample_id == "20220926_20220809_16-1927_TU_001"],
     scale_size_continuous(range = c(0.1, 2)) +
     ggtitle("GD2")
 
-plotSpatial(spe[,spe$sample_id == "20220926_20220809_16-1927_TU_001"], 
+plotSpatial(spe[,spe$sample_id == "20220926_20220809_16-1934_TU_003"], 
             node_color_by = "patch_id", 
             img_id = "sample_id", 
             node_size_fix = 0.5) +
     theme(legend.position = "none")
 
-plotSpatial(spe_red[,spe_red$sample_id == "20220926_20220809_16-1927_TU_001"], 
-            node_color_by = "celltype", 
+plotSpatial(spe_red[,spe_red$sample_id == "20220926_20220809_16-1934_TU_003"], 
+            node_color_by = "celltype_2", 
             img_id = "sample_id", 
             ncols=6,
             node_size_fix = 0.5) +
-        scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) 
+        scale_color_manual(values = metadata(spe)$color_vectors$col_celltype_2) 
 ```
 
 Next, we plot the composition of cells at the tumor-stroma border in piecharts.
@@ -677,6 +677,12 @@ Next, we plot the composition of cells at the tumor-stroma border in piecharts.
 counts <- table(spe[, spe$border == "core" & spe$metacluster=="T cell"]$celltype)
 #counts <- counts[sort(names(counts))]
 plot_colors <- metadata(spe)$color_vectors$col_celltype[names(counts)]
+
+# ggplot(counts, aes(x = "", y = Freq, fill = Var1)) +
+#   geom_col(position = "fill") + 
+#   coord_polar(theta = "y") +
+#   xlab(NULL) +
+#   scale_fill_manual(values=metadata(spe)$color_vectors$col_celltype)
 
 pie(counts, 
     col=plot_colors,
@@ -759,8 +765,11 @@ ggplot(df_summary, aes(x = border, y = proportion)) +
 ```
 ```{r, fig.width=10, fig.height=10}
 library(tidyr)
+df <- as.data.frame(colData(spe)[(spe$metacluster =="T cell" | spe$metacluster =="MO/DC/NK" | spe$metacluster =="B cell" | spe$metacluster =="granulocyte"), c("sample", "metacluster", "border")])
 
-df <- as.data.frame(colData(spe)[spe$metacluster =="MO/DC/NK", c("sample", "celltype", "border")])
+colnames(df) <- c("sample", "celltype", "border")
+
+#df <- as.data.frame(colData(spe)[spe$metacluster =="MO/DC/NK", c("sample", "celltype", "border")])
 
 df_summary <- df %>%
   group_by(sample, celltype, border) %>%
@@ -829,11 +838,53 @@ ggplot(df_summary, aes(x = border, y = proportion)) +
   geom_jitter(aes(color = celltype), position = position_jitterdodge(jitter.width = 0.35, dodge.width = 0.9), size = 2, alpha = 0.5) +
   stat_pvalue_manual(results, label = "label", tip.length = 0) +
   facet_wrap(~ celltype, scales = "free_y") +
-  scale_color_manual(values = metadata(spe)$color_vectors$col_celltype) +
+  scale_color_manual(values = metadata(spe)$color_vectors$col_metacluster) +
   labs(title = "Comparison of Cell Type Proportions at Border vs No Border",
        x = "Border Status", y = "Proportion of Cell Type") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+Here we plot the abundances of celltypes however, we divide by the number of samples per group so that the result is not driven by outliers. 
+
+```{r}
+#df <- as.data.frame(colData(spe)[spe$metacluster =="MO/DC/NK", c("sample", "celltype", "border")])
+
+df <- as.data.frame(colData(spe)[(spe$metacluster =="T cell" | spe$metacluster =="MO/DC/NK" | spe$metacluster =="B cell" | spe$metacluster =="granulocyte"), c("sample", "metacluster", "border")])
+
+colnames(df) <- c("sample", "celltype", "border")
+
+df_summary <- df %>%
+  group_by(sample, celltype, border) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  ungroup() %>%
+  complete(sample, celltype, border, fill = list(count = 0)) %>%
+  group_by(sample, border) %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  mutate(proportion = if_else(total == 0, 0, count / total))
+
+#adjust the order
+df_summary$border <- factor(df_summary$border, levels = c("core", "border", "stroma"))
+
+df_normalized <- df_summary %>%
+  group_by(celltype, border) %>%
+  summarise(normalized_prop = mean(proportion, na.rm = TRUE), std=sd(proportion, na.rm = TRUE)) %>%
+  ungroup()
+
+df_normalized$celltype <- factor(df_normalized$celltype)
+levels
+
+ggplot(df_normalized, aes(fill=celltype, y=normalized_prop, x=border)) + 
+  #ggtitle(paste0("celltype per ", groupname)) +
+  geom_bar(
+    #position="fill", 
+    #position="stack",
+    stat="identity",
+    position="dodge",
+    show.legend = T) + 
+  scale_fill_manual(values = metadata(spe)$color_vectors$col_metacluster) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 ```
 
@@ -844,9 +895,9 @@ specific manner.
 library(ggridges)
 
 ggplot(as.data.frame(colData(spe))) + 
-    geom_density_ridges(aes(distToCells, celltype, fill = celltype)) +
+    geom_density_ridges(aes(distToCells, celltype_2, fill = celltype_2)) +
     geom_vline(xintercept = 0, color = "dark red", linewidth = 2) +
-    scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype)
+    scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype_2)
 ```
 
 ## Interaction analysis
@@ -871,13 +922,18 @@ dataset.
 ```{r testInteractions-1, message=FALSE}
 library(scales)
 library(BiocParallel)
-out <- testInteractions(spe, 
+
+spe_red <- spe[,spe$metacluster!="other"]
+
+out <- testInteractions(spe_red, 
                         group_by = "sample_id",
-                        label = "celltype", 
+                        label = "celltype_2", 
                         colPairName = "neighborhood")
                         #BPPARAM = SerialParam(RNGseed = 221029))
 
 head(out)
+
+saveRDS(out, file.path(path,"results/spatial_analysis/out_celltype2.rds"))
 ```
 
 The returned `DataFrame` contains the test results per grouping level (in this case
@@ -901,7 +957,7 @@ out %>% as_tibble() %>%
         theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 Let's plot a heatmap with clustered rows and columns:
-```{r, fig.width=15, fig.height=15}
+```{r, fig.width=10, fig.height=10}
 library(pheatmap)
 library(tidyverse)
 data <- out %>% as_tibble() %>%
@@ -985,7 +1041,7 @@ as strong when considering CD4$^+$ T cells sitting around myeloid cells.
 Finally, we save the updated `SpatialExperiment` object.
 
 ```{r spatial-save-object}
-saveRDS(spe, file.path(path,"results/spatial_analysis/spe_CNs_border.rds"))
+saveRDS(spe, file.path(path,"NEWEST_RESULTS/results/spatial_analysis/spe_CNs_border2.rds"))
 ```
 
 ## Session Info

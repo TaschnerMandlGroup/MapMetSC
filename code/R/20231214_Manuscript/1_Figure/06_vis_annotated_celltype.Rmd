@@ -1002,19 +1002,19 @@ for(i in 1: length(files)){
   mcols(masks) <- DataFrame(sample_id = names(masks))
   
   plotCells(masks,
-            object = spe,
+            object = spe[, spe$metacluster!="other"],
             cell_id = "ObjectNumber", img_id = "sample_id",
-            colour_by = "celltype",
-            colour = list(celltype = metadata(spe)$color_vectors$col_celltype_2),
+            colour_by = "celltype_2",
+            colour = list(celltype_2 = metadata(spe)$color_vectors$col_celltype_2),
             display = "single",
-            save_plot = list(filename = file.path(path, "tmp", tissue, paste0("yellow_", files[i], "f"))),
+            save_plot = list(filename = file.path(path, "tmp", tissue, paste0("CT2_", files[i], "f"))),
             #save_plot = list(filename = file.path(path, "tmp", tissue, paste0("all_", files[i], "f"))),
             legend = NULL)
 
 
-  col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
-  spe$binary <- 'no'
-  spe[,spe$celltype == c]$binary <- 'yes'
+  # col_celltype_bin <- setNames(c("red", "white"), c('yes', 'no'))
+  # spe$binary <- 'no'
+  # spe[,spe$celltype == c]$binary <- 'yes'
 
 
   # plotCells(masks,

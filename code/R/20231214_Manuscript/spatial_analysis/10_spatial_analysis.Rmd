@@ -44,6 +44,8 @@ library(ggpubr)
 library(gridExtra)
 library(ggridges)
 library(forcats)
+library(pheatmap)
+library(tidyverse)
 ```
 </details>
 
@@ -82,13 +84,56 @@ Next, we determine the interactions between cells on the celltype_2 level. For e
 ```{r interaction-analysis}
 #spe_red <- spe[,spe$metacluster!="other" & spe$metacluster!="progenitor"]
 
-out <- testInteractions(spe_red, 
+out <- testInteractions(spe, 
                         group_by = "sample_id",
                         label = "metacluster", 
                         colPairName = "neighborhood",
                         BPPARAM = SerialParam(RNGseed = 221029))
 
 saveRDS(out, "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/ADD_4_Figure/R/testInteractions.rds")
+```
+
+These interactions can be shown in a heatmap.
+
+```{r, fig.width=5, fig.height=5}
+
+data <- out %>% as_tibble() %>%
+    group_by(from_label, to_label) %>%
+    summarize(sum_sigval = sum(sigval, na.rm = TRUE))
+
+# Reshaping the data to a wide format suitable for heatmap
+data_wide <- data %>%
+  pivot_wider(
+    names_from = to_label,
+    values_from = sum_sigval,
+    values_fill = list(sum_sigval = 0)  # Fill missing combinations with 0 if any
+  )
+
+data_wide <- tibble::column_to_rownames(data_wide, var = "from_label")
+
+# Define maximum range value for symmetric color scale
+#max_range <- max(abs(max(data_wide)), abs(min(data_wide)))  
+max_range <- max(abs(50), abs(50))
+
+# Define breaks, making sure 0 is exactly in the middle
+breaks <- seq(-max_range, max_range, length.out = 101)  # From -30 to 30
+
+# Create a color palette from blue (negative) to white (zero) to red (positive)
+colors <- colorRampPalette(c("blue", "white", "red"))(length(breaks) - 1)
+
+# Plotting the heatmap
+setEPS()
+postscript(file.path("/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/ADD_4_Figure/R/interaction_heatmap.eps"), height=6, width=6)
+pheatmap(data_wide,
+         color = colors,
+         breaks = breaks,
+         cellwidth = 20,
+         cellheight = 20,
+         fontsize = 10,
+         display_numbers = TRUE  # Optionally display the values in cells
+)
+dev.off()
+
 ```
 
 ## Cellular neighborhoods
@@ -326,7 +371,7 @@ rowData(res_DA)[rowData(res_DA)$p_adj<FDR_cutoff,]
 res<- data.frame(rowData(res_DA))
 ```
 
-Finally, we visualize DA results in boxplots and barplots showing the logFC.
+Finally, we visualize DA results in boxplots and barplots showing the logFC
 
 ```{r visualize-da, fig.width=12, fig.height=10}
 p <- plotAbundances(sce, k = "celltype", by = "sample") 
@@ -377,6 +422,29 @@ setEPS()
 postscript("/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/ADD_4_Figure/R/CNs_DA_boxplot.eps", height=26, width=20)
 grid.arrange(grobs = plot_list_fc, ncol = 6)
    dev.off()
+```
+
+and in dodge barplots.
+```{r barplot-logFC, fig.width=7, fig.height=8}
+df <- res[, c("logFC", "p_adj")]
+df$p_adj_signif <- stars.pval(df$p_adj)
+df$p_adj_signif[df$p_adj_signif==" "] <- "ns"
+df$cluster <- rownames(df)
+
+p <- ggplot(df, aes(fill=cluster, y=logFC, x=cluster)) + 
+  ggtitle("DA - CNs") +
+  geom_bar(
+    stat="identity",
+    position="dodge",
+    show.legend = F) + 
+  scale_fill_manual(values = brewer.pal(6, "Set3")) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_text(aes(label = p_adj_signif), vjust = 0)
+
+setEPS()
+postscript(paste0("/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/ADD_4_Figure/R/CNs_DA_dodge_.eps"), height=6, width=6)
+p
+dev.off()
 ```
 ## Patch detection
 Subsequently, we will detect tumor patches. We will first detect connected sets of tumor cells with a predefined min. number of cells making up a patch and then we expand the concave hull around the patch by 1 pixel.
@@ -485,9 +553,9 @@ for(i in 1:length(unique(celltypes))){
 }
 
 setEPS()
-postscript("/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/ADD_4_Figure/R/metacluster_freq_patch.eps", height=26, width=20)
+postscript("/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/ADD_4_Figure/R/metacluster_freq_patch_prog.eps", height=26, width=20)
 grid.arrange(grobs = plot_list, ncol = 6)
-   dev.off()
+    dev.off()
 ```
 
 We repeat the same for immune cells overall. 

@@ -416,7 +416,9 @@ p <- ggplot(df, aes(fill=cluster, y=logFC, x=cluster)) +
 
 p
 ```
+
 ## Patch detection
+
 Subsequently, we detect tumor patches. We first detect connected sets of tumor cells with a predefined min. number of cells making up a patch and then we expand the concave hull around the patch by 1 pixel.
 
 ```{r patchDetection-1, fig.height=20, fig.width=20}
@@ -579,7 +581,9 @@ p <- ggboxplot(combined_data, x = "condition", y = "mean_cell_freq",
                   
 p
 ```
+
 ### Distance to tumor-stroma border
+
 Based on detected patches, the distance to the tumor stroma border can be computed. Therefore the [minDistToCells](https://bodenmillergroup.github.io/imcRtools/reference/minDistToCells.html) can be used. Negative values indicate cells within patches and positive values cells outside of patches.
 ```{r minDistCells}
 spe <- minDistToCells(spe, 
@@ -725,7 +729,6 @@ rowData(res_DA)[rowData(res_DA)$p_adj<FDR_cutoff,]
 res<- data.frame(rowData(res_DA))
 ```
 
-## Visualization of DA results
 Finally, we visualize DA results in boxplots.
 
 ```{r visualize-da, fig.width=12, fig.height=4}
@@ -798,7 +801,7 @@ p <- ggplot(df, aes(fill=cluster, y=logFC, x=cluster)) +
 p
 ```
 
-
+## Save R object
 
 Finally, we save the R object.
 

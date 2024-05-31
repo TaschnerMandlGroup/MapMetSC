@@ -1,0 +1,1982 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="LazDaria" />
+
+<meta name="date" content="2024-05-31" />
+
+<title>Spatial analysis in primary tumor samples</title>
+
+<script src="site_libs/header-attrs-2.26/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/paper.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/textmate.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<link rel="icon" href="https://github.com/workflowr/workflowr-assets/raw/main/img/reproducible.png">
+<!-- Add a small amount of space between sections. -->
+<style type="text/css">
+div.section {
+  padding-top: 12px;
+}
+</style>
+
+
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+<link rel="stylesheet" href="style.css" type="text/css" />
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">MapMetSC</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Home</a>
+</li>
+<li>
+  <a href="about.html">About</a>
+</li>
+<li>
+  <a href="license.html">License</a>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Spatial analysis in primary tumor
+samples</h1>
+<h4 class="author">LazDaria</h4>
+<h4 class="date">2024-05-31</h4>
+
+</div>
+
+
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
+<span class="glyphicon glyphicon-list" aria-hidden="true"></span>
+workflowr <span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span>
+</button>
+</p>
+<div id="workflowr-report" class="collapse">
+<ul class="nav nav-tabs">
+<li class="active">
+<a data-toggle="tab" href="#summary">Summary</a>
+</li>
+<li>
+<a data-toggle="tab" href="#checks"> Checks <span
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
+</a>
+</li>
+<li>
+<a data-toggle="tab" href="#versions">Past versions</a>
+</li>
+</ul>
+<div class="tab-content">
+<div id="summary" class="tab-pane fade in active">
+<p>
+<strong>Last updated:</strong> 2024-05-31
+</p>
+<p>
+<strong>Checks:</strong> <span
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 7
+<span class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> 0
+</p>
+<p>
+<strong>Knit directory:</strong> <code>MapMetSC/</code> <span
+class="glyphicon glyphicon-question-sign" aria-hidden="true"
+title="This is the local directory in which the code in this file was executed.">
+</span>
+</p>
+<p>
+This reproducible <a href="https://rmarkdown.rstudio.com">R Markdown</a>
+analysis was created with <a
+  href="https://github.com/workflowr/workflowr">workflowr</a> (version
+1.7.1). The <em>Checks</em> tab describes the reproducibility checks
+that were applied when the results were created. The <em>Past
+versions</em> tab lists the development history.
+</p>
+<hr>
+</div>
+<div id="checks" class="tab-pane fade">
+<div id="workflowr-checks" class="panel-group">
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguptodate">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>R Markdown file:</strong> up-to-date
+</a>
+</p>
+</div>
+<div id="strongRMarkdownfilestronguptodate"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great! Since the R Markdown file has been committed to the Git
+repository, you know the exact version of the code that produced these
+results.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongEnvironmentstrongempty">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Environment:</strong> empty </a>
+</p>
+</div>
+<div id="strongEnvironmentstrongempty" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! The global environment was empty. Objects defined in the
+global environment can affect the analysis in your R Markdown file in
+unknown ways. For reproduciblity it’s best to always run the code in an
+empty environment.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSeedstrongcodesetseed20240314code">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Seed:</strong>
+<code>set.seed(20240314)</code> </a>
+</p>
+</div>
+<div id="strongSeedstrongcodesetseed20240314code"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>The command <code>set.seed(20240314)</code> was run prior to running
+the code in the R Markdown file. Setting a seed ensures that any results
+that rely on randomness, e.g. subsampling or permutations, are
+reproducible.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSessioninformationstrongrecorded">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Session information:</strong>
+recorded </a>
+</p>
+</div>
+<div id="strongSessioninformationstrongrecorded"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Recording the operating system, R version, and package
+versions is critical for reproducibility.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongCachestrongnone">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Cache:</strong> none </a>
+</p>
+</div>
+<div id="strongCachestrongnone" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Nice! There were no cached chunks for this analysis, so you can be
+confident that you successfully produced the results during this
+run.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongFilepathsstrongrelative">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>File paths:</strong> relative </a>
+</p>
+</div>
+<div id="strongFilepathsstrongrelative" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Using relative paths to the files within your workflowr
+project makes it easier to run your code on other machines.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettree88535647314e6ca591e2c84d66a5f2cb09a60648targetblank8853564a">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Repository version:</strong>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/88535647314e6ca591e2c84d66a5f2cb09a60648" target="_blank">8853564</a>
+</a>
+</p>
+</div>
+<div
+id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettree88535647314e6ca591e2c84d66a5f2cb09a60648targetblank8853564a"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>
+Great! You are using Git for version control. Tracking code development
+and connecting the code version to the results is critical for
+reproducibility.
+</p>
+<p>
+The results in this page were generated with repository version
+<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/88535647314e6ca591e2c84d66a5f2cb09a60648" target="_blank">8853564</a>.
+See the <em>Past versions</em> tab to see a history of the changes made
+to the R Markdown and HTML files.
+</p>
+<p>
+Note that you need to be careful to ensure that all relevant files for
+the analysis have been committed to Git prior to generating the results
+(you can use <code>wflow_publish</code> or
+<code>wflow_git_commit</code>). workflowr only checks the R Markdown
+file, but you know if there are other scripts or data files that it
+depends on. Below is the status of the Git repository when the results
+were generated:
+</p>
+<pre><code>
+Ignored files:
+    Ignored:    analysis/figure/
+
+</code></pre>
+<p>
+Note that any generated files, e.g. HTML, png, CSS, etc., are not
+included in this status report because it is ok for generated content to
+have uncommitted changes.
+</p>
+</div>
+</div>
+</div>
+</div>
+<hr>
+</div>
+<div id="versions" class="tab-pane fade">
+
+<p>
+These are the previous versions of the repository in which changes were
+made to the R Markdown (<code>analysis/10_spatial_analysis.Rmd</code>)
+and HTML (<code>docs/10_spatial_analysis.html</code>) files. If you’ve
+configured a remote Git repository (see <code>?wflow_git_remote</code>),
+click on the hyperlinks in the table below to view the files as they
+were in that past version.
+</p>
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+File
+</th>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+<th>
+Message
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/88535647314e6ca591e2c84d66a5f2cb09a60648/analysis/10_spatial_analysis.Rmd" target="_blank">8853564</a>
+</td>
+<td>
+lazdaria
+</td>
+<td>
+2024-05-31
+</td>
+<td>
+wflow_publish("analysis/10_spatial_analysis.Rmd")
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+</div>
+</div>
+</div>
+<div id="sp-pt" class="section level1">
+<h1>Spatial analysis in PT</h1>
+<p>Herein, we explore spatial interactions in the primary tumor.</p>
+<div id="load-libraries" class="section level2">
+<h2>Load libraries</h2>
+<details>
+<summary>
+Load libraries
+</summary>
+<pre class="r"><code>library(imcRtools)</code></pre>
+<pre><code>Loading required package: SpatialExperiment</code></pre>
+<pre><code>Loading required package: SingleCellExperiment</code></pre>
+<pre><code>Loading required package: SummarizedExperiment</code></pre>
+<pre><code>Loading required package: MatrixGenerics</code></pre>
+<pre><code>Loading required package: matrixStats</code></pre>
+<pre><code>
+Attaching package: &#39;MatrixGenerics&#39;</code></pre>
+<pre><code>The following objects are masked from &#39;package:matrixStats&#39;:
+
+    colAlls, colAnyNAs, colAnys, colAvgsPerRowSet, colCollapse,
+    colCounts, colCummaxs, colCummins, colCumprods, colCumsums,
+    colDiffs, colIQRDiffs, colIQRs, colLogSumExps, colMadDiffs,
+    colMads, colMaxs, colMeans2, colMedians, colMins, colOrderStats,
+    colProds, colQuantiles, colRanges, colRanks, colSdDiffs, colSds,
+    colSums2, colTabulates, colVarDiffs, colVars, colWeightedMads,
+    colWeightedMeans, colWeightedMedians, colWeightedSds,
+    colWeightedVars, rowAlls, rowAnyNAs, rowAnys, rowAvgsPerColSet,
+    rowCollapse, rowCounts, rowCummaxs, rowCummins, rowCumprods,
+    rowCumsums, rowDiffs, rowIQRDiffs, rowIQRs, rowLogSumExps,
+    rowMadDiffs, rowMads, rowMaxs, rowMeans2, rowMedians, rowMins,
+    rowOrderStats, rowProds, rowQuantiles, rowRanges, rowRanks,
+    rowSdDiffs, rowSds, rowSums2, rowTabulates, rowVarDiffs, rowVars,
+    rowWeightedMads, rowWeightedMeans, rowWeightedMedians,
+    rowWeightedSds, rowWeightedVars</code></pre>
+<pre><code>Loading required package: GenomicRanges</code></pre>
+<pre><code>Loading required package: stats4</code></pre>
+<pre><code>Loading required package: BiocGenerics</code></pre>
+<pre><code>
+Attaching package: &#39;BiocGenerics&#39;</code></pre>
+<pre><code>The following objects are masked from &#39;package:stats&#39;:
+
+    IQR, mad, sd, var, xtabs</code></pre>
+<pre><code>The following objects are masked from &#39;package:base&#39;:
+
+    anyDuplicated, aperm, append, as.data.frame, basename, cbind,
+    colnames, dirname, do.call, duplicated, eval, evalq, Filter, Find,
+    get, grep, grepl, intersect, is.unsorted, lapply, Map, mapply,
+    match, mget, order, paste, pmax, pmax.int, pmin, pmin.int,
+    Position, rank, rbind, Reduce, rownames, sapply, setdiff, table,
+    tapply, union, unique, unsplit, which.max, which.min</code></pre>
+<pre><code>Loading required package: S4Vectors</code></pre>
+<pre><code>
+Attaching package: &#39;S4Vectors&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:utils&#39;:
+
+    findMatches</code></pre>
+<pre><code>The following objects are masked from &#39;package:base&#39;:
+
+    expand.grid, I, unname</code></pre>
+<pre><code>Loading required package: IRanges</code></pre>
+<pre><code>Loading required package: GenomeInfoDb</code></pre>
+<pre><code>Loading required package: Biobase</code></pre>
+<pre><code>Welcome to Bioconductor
+
+    Vignettes contain introductory material; view with
+    &#39;browseVignettes()&#39;. To cite Bioconductor, see
+    &#39;citation(&quot;Biobase&quot;)&#39;, and for packages &#39;citation(&quot;pkgname&quot;)&#39;.</code></pre>
+<pre><code>
+Attaching package: &#39;Biobase&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:MatrixGenerics&#39;:
+
+    rowMedians</code></pre>
+<pre><code>The following objects are masked from &#39;package:matrixStats&#39;:
+
+    anyMissing, rowMedians</code></pre>
+<pre class="r"><code>library(scales)
+library(BiocParallel)
+library(RColorBrewer)
+library(circlize)</code></pre>
+<pre><code>========================================
+circlize version 0.4.16
+CRAN page: https://cran.r-project.org/package=circlize
+Github page: https://github.com/jokergoo/circlize
+Documentation: https://jokergoo.github.io/circlize_book/book/
+
+If you use it in published research, please cite:
+Gu, Z. circlize implements and enhances circular visualization
+  in R. Bioinformatics 2014.
+
+This message can be suppressed by:
+  suppressPackageStartupMessages(library(circlize))
+========================================</code></pre>
+<pre class="r"><code>library(patchwork)
+library(ggplot2)
+library(lisaClust)
+library(tidyr)</code></pre>
+<pre><code>
+Attaching package: &#39;tidyr&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:S4Vectors&#39;:
+
+    expand</code></pre>
+<pre class="r"><code>library(diffcyt)
+library(dplyr)</code></pre>
+<pre><code>
+Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:Biobase&#39;:
+
+    combine</code></pre>
+<pre><code>The following objects are masked from &#39;package:GenomicRanges&#39;:
+
+    intersect, setdiff, union</code></pre>
+<pre><code>The following object is masked from &#39;package:GenomeInfoDb&#39;:
+
+    intersect</code></pre>
+<pre><code>The following objects are masked from &#39;package:IRanges&#39;:
+
+    collapse, desc, intersect, setdiff, slice, union</code></pre>
+<pre><code>The following objects are masked from &#39;package:S4Vectors&#39;:
+
+    first, intersect, rename, setdiff, setequal, union</code></pre>
+<pre><code>The following objects are masked from &#39;package:BiocGenerics&#39;:
+
+    combine, intersect, setdiff, union</code></pre>
+<pre><code>The following object is masked from &#39;package:matrixStats&#39;:
+
+    count</code></pre>
+<pre><code>The following objects are masked from &#39;package:stats&#39;:
+
+    filter, lag</code></pre>
+<pre><code>The following objects are masked from &#39;package:base&#39;:
+
+    intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(CATALYST)
+library(ComplexHeatmap)</code></pre>
+<pre><code>Loading required package: grid</code></pre>
+<pre><code>========================================
+ComplexHeatmap version 2.19.0
+Bioconductor page: http://bioconductor.org/packages/ComplexHeatmap/
+Github page: https://github.com/jokergoo/ComplexHeatmap
+Documentation: http://jokergoo.github.io/ComplexHeatmap-reference
+
+If you use it in published research, please cite either one:
+- Gu, Z. Complex Heatmap Visualization. iMeta 2022.
+- Gu, Z. Complex heatmaps reveal patterns and correlations in multidimensional 
+    genomic data. Bioinformatics 2016.
+
+
+The new InteractiveComplexHeatmap package can directly export static 
+complex heatmaps into an interactive Shiny app with zero effort. Have a try!
+
+This message can be suppressed by:
+  suppressPackageStartupMessages(library(ComplexHeatmap))
+========================================</code></pre>
+<pre class="r"><code>library(gtools)
+library(ggpubr)
+library(gridExtra)</code></pre>
+<pre><code>
+Attaching package: &#39;gridExtra&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:dplyr&#39;:
+
+    combine</code></pre>
+<pre><code>The following object is masked from &#39;package:Biobase&#39;:
+
+    combine</code></pre>
+<pre><code>The following object is masked from &#39;package:BiocGenerics&#39;:
+
+    combine</code></pre>
+<pre class="r"><code>library(ggridges)
+library(forcats)
+library(pheatmap)</code></pre>
+<pre><code>
+Attaching package: &#39;pheatmap&#39;</code></pre>
+<pre><code>The following object is masked from &#39;package:ComplexHeatmap&#39;:
+
+    pheatmap</code></pre>
+<pre class="r"><code>library(tidyverse)</code></pre>
+<pre><code>── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+✔ lubridate 1.9.3     ✔ stringr   1.5.1
+✔ purrr     1.0.2     ✔ tibble    3.2.1
+✔ readr     2.1.5     </code></pre>
+<pre><code>── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ lubridate::%within%() masks IRanges::%within%()
+✖ readr::col_factor()   masks scales::col_factor()
+✖ dplyr::collapse()     masks IRanges::collapse()
+✖ gridExtra::combine()  masks dplyr::combine(), Biobase::combine(), BiocGenerics::combine()
+✖ dplyr::count()        masks matrixStats::count()
+✖ dplyr::desc()         masks IRanges::desc()
+✖ purrr::discard()      masks scales::discard()
+✖ tidyr::expand()       masks S4Vectors::expand()
+✖ dplyr::filter()       masks stats::filter()
+✖ dplyr::first()        masks S4Vectors::first()
+✖ dplyr::lag()          masks stats::lag()
+✖ ggplot2::Position()   masks BiocGenerics::Position(), base::Position()
+✖ purrr::reduce()       masks GenomicRanges::reduce(), IRanges::reduce()
+✖ dplyr::rename()       masks S4Vectors::rename()
+✖ lubridate::second()   masks S4Vectors::second()
+✖ lubridate::second&lt;-() masks S4Vectors::second&lt;-()
+✖ dplyr::slice()        masks IRanges::slice()
+ℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors</code></pre>
+</details>
+</div>
+<div id="read-data" class="section level2">
+<h2>Read data</h2>
+<p>First, we load the processed and phenotyped single-cell data from <a
+href="#phenotyping">chapter 4</a>. We perform spatial analysis only in
+the primary tumor samples, since the bone marrow samples are aspirates,
+where the spatial context is lost. Therefore, we first subset the SPE
+object to the PT samples and then load cell neighbors that were computed
+in <a
+href="https://github.com/TaschnerMandlGroup/MapMetIP">MapMetIP</a>.
+Therein, we have constructed a spatial graph by expanding individual
+high-resolution cell masks by 15 pixels. For the spatial interaction
+analysis, we will use the metaclusters for non-tumor cells, since these
+represent the minority in the PT samples, and the celltype level
+annotations for the tumor cells (majority).</p>
+<pre class="r"><code>spe &lt;- readRDS(file.path(params$output,&quot;spe_final.rds&quot;))
+spe &lt;- spe[,spe$tissue==&quot;PT&quot;] 
+
+spe_neighbors &lt;- read_steinbock(path=params$input, image_file=NULL, panel_file = NULL, intensities_folder = &quot;intensities-0px-PT&quot;,regionprops_folder = NULL, graphs_folder=&quot;neighbors&quot;) 
+colnames(spe_neighbors) &lt;- paste0(spe_neighbors$sample_id, &quot;_&quot;, spe_neighbors$ObjectNumber)
+colPair(spe, &quot;neighborhood&quot;) &lt;- colPair(spe_neighbors[,colnames(spe)], &quot;neighborhood&quot;)
+
+#celltype 2
+spe$celltype_2 &lt;- spe$metacluster
+spe[,spe$metacluster==&quot;tumor&quot;]$celltype_2 &lt;- spe[,spe$metacluster==&quot;tumor&quot;]$celltype
+
+# generate new color vector
+tumor_names &lt;- unique(spe[,spe$metacluster==&quot;tumor&quot;]$celltype)
+metadata(spe)$color_vectors$col_celltype_2 &lt;- metadata(spe)$color_vectors$col_metacluster
+metadata(spe)$color_vectors$col_celltype_2 &lt;- c(metadata(spe)$color_vectors$col_celltype_2, metadata(spe)$color_vectors$col_celltype[tumor_names])
+
+#celltype 3
+spe$celltype_3 &lt;- spe$metacluster
+spe[,spe$metacluster==&quot;T cell&quot; | spe$metacluster==&quot;B cell&quot; | spe$metacluster==&quot;granulocyte&quot; | spe$metacluster==&quot;MO/DC/NK&quot;]$celltype_3 &lt;- &quot;immune&quot;
+
+# generate new color vector
+metadata(spe)$color_vectors$col_celltype_3 &lt;- metadata(spe)$color_vectors$col_metacluster
+metadata(spe)$color_vectors$col_celltype_3 &lt;- c(metadata(spe)$color_vectors$col_celltype_3, &quot;immune&quot; = &quot;red&quot;)</code></pre>
+</div>
+<div id="interaction-analysis" class="section level2">
+<h2>Interaction analysis</h2>
+<p>Next, we determine the interactions between cells on the celltype_2
+level. For each image, the <code>testInteractions</code> function
+computes the averaged cell type interactions and compares this number
+against an empirical null distribution generated by permuting all cell
+labels, while maintaining tissue structure. To save time, a previously
+computed interaction matrix can be loaded from memory.</p>
+<pre class="r"><code>out &lt;- readRDS(file.path(params$output,&quot;testInteractions.rds&quot;))
+
+# out &lt;- testInteractions(spe, 
+#                         group_by = &quot;sample_id&quot;,
+#                         label = &quot;metacluster&quot;, 
+#                         colPairName = &quot;neighborhood&quot;,
+#                         BPPARAM = SerialParam(RNGseed = 221029))</code></pre>
+<p>These interactions can be shown in a heatmap.</p>
+<pre class="r"><code>data &lt;- out %&gt;% as_tibble() %&gt;%
+    group_by(from_label, to_label) %&gt;%
+    summarize(sum_sigval = sum(sigval, na.rm = TRUE))</code></pre>
+<pre><code>`summarise()` has grouped output by &#39;from_label&#39;. You can override using the
+`.groups` argument.</code></pre>
+<pre class="r"><code># Reshaping the data to a wide format suitable for heatmap
+data_wide &lt;- data %&gt;%
+  pivot_wider(
+    names_from = to_label,
+    values_from = sum_sigval
+  )
+
+data_wide &lt;- tibble::column_to_rownames(data_wide, var = &quot;from_label&quot;)
+
+# Define maximum range value for symmetric color scale
+#max_range &lt;- max(abs(max(data_wide)), abs(min(data_wide)))  
+max_range &lt;- max(abs(50), abs(50))
+
+# Define breaks, making sure 0 is exactly in the middle
+breaks &lt;- seq(-max_range, max_range, length.out = 101)  # From -30 to 30
+
+# Create a color palette from blue (negative) to white (zero) to red (positive)
+colors &lt;- colorRampPalette(c(&quot;blue&quot;, &quot;white&quot;, &quot;red&quot;))(length(breaks) - 1)
+
+pheatmap(data_wide,
+         color = colors,
+         breaks = breaks,
+         cellwidth = 20,
+         cellheight = 20,
+         fontsize = 10,
+         display_numbers = TRUE)  # Optionally display the values in cells</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/unnamed-chunk-1-1.png" width="480" style="display: block; margin: auto;" /></p>
+</div>
+<div id="cellular-neighborhoods" class="section level2">
+<h2>Cellular neighborhoods</h2>
+<p>In a next step, we detect cellular neighborhoods (CNs). Cells are
+grouped into neighborhoods based on celltypes in their proximity. For
+each cell, the fraction of cells of a celltype among its neighbors, is
+detected. Based on these metrics, the cells can then be aggregated into
+neighborhoods. The number of neighborhoods has to be predefined.</p>
+<pre class="r"><code>spe &lt;- aggregateNeighbors(spe, 
+                          colPairName = &quot;neighborhood&quot;, 
+                          aggregate_by = &quot;metadata&quot;, 
+                          count_by = &quot;celltype_2&quot;)
+
+set.seed(220705)
+
+cn_1 &lt;- kmeans(spe$aggregatedNeighbors, centers = 6)
+spe$cn_celltypes_2 &lt;- as.factor(cn_1$cluster)
+
+plotSpatial(spe, 
+            node_color_by = &quot;cn_celltypes_2&quot;, 
+            img_id = &quot;sample_id&quot;, 
+            ncols=6,
+            node_size_fix = 0.5) +
+    scale_color_brewer(palette = &quot;Set3&quot;)</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/cn-analysis-1.png" width="1920" style="display: block; margin: auto;" /></p>
+<p>Lastly, we can visualize the enrichment of cell types within cellular
+neighborhoods using the <code>regionMap</code> function of the
+<code>lisaClust</code> package.</p>
+<pre class="r"><code>regionMap(spe, 
+          cellType = &quot;celltype_2&quot;,
+          region = &quot;cn_celltypes_2&quot;)</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/unnamed-chunk-2-1.png" width="480" style="display: block; margin: auto;" /></p>
+<div id="differential-abundance-of-cns" class="section level3">
+<h3>Differential abundance of CNs</h3>
+<p>Finally, we will generate a barplot showing the proportions of CNs
+per sample. To be able to use the diffcyt package, we will first
+transform the SPE object into a catalyst-compatible object.</p>
+<pre class="r"><code>sce &lt;- SingleCellExperiment(assays=list(counts=assay(spe, &quot;counts&quot;), exprs=assay(spe, &quot;counts&quot;)))
+
+#recode metadata on progression
+sce$progress &lt;- factor(spe$progression)
+progress &lt;- recode(sce$progress, `0` = &#39;NoProg&#39;, `1` = &#39;Prog&#39;)
+sce$progress &lt;- as.factor(progress)
+
+#recode metadata on MYCN amplification
+sce$mna &lt;- factor(spe$MYCN_amp)
+mna &lt;- recode(sce$mna, `1` = &#39;MNA&#39;, `2` = &#39;het&#39;, `0` = &#39;nMNA&#39;, `9` = &#39;unknown&#39;)
+sce$mna &lt;- as.factor(mna)
+
+sce$patient &lt;- factor(spe$study_id)
+sce$fm_id &lt;- spe$fm_id
+
+sce$sample_id &lt;- factor(paste0(sce$progress, &quot;_&quot;, sce$mna, &quot;_&quot;, sce$patient, &quot;_&quot;, sce$fm_id))
+
+sce$cluster_id &lt;- factor(spe$cn_celltypes_2)
+sce$metacluster &lt;- factor(spe$metacluster)
+
+sce$condition &lt;- &#39;na&#39; 
+
+# Add celltype information to metadata
+metadata(sce)$cluster_codes &lt;- data.frame(celltype = factor(spe$cn_celltypes_2))</code></pre>
+<p>Next, we will generate a barplot showing the proportion of cells
+assigned to each of the 6 CNs per sample.</p>
+<pre class="r"><code>set.seed(20231103)
+
+p &lt;- plotAbundances(sce, k = &quot;celltype&quot;, by = &quot;sample&quot;, col_clust=T, k_pal=brewer.pal(6, &quot;Set3&quot;), 
+                    linkage=&quot;ward.D&quot;, distance=&quot;manhattan&quot;) 
+p</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/cohort-overview-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>We generate a dendogram for the hierarchical clustering of
+barplots.</p>
+<pre class="r"><code>#Dendogram
+set.seed(20231103)
+wide_df &lt;- p$data %&gt;%
+  select(-condition) %&gt;%
+  pivot_wider(names_from = cluster_id, values_from = Freq)
+
+wide_df &lt;- data.frame(wide_df)
+rownames(wide_df) &lt;- wide_df$sample_id
+wide_df &lt;- wide_df %&gt;% select(-sample_id)
+
+dist_matrix &lt;- dist(wide_df, method = &quot;manhattan&quot;)
+hc &lt;- hclust(dist_matrix, method = &quot;ward.D&quot;)
+
+plot(hc)</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/dendogram-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>In addition, we plot the metadata of these samples in the respective
+order.</p>
+<pre class="r"><code>clustered_samples &lt;- levels(p$data$sample_id)
+sce$sample_id &lt;- factor(sce$sample_id, levels=clustered_samples)
+
+#access sample-level data
+sample_summary &lt;- as.data.frame(colData(sce)) %&gt;%
+  group_by(sample_id) %&gt;%
+  summarize(mna = first(mna), 
+            progress=first(progress),
+  )
+
+sample_summary &lt;- as.data.frame(sample_summary)
+rownames(sample_summary) &lt;- sample_summary$sample_id
+sample_summary &lt;- sample_summary %&gt;% select(-sample_id)
+
+
+#assign color codes
+col_code &lt;- c(&quot;MNA&quot;=rgb(202,0,32, maxColorValue = 255),
+              &quot;het&quot;=rgb(146,197,222, maxColorValue = 255),
+              &quot;nMNA&quot;=rgb(5,113,176, maxColorValue = 255),
+              &quot;unknown&quot;=&quot;white&quot;,
+              &quot;Prog&quot;=rgb(202,0,32, maxColorValue = 255),
+              &quot;NoProg&quot;=rgb(5,113,176, maxColorValue = 255)
+              )
+
+
+# Plot metadata
+columnAnnotation(MYCN_amp=sample_summary$mna, col=list(MYCN_amp=col_code)) %v%
+  columnAnnotation(progression=sample_summary$progress, col=list(progression=col_code)) </code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/plot-metadata-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>We then compare the abundance of cellular communities between nMNA
+and MNA samples. Therefore, we first prepare data for DA analysis using
+the <code>diffcyt</code> package.</p>
+<pre class="r"><code>keep_rows &lt;- rowData(spe)$use_channel 
+keep_cols &lt;- spe$MYCN_amp==0 | spe$MYCN_amp==1
+sce &lt;- SingleCellExperiment(assays=list(counts=assay(spe[keep_rows,keep_cols], &quot;counts&quot;), exprs=assay(spe[keep_rows,keep_cols], &quot;counts&quot;)))
+
+#recode metadata on progression
+sce$progress &lt;- factor(spe[keep_rows,keep_cols]$progression)
+progress &lt;- recode(sce$progress, `0` = &#39;NoProg&#39;, `1` = &#39;Prog&#39;)
+sce$progress &lt;- as.factor(progress)
+
+#recode metadata on MYCN amplification
+sce$mna &lt;- factor(spe[keep_rows,keep_cols]$MYCN_amp)
+mna &lt;- recode(sce$mna, `1` = &#39;MNA&#39;, `2` = &#39;het&#39;, `0` = &#39;nMNA&#39;, `9` = &#39;unknown&#39;)
+sce$mna &lt;- as.factor(mna)
+
+sce$patient &lt;- factor(spe[keep_rows,keep_cols]$study_id)
+sce$fm_id &lt;- spe[keep_rows,keep_cols]$fm_id
+
+sce$sample_id &lt;- factor(paste0(sce$progress, &quot;_&quot;, sce$mna, &quot;_&quot;, sce$patient, &quot;_&quot;, sce$fm_id))
+
+sce$cluster_id &lt;- factor(spe[keep_rows,keep_cols]$cn_celltypes_2)
+sce$metacluster &lt;- factor(spe[keep_rows,keep_cols]$metacluster)
+
+sce$condition &lt;- sce$mna 
+
+# Add experiment_info
+metadata(sce)$experiment_info &lt;- as.data.frame(colData(sce)) %&gt;% group_by(sample_id,patient, mna, condition, progress) %&gt;% 
+    summarise(n_cells=n(),.groups = &#39;drop&#39;) %&gt;%
+    as.data.frame()
+
+# Add celltype information to metadata
+metadata(sce)$cluster_codes &lt;- data.frame(celltype = factor(spe[keep_rows,keep_cols]$cn_celltypes_2))
+
+# Define cell type and state markers
+type_markers &lt;- c(&quot;MPO_Y89_mean&quot;, &quot;CD44_In115_mean&quot;, &quot;CD11b_Nd142_mean&quot;, &quot;HLA-DR_Nd143_mean&quot;, &quot;PRPH_Nd144_mean&quot;, &quot;HLA-ABC_Sm147_mean&quot;, &quot;CD20_Nd148_mean&quot;, &quot;LUM_Sm149_mean&quot;, &quot;CD11c_Nd150_mean&quot;,
+                  &quot;CD24_Eu151_mean&quot;, &quot;CD3_Sm152_mean&quot;, &quot;CD45_Eu153_mean&quot;, &quot;CD8a_Sm154_mean&quot;, &quot;GD2_Gd155_mean&quot;, &quot;CD34_Gd156_mean&quot;, &quot;CD10_Gd158_mean&quot;, &quot;CXCR4_Tb159_mean&quot;,&quot;SOX10_Dy162_mean&quot;,
+                  &quot;FOXP3_Dy163_mean&quot;, &quot;CHGA_Dy164_mean&quot;, &quot;GATA3_Er168_mean&quot;, &quot;CD56_Er170_mean&quot;, &quot;CD4_Yb171_mean&quot;, &quot;ELAVL4_Yb174_mean&quot;, &quot;CD14_Lu175_mean&quot;, &quot;Vimentin_Pt196_mean&quot;, &quot;CD15_Bi209_mean&quot;)
+
+state_markers &lt;- c(&quot;CD274_Gd160_mean&quot;, &quot;S100B_Dy161_mean&quot;, &quot;CD279_Ho165_mean&quot;, &quot;Ki-67_Tm169_mean&quot;, &quot;GZMB_Yb173_mean&quot;)</code></pre>
+<pre class="r"><code>#list of samples as input to diffcyt methods
+df_list &lt;- lapply(unique(sce$sample_id), function(x){as.data.frame(t(counts(sce[,sce$sample_id==x])))})
+names(df_list) &lt;- unique(sce$sample_id)
+
+#experiment info
+experiment_info &lt;- metadata(sce)$experiment_info
+experiment_info &lt;- experiment_info[match(names(df_list),experiment_info$sample_id),]
+
+#marker info
+channel_name &lt;- sapply(strsplit(rownames(rowData(spe[keep_rows,])), &quot;_&quot;), &quot;[[&quot;, 2)
+marker_name &lt;- sapply(strsplit(rownames(rowData(spe[keep_rows,])), &quot;_&quot;), &quot;[[&quot;, 1)
+marker_class &lt;-ifelse(rownames(spe[keep_rows,]) %in% type_markers, &quot;type&quot;,
+                                    ifelse(rownames(spe[keep_rows,]) %in% state_markers, &quot;state&quot;, 
+                                    &quot;other&quot;))
+row_data &lt;- data.frame(cbind(channel_name, marker_name), row.names=marker_name)
+row_data$marker_class &lt;- as.factor(marker_class)
+
+marker_info &lt;-  row_data
+
+#prepare data into format for diffcyt pipeline 
+d_se &lt;- prepareData(df_list, experiment_info, marker_info)
+rowData(d_se)$cluster_id &lt;- sce[,rownames(d_se)]$cluster_id 
+metadata(d_se)$cluster_codes &lt;- metadata(sce)$cluster_codes
+
+# Transform data
+d_se &lt;- transformData(d_se)
+
+# Calculate counts
+d_counts &lt;- calcCounts(d_se)</code></pre>
+<p>Subsequently, we perform the DA analysis comparing celltype
+proportions between to genetic subgroups.</p>
+<pre class="r"><code># Create design matrix
+design &lt;- createDesignMatrix(experiment_info, cols_design = &quot;condition&quot;)
+
+# Create contrast matrix
+contrast &lt;- createContrast(c(0, 1)) 
+nrow(contrast) == ncol(design)</code></pre>
+<pre><code>[1] TRUE</code></pre>
+<pre class="r"><code># Test for differential abundance (DA) of clusters
+res_DA &lt;- testDA_voom(d_counts,design, contrast
+                       )
+
+FDR_cutoff = 0.1
+rowData(res_DA)[rowData(res_DA)$p_adj&lt;FDR_cutoff,]</code></pre>
+<pre><code>DataFrame with 4 rows and 7 columns
+  cluster_id     logFC   AveExpr         t       p_val       p_adj         B
+    &lt;factor&gt; &lt;numeric&gt; &lt;numeric&gt; &lt;numeric&gt;   &lt;numeric&gt;   &lt;numeric&gt; &lt;numeric&gt;
+2          2   2.06248   17.1685   2.25828 2.89285e-02 6.55473e-02  -3.84558
+3          3  -1.39763   16.6829  -1.97151 5.49627e-02 8.24441e-02  -4.41164
+5          5  -2.84090   12.9985  -2.20424 3.27737e-02 6.55473e-02  -3.61294
+6          6  -5.34792   14.8359  -5.17667 5.34551e-06 3.20731e-05   3.90366</code></pre>
+<pre class="r"><code>res&lt;- data.frame(rowData(res_DA))</code></pre>
+<p>Finally, we visualize DA results in boxplots and barplots showing the
+logFC</p>
+<pre class="r"><code>p &lt;- plotAbundances(sce, k = &quot;celltype&quot;, by = &quot;sample&quot;) 
+comparisons &lt;- c(&quot;nMNAvsMNA&quot;)
+
+plot_list_fc &lt;- list()
+
+for(i in 1:length(unique(p$data$cluster_id))){
+  cluster_name &lt;- unique(p$data$cluster_id)[i]
+  proportions &lt;- data.frame(p$data[p$data$cluster_id == cluster_name, c(&quot;sample_id&quot;, &quot;condition&quot;, &quot;Freq&quot;)])
+  
+  p_adj &lt;- c()
+  group1 &lt;- c()
+  group2 &lt;- c()
+  logFC &lt;- c()
+  
+  for(j in 1:1){
+  stats &lt;- res
+  p_adj &lt;- c(p_adj, round(stats[rownames(stats)==droplevels(cluster_name), &quot;p_adj&quot;],3))
+  logFC &lt;- c(logFC, -1*round(stats[rownames(stats)==droplevels(cluster_name), &quot;logFC&quot;],2))
+  group1 &lt;- c(group1, unlist(strsplit(comparisons[j], &quot;vs&quot;))[1])
+  group2 &lt;- c(group2, unlist(strsplit(comparisons[j], &quot;vs&quot;))[2])
+  }
+
+  stats_df &lt;- data.frame(p_adj=p_adj, group1=group1, group2=group2, logFC=logFC)
+  stats_df$p_adj_signif &lt;- stars.pval(stats_df$p_adj)
+  stats_df$p_adj_signif[stats_df$p_adj_signif==&quot; &quot;] &lt;- &quot;ns&quot;
+  stats_df$p_fc &lt;- paste0(stats_df$logFC, &quot; (&quot;, stats_df$p_adj, &quot;)&quot;, &quot; (&quot;, stats_df$p_adj_signif, &quot;)&quot;)
+  
+  color &lt;- brewer.pal(6, &quot;Set3&quot;)[cluster_name]
+  
+  plot_list_fc[[i]] &lt;- ggboxplot(proportions, x = &quot;condition&quot;, y = &quot;Freq&quot;, order=c(&quot;nMNA&quot;, &quot;MNA&quot;),
+              color = &quot;condition&quot;, palette =c(color, color), 
+              add.params = list(size = 1.5),
+              add = &quot;jitter&quot;, 
+              title=cluster_name, show.legend = F) +
+      stat_pvalue_manual(
+        stats_df,
+        y.position = max(proportions$Freq),
+        step.increase = 0.4,
+        label = &quot;p_fc&quot;
+        )  +
+      theme(aspect.ratio = 1.5, legend.position=&quot;none&quot;) +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+}
+
+grid.arrange(grobs = plot_list_fc, ncol = 6)</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/visualize-da2-1.png" width="1152" style="display: block; margin: auto;" /></p>
+<p>and in dodge barplots.</p>
+<pre class="r"><code>df &lt;- res[, c(&quot;logFC&quot;, &quot;p_adj&quot;)]
+df$p_adj_signif &lt;- stars.pval(df$p_adj)
+df$p_adj_signif[df$p_adj_signif==&quot; &quot;] &lt;- &quot;ns&quot;
+df$cluster &lt;- rownames(df)
+
+p &lt;- ggplot(df, aes(fill=cluster, y=logFC, x=cluster)) + 
+  ggtitle(&quot;DA - CNs&quot;) +
+  geom_bar(
+    stat=&quot;identity&quot;,
+    position=&quot;dodge&quot;,
+    show.legend = F) + 
+  scale_fill_manual(values = brewer.pal(6, &quot;Set3&quot;)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_text(aes(label = p_adj_signif), vjust = 0)
+
+p</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/barplot-logFC2-1.png" width="672" style="display: block; margin: auto;" />
+## Patch detection Subsequently, we detect tumor patches. We first
+detect connected sets of tumor cells with a predefined min. number of
+cells making up a patch and then we expand the concave hull around the
+patch by 1 pixel.</p>
+<pre class="r"><code>spe &lt;- patchDetection(spe, 
+                      patch_cells = spe$metacluster == &quot;tumor&quot;,
+                      img_id = &quot;sample_id&quot;,
+                      min_patch_size=20,
+                      expand_by=1,
+                      colPairName = &quot;neighborhood&quot;)</code></pre>
+<pre><code>The returned object is ordered by the &#39;sample_id&#39; entry.</code></pre>
+<p>We can now plot the tumor patch in the neighborhood graph of
+individual samples.</p>
+<pre class="r"><code>plotSpatial(spe[,spe$sample_id == &quot;20220926_20220809_16-006_TU_003&quot;], 
+            node_color_by = &quot;GD2_Gd155_mean&quot;, 
+            assay_type = &quot;counts&quot;,
+            img_id = &quot;sample_id&quot;, 
+            draw_edges = TRUE, 
+            colPairName = &quot;neighborhood&quot;, 
+            nodes_first = FALSE, 
+            node_size_by = &quot;area&quot;, 
+            directed = FALSE,
+            edge_color_fix = &quot;grey&quot;) + 
+    scale_size_continuous(range = c(0.1, 2)) +
+    ggtitle(&quot;GD2&quot;)</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/plot-patch-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>plotSpatial(spe[,spe$sample_id == &quot;20220926_20220809_16-006_TU_003&quot;], 
+            node_color_by = &quot;patch_id&quot;, 
+            img_id = &quot;sample_id&quot;, 
+            node_size_fix = 0.5) +
+    theme(legend.position = &quot;none&quot;)</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/plot-patch-2.png" width="672" style="display: block; margin: auto;" /></p>
+<p>Then we determine the frequency of cells within the patch belonging
+to a metacluster per sample with respect to progression status of the
+respective patient.</p>
+<pre class="r"><code>variable &lt;- &quot;progression&quot;
+plot_list &lt;- list()
+celltypes &lt;- unique(spe$metacluster)
+
+for(i in 1:length(unique(celltypes))){
+  
+  c &lt;- celltypes[i]
+  
+  cell_freq_per_patch &lt;- colData(spe) %&gt;% as_tibble() %&gt;%
+      group_by(patch_id, sample) %&gt;%
+      summarize(cell_count = sum(metacluster == c),
+                patch_size = n(),
+                cell_freq = cell_count / patch_size) %&gt;%
+      filter(!is.na(patch_id)) 
+    
+  mean_cell_freq_per_sample &lt;- cell_freq_per_patch %&gt;%
+    group_by(sample) %&gt;%
+    summarise(mean_cell_freq = mean(cell_freq, na.rm = TRUE))%&gt;%
+    arrange(desc(mean_cell_freq))
+  
+  df &lt;- data.frame(
+    sample = spe$sample,
+    condition = colData(spe)[,variable]
+  )
+  
+  progression_per_sample &lt;- df %&gt;%
+    group_by(sample) %&gt;%
+    summarise(condition = first(condition))
+  
+  combined_data &lt;- mean_cell_freq_per_sample %&gt;%
+    left_join(progression_per_sample, by = &quot;sample&quot;)
+  
+  # Calculate log2FC
+  log2fc_df &lt;- combined_data %&gt;%
+    group_by(condition) %&gt;%
+    summarise(mean_freq = mean(mean_cell_freq, na.rm = TRUE)) %&gt;%
+    spread(condition, mean_freq) %&gt;%
+    mutate(log2FC = log2(`1` / `0`))
+  
+  stats_df &lt;- compare_means(mean_cell_freq ~ condition,  
+                            method = &quot;wilcox.test&quot;,  
+                            data = combined_data) 
+    
+  stats_df$p_adj_signif &lt;- stars.pval(stats_df$p.adj)
+  stats_df$p_adj_signif[stats_df$p_adj_signif==&quot; &quot;] &lt;- &quot;ns&quot;
+  stats_df$p_long &lt;- paste0(&quot;log2FC: &quot;, round(log2fc_df$log2FC, 2), 
+                            &quot; (&quot;, stats_df$p.adj, &quot; &quot;, stats_df$p_adj_signif, &quot;)&quot;)
+  
+  color &lt;- unname(metadata(spe)$color_vectors$col_metacluster[as.character(c)])
+  
+  plot_list[[c]] &lt;- ggboxplot(combined_data, x = &quot;condition&quot;, y = &quot;mean_cell_freq&quot;,
+                  color = &quot;condition&quot;, palette =c(color, color),
+                  add.params = list(size = 3),
+                  add = &quot;jitter&quot;,
+                  title=c) + 
+                  stat_pvalue_manual(stats_df, label = &quot;p_long&quot;, y.position = max(combined_data$mean_cell_freq), step.increase = 0.4,) +
+                  theme(aspect.ratio = 1.6, legend.position=&quot;none&quot;) +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+                  
+  
+}</code></pre>
+<pre><code>`summarise()` has grouped output by &#39;patch_id&#39;. You can override using the
+`.groups` argument.
+`summarise()` has grouped output by &#39;patch_id&#39;. You can override using the
+`.groups` argument.
+`summarise()` has grouped output by &#39;patch_id&#39;. You can override using the
+`.groups` argument.
+`summarise()` has grouped output by &#39;patch_id&#39;. You can override using the
+`.groups` argument.
+`summarise()` has grouped output by &#39;patch_id&#39;. You can override using the
+`.groups` argument.
+`summarise()` has grouped output by &#39;patch_id&#39;. You can override using the
+`.groups` argument.
+`summarise()` has grouped output by &#39;patch_id&#39;. You can override using the
+`.groups` argument.
+`summarise()` has grouped output by &#39;patch_id&#39;. You can override using the
+`.groups` argument.</code></pre>
+<pre class="r"><code>grid.arrange(grobs = plot_list, ncol = 6)</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/patch-freq-1.png" width="1344" style="display: block; margin: auto;" /></p>
+<p>We repeat the same for immune cells overall.</p>
+<pre class="r"><code>variable &lt;- &quot;progression&quot;
+  
+c &lt;- &quot;immune&quot;
+
+cell_freq_per_patch &lt;- colData(spe) %&gt;% as_tibble() %&gt;%
+    group_by(patch_id, sample) %&gt;%
+    summarize(cell_count = sum(celltype_3 == c),
+              patch_size = n(),
+              cell_freq = cell_count / patch_size) %&gt;%
+    filter(!is.na(patch_id)) </code></pre>
+<pre><code>`summarise()` has grouped output by &#39;patch_id&#39;. You can override using the
+`.groups` argument.</code></pre>
+<pre class="r"><code>mean_cell_freq_per_sample &lt;- cell_freq_per_patch %&gt;%
+  group_by(sample) %&gt;%
+  summarise(mean_cell_freq = mean(cell_freq, na.rm = TRUE))%&gt;%
+  arrange(desc(mean_cell_freq))
+
+df &lt;- data.frame(
+  sample = spe$sample,
+  condition = colData(spe)[,variable]
+)
+
+progression_per_sample &lt;- df %&gt;%
+  group_by(sample) %&gt;%
+  summarise(condition = first(condition))
+
+combined_data &lt;- mean_cell_freq_per_sample %&gt;%
+  left_join(progression_per_sample, by = &quot;sample&quot;)
+
+# Calculate log2FC
+log2fc_df &lt;- combined_data %&gt;%
+  group_by(condition) %&gt;%
+  summarise(mean_freq = mean(mean_cell_freq, na.rm = TRUE)) %&gt;%
+  spread(condition, mean_freq) %&gt;%
+  mutate(log2FC = log2(`1` / `0`))
+
+stats_df &lt;- compare_means(mean_cell_freq ~ condition,  
+                          method = &quot;wilcox.test&quot;,  
+                          data = combined_data) 
+  
+stats_df$p_adj_signif &lt;- stars.pval(stats_df$p.adj)
+stats_df$p_adj_signif[stats_df$p_adj_signif==&quot; &quot;] &lt;- &quot;ns&quot;
+stats_df$p_long &lt;- paste0(&quot;log2FC: &quot;, round(log2fc_df$log2FC, 2), 
+                          &quot; (&quot;, stats_df$p.adj, &quot; &quot;, stats_df$p_adj_signif, &quot;)&quot;)
+
+color &lt;- unname(metadata(spe)$color_vectors$col_celltype_3[as.character(c)])
+
+p &lt;- ggboxplot(combined_data, x = &quot;condition&quot;, y = &quot;mean_cell_freq&quot;,
+                color = &quot;condition&quot;, palette =c(color, color),
+                add.params = list(size = 3),
+                add = &quot;jitter&quot;,
+                title=c) + 
+                stat_pvalue_manual(stats_df, label = &quot;p_long&quot;, y.position = max(combined_data$mean_cell_freq), step.increase = 0.4,) +
+                theme(aspect.ratio = 1.6, legend.position=&quot;none&quot;) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+                  
+p</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/patch-freq-immune-1.png" width="672" style="display: block; margin: auto;" />
+### Distance to tumor-stroma border Based on detected patches, the
+distance to the tumor stroma border can be computed. Therefore the <a
+href="https://bodenmillergroup.github.io/imcRtools/reference/minDistToCells.html">minDistToCells</a>
+can be used. Negative values indicate cells within patches and positive
+values cells outside of patches.</p>
+<pre class="r"><code>spe &lt;- minDistToCells(spe, 
+                      x_cells = !is.na(spe$patch_id), 
+                      img_id = &quot;sample_id&quot;)</code></pre>
+<pre><code>The returned object is ordered by the &#39;sample_id&#39; entry.</code></pre>
+<pre class="r"><code>plotSpatial(spe[,spe$sample_id == &quot;20220926_20220809_16-006_TU_003&quot;], 
+            node_color_by = &quot;distToCells&quot;, 
+            img_id = &quot;sample_id&quot;, 
+            node_size_fix = 0.5) +
+    scale_color_gradient2(low = &quot;dark blue&quot;, mid = &quot;white&quot;, high = &quot;dark red&quot;)</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/minDistCells-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>The distance distribution per celltype can be shown in ridge
+plots.</p>
+<pre class="r"><code>ggplot(as.data.frame(colData(spe)) %&gt;%
+         mutate(celltype_2 = fct_reorder(celltype_2, distToCells, .fun = median))) + 
+  stat_density_ridges(aes(distToCells, celltype_2, fill = celltype_2), 
+                      quantiles = c(0.5), quantile_lines = TRUE, scale = 3) +
+  geom_vline(xintercept = 0, color = &quot;dark red&quot;, linewidth = 2) +
+  scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype_2) +
+  theme_ridges()</code></pre>
+<pre><code>Picking joint bandwidth of 58.9</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/ridges-distance-1.png" width="768" style="display: block; margin: auto;" /></p>
+<p>Based on the calculated distance for each cell, three compartments -
+tumor core, tumor/stroma border and stroma - can be defined using a
+distance threshold. Image <code>20221018_20220906_03-018_TU_001</code>
+lacks patches, therefore all cells are defined as <code>stroma</code>
+for this image.</p>
+<pre class="r"><code>threshold &lt;- 100
+
+spe$compartment &lt;- &quot;stroma&quot;
+spe[, abs(spe$distToCells) &lt;= threshold &amp; spe$sample_id != &quot;20221018_20220906_03-018_TU_001&quot;]$compartment &lt;- &quot;border&quot;
+spe[,spe$compartment != &quot;border&quot; &amp; spe$distToCells&lt;0 &amp; spe$sample_id != &quot;20221018_20220906_03-018_TU_001&quot;]$compartment &lt;- &quot;core&quot;</code></pre>
+</div>
+<div id="da-analysis-in-spatial-compartments" class="section level3">
+<h3>DA analysis in spatial compartments</h3>
+<p>Next, we will plot the differential abundance of metaclusters with
+respect to spatial compartment on a sample level. Let’s again convert
+the SPE object into a catalyst-compatible object. Decide whether you
+want to compare <code>tumor</code> celltypes or <code>immune</code>
+metaclusters by setting the variable <code>cells</code>. Furthermore,
+select which compartments to compare, by setting <code>compare</code> to
+<code>core-border</code>, <code>core-stroma</code> or
+<code>border-stroma</code>.</p>
+<pre class="r"><code>cells &lt;- &quot;immune&quot;
+compare &lt;- &quot;core-border&quot;
+
+if (cells ==&quot;immune&quot;){
+  order &lt;- c(&quot;T cell&quot;, &quot;B cell&quot;, &quot;MO/DC/NK&quot;, &quot;granulocyte&quot;)
+  keep_cols &lt;- spe$metacluster==&quot;T cell&quot; | spe$metacluster==&quot;B cell&quot; | spe$metacluster==&quot;MO/DC/NK&quot; | spe$metacluster==&quot;granulocyte&quot;
+  color &lt;- metadata(spe)$color_vectors$col_celltype_2
+}else{
+  order &lt;- c(&quot;early SYM-like TC&quot;,&quot;CD24+ marker-lo TC&quot;, &quot;CD24- marker-lo TC&quot;, &quot;GD2lo TC&quot;, &quot;Ki67hi TC&quot;, &quot;CHGAhi TC&quot;, &quot;CXCR4hi TC&quot;, &quot;GATA3hi TC&quot;, &quot;bridge-like TC&quot;, &quot;CD44+ mes-like TC&quot;)
+  keep_cols &lt;- spe$metacluster==&quot;tumor&quot;
+  color &lt;- metadata(spe)$color_vectors$col_celltype_2
+}
+
+keep_cols &lt;- keep_cols &amp; (spe$compartment == strsplit(compare, &quot;-&quot;)[[1]][1] | spe$compartment == strsplit(compare, &quot;-&quot;)[[1]][2])
+keep_rows &lt;- rowData(spe)$use_channel 
+sce &lt;- SingleCellExperiment(assays=list(counts=assay(spe, &quot;counts&quot;)[keep_rows,keep_cols], exprs=assay(spe, &quot;counts&quot;)[keep_rows,keep_cols]))
+
+sce$fm_id &lt;- spe[keep_rows,keep_cols]$fm_id
+sce$compartment &lt;- factor(spe[keep_rows,keep_cols]$compartment)
+
+#split samples into individual compartments
+sce$sample_id &lt;- factor(paste0(sce$fm_id, &quot;_&quot;, sce$compartment))
+sce$sample &lt;- factor(spe[keep_rows,keep_cols]$sample)
+
+sce$condition &lt;- sce$compartment
+
+sce$cluster_id &lt;- factor(spe[keep_rows,keep_cols]$celltype_2, levels=order)                                                                     
+
+sce$metacluster &lt;- factor(spe[keep_rows,keep_cols]$metacluster)
+metadata(sce)$cluster_codes &lt;- data.frame(celltype = factor(spe[keep_rows,keep_cols]$celltype_2, levels=order))
+
+# Add metadata
+metadata(sce)$experiment_info &lt;- as.data.frame(colData(sce)) %&gt;% group_by(sample_id, condition, sample) %&gt;% 
+    summarise(n_cells=n(),.groups = &#39;drop&#39;) %&gt;%
+    as.data.frame()
+
+# Define cell_type_markers 
+type_markers &lt;- c(&quot;MPO_Y89_mean&quot;, &quot;CD44_In115_mean&quot;, &quot;CD11b_Nd142_mean&quot;, &quot;HLA-DR_Nd143_mean&quot;, &quot;PRPH_Nd144_mean&quot;, &quot;HLA-ABC_Sm147_mean&quot;, &quot;CD20_Nd148_mean&quot;, &quot;LUM_Sm149_mean&quot;, &quot;CD11c_Nd150_mean&quot;,
+                  &quot;CD24_Eu151_mean&quot;, &quot;CD3_Sm152_mean&quot;, &quot;CD45_Eu153_mean&quot;, &quot;CD8a_Sm154_mean&quot;, &quot;GD2_Gd155_mean&quot;, &quot;CD34_Gd156_mean&quot;, &quot;CD10_Gd158_mean&quot;, &quot;CXCR4_Tb159_mean&quot;,&quot;SOX10_Dy162_mean&quot;,
+                  &quot;FOXP3_Dy163_mean&quot;, &quot;CHGA_Dy164_mean&quot;, &quot;GATA3_Er168_mean&quot;, &quot;CD56_Er170_mean&quot;, &quot;CD4_Yb171_mean&quot;, &quot;ELAVL4_Yb174_mean&quot;, &quot;CD14_Lu175_mean&quot;, &quot;Vimentin_Pt196_mean&quot;, &quot;CD15_Bi209_mean&quot;)
+
+# Define cell_state_markers 
+state_markers &lt;- c(&quot;CD274_Gd160_mean&quot;, &quot;S100B_Dy161_mean&quot;, &quot;CD279_Ho165_mean&quot;, &quot;Ki-67_Tm169_mean&quot;, &quot;GZMB_Yb173_mean&quot;)
+
+# Add to sce
+rowData(sce)$marker_class &lt;- ifelse(rownames(sce) %in% type_markers, &quot;type&quot;,
+                                    ifelse(rownames(sce) %in% state_markers, &quot;state&quot;, 
+                                    &quot;other&quot;))
+
+plotAbundances(sce, k = &quot;celltype&quot;, by = &quot;sample&quot;, k_pal=color) </code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/catalyst-comp-object3-1.png" width="1152" style="display: block; margin: auto;" /></p>
+<p>We first prepare data for DA analysis using the <code>diffcyt</code>
+package.</p>
+<pre class="r"><code>#list of samples as input to diffcyt methods
+df_list &lt;- lapply(unique(sce$sample_id), function(x){as.data.frame(t(counts(sce[,sce$sample_id==x])))})
+names(df_list) &lt;- unique(sce$sample_id)
+
+#experiment info
+experiment_info &lt;- metadata(sce)$experiment_info
+experiment_info &lt;- experiment_info[match(names(df_list),experiment_info$sample_id),]
+
+#marker info
+channel_name &lt;- sapply(strsplit(rownames(rowData(spe)[keep_rows,]), &quot;_&quot;), &quot;[[&quot;, 2)
+marker_name &lt;- sapply(strsplit(rownames(rowData(spe)[keep_rows,]), &quot;_&quot;), &quot;[[&quot;, 1)
+marker_class &lt;-ifelse(rownames(spe)[keep_rows] %in% type_markers, &quot;type&quot;,
+                                    ifelse(rownames(spe)[keep_rows] %in% state_markers, &quot;state&quot;, 
+                                    &quot;other&quot;))
+row_data &lt;- data.frame(cbind(channel_name, marker_name), row.names=marker_name)
+row_data$marker_class &lt;- as.factor(marker_class)
+
+marker_info &lt;-  row_data
+
+#prepare data into format for diffcyt pipeline 
+d_se &lt;- prepareData(df_list, experiment_info, marker_info)
+rowData(d_se)$cluster_id &lt;- sce[,rownames(d_se)]$cluster_id 
+metadata(d_se)$cluster_codes &lt;- metadata(sce)$cluster_codes
+
+# Transform data
+d_se &lt;- transformData(d_se)
+
+# Calculate counts
+d_counts &lt;- calcCounts(d_se)</code></pre>
+<p>Subsequently, we perform the DA analysis comparing immune
+celltype/metacluster proportions between paired compartments, i.e. from
+the same sample.</p>
+<pre class="r"><code>design &lt;- createDesignMatrix(experiment_info, cols_design = c(&quot;condition&quot;, &quot;sample&quot;)) 
+contrast &lt;- createContrast(c(0, 1, rep(0, length(unique(experiment_info$sample))-1))) #paired
+nrow(contrast) == ncol(design)</code></pre>
+<pre><code>[1] TRUE</code></pre>
+<pre class="r"><code># Test for differential abundance (DA) of clusters
+res_DA &lt;- testDA_edgeR(d_counts,design, contrast, 
+                       min_cells=3, 
+                       min_samples=round(dim(d_counts)[2]*0.2)
+                       )
+
+
+FDR_cutoff = 0.1
+rowData(res_DA)[rowData(res_DA)$p_adj&lt;FDR_cutoff,]</code></pre>
+<pre><code>DataFrame with 2 rows and 6 columns
+         cluster_id     logFC    logCPM        LR       p_val       p_adj
+           &lt;factor&gt; &lt;numeric&gt; &lt;numeric&gt; &lt;numeric&gt;   &lt;numeric&gt;   &lt;numeric&gt;
+B cell     B cell   -1.083921   15.3721  13.47390 0.000241905 0.000967622
+MO/DC/NK   MO/DC/NK -0.288246   18.2538   4.35369 0.036928897 0.073857793</code></pre>
+<pre class="r"><code>res&lt;- data.frame(rowData(res_DA))</code></pre>
+</div>
+</div>
+<div id="visualization-of-da-results" class="section level2">
+<h2>Visualization of DA results</h2>
+<p>Finally, we visualize DA results in boxplots.</p>
+<pre class="r"><code>p &lt;- plotAbundances(sce, k = &quot;celltype&quot;, by = &quot;sample&quot;)
+
+comparisons &lt;- c(paste0(strsplit(compare, &quot;-&quot;)[[1]][1], &quot;vs&quot;, strsplit(compare, &quot;-&quot;)[[1]][2]))
+ord &lt;- c(strsplit(compare, &quot;-&quot;)[[1]][1], strsplit(compare, &quot;-&quot;)[[1]][2])
+
+plot_list_fc &lt;- list()
+
+for(i in 1:length(unique(p$data$cluster_id))){
+  cluster_name &lt;- unique(p$data$cluster_id)[i]
+  proportions &lt;- data.frame(p$data[p$data$cluster_id == cluster_name, c(&quot;sample_id&quot;, &quot;condition&quot;, &quot;Freq&quot;)])
+  
+  p_adj &lt;- c()
+  group1 &lt;- c()
+  group2 &lt;- c()
+  logFC &lt;- c()
+  
+  for(j in 1:1){
+  stats &lt;- res
+  p_adj &lt;- c(p_adj, round(stats[rownames(stats)==droplevels(cluster_name), &quot;p_adj&quot;],3))
+  logFC &lt;- c(logFC, round(stats[rownames(stats)==droplevels(cluster_name), &quot;logFC&quot;],2))
+  group1 &lt;- c(group1, unlist(strsplit(comparisons[j], &quot;vs&quot;))[1])
+  group2 &lt;- c(group2, unlist(strsplit(comparisons[j], &quot;vs&quot;))[2])
+  }
+
+  stats_df &lt;- data.frame(p_adj=p_adj, group1=group1, group2=group2, logFC=logFC)
+  stats_df$p_adj_signif &lt;- stars.pval(stats_df$p_adj)
+  stats_df$p_adj_signif[stats_df$p_adj_signif==&quot; &quot;] &lt;- &quot;ns&quot;
+  stats_df$p_fc &lt;- paste0(stats_df$logFC, &quot; (&quot;, stats_df$p_adj, &quot;)&quot;, &quot; (&quot;, stats_df$p_adj_signif, &quot;)&quot;)
+
+  color &lt;- unname(metadata(spe)$color_vectors$col_celltype_2[as.character(cluster_name)]) 
+  
+  plot_list_fc[[i]] &lt;- ggboxplot(proportions, x = &quot;condition&quot;, y = &quot;Freq&quot;, order=ord,
+              color = &quot;condition&quot;, palette =c(color, color), 
+              add.params = list(size = 1.5),
+              add = &quot;jitter&quot;, 
+              title=cluster_name, show.legend = F) +
+      stat_pvalue_manual(
+        stats_df,
+        y.position = max(proportions$Freq),
+        step.increase = 0.4,
+        label = &quot;p_fc&quot;
+        )  +
+      theme(aspect.ratio = 1.5, legend.position=&quot;none&quot;) +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+}
+
+grid.arrange(grobs = plot_list_fc, ncol = 6)</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/visualize-da-1.png" width="1152" style="display: block; margin: auto;" /></p>
+<p>We will plot the logFC for the comparisons between conditions in a
+barplot.</p>
+<pre class="r"><code>df &lt;- res[, c(&quot;logFC&quot;, &quot;p_adj&quot;)]
+df$p_adj_signif &lt;- stars.pval(df$p_adj)
+df$p_adj_signif[df$p_adj_signif==&quot; &quot;] &lt;- &quot;ns&quot;
+df$cluster &lt;- rownames(df)
+
+p &lt;- ggplot(df, aes(fill=cluster, y=logFC, x=cluster)) + 
+  ggtitle(colnames(contrasts)[i]) +
+  geom_bar(
+    stat=&quot;identity&quot;,
+    position=&quot;dodge&quot;,
+    show.legend = F) + 
+  scale_fill_manual(values = metadata(spe)$color_vectors$col_celltype_2) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_text(aes(label = p_adj_signif), vjust = 0)
+
+p</code></pre>
+<p><img src="figure/10_spatial_analysis.Rmd/barplot-logFC-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>Finally, we save the R object.</p>
+<pre class="r"><code>saveRDS(spe, file.path(params$output,&quot;spe_spatial.RDS&quot;))</code></pre>
+</div>
+<div id="session-info" class="section level2">
+<h2>Session Info</h2>
+<details>
+<summary>
+SessionInfo
+</summary>
+<pre><code>R version 4.4.0 (2024-04-24)
+Platform: x86_64-pc-linux-gnu
+Running under: Ubuntu 22.04.4 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.20.so;  LAPACK version 3.10.0
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+time zone: Etc/UTC
+tzcode source: system (glibc)
+
+attached base packages:
+[1] grid      stats4    stats     graphics  grDevices utils     datasets 
+[8] methods   base     
+
+other attached packages:
+ [1] lubridate_1.9.3             stringr_1.5.1              
+ [3] purrr_1.0.2                 readr_2.1.5                
+ [5] tibble_3.2.1                tidyverse_2.0.0            
+ [7] pheatmap_1.0.12             forcats_1.0.0              
+ [9] ggridges_0.5.6              gridExtra_2.3              
+[11] ggpubr_0.6.0                gtools_3.9.5               
+[13] ComplexHeatmap_2.19.0       CATALYST_1.27.2            
+[15] dplyr_1.1.4                 diffcyt_1.24.0             
+[17] tidyr_1.3.1                 lisaClust_1.11.1           
+[19] ggplot2_3.5.1               patchwork_1.2.0            
+[21] circlize_0.4.16             RColorBrewer_1.1-3         
+[23] BiocParallel_1.37.1         scales_1.3.0               
+[25] imcRtools_1.9.2             SpatialExperiment_1.13.2   
+[27] SingleCellExperiment_1.25.1 SummarizedExperiment_1.33.3
+[29] Biobase_2.63.1              GenomicRanges_1.55.4       
+[31] GenomeInfoDb_1.39.14        IRanges_2.37.1             
+[33] S4Vectors_0.41.7            BiocGenerics_0.49.1        
+[35] MatrixGenerics_1.15.1       matrixStats_1.3.0          
+[37] workflowr_1.7.1            
+
+loaded via a namespace (and not attached):
+  [1] vroom_1.6.5                 tiff_0.1-12                
+  [3] goftest_1.2-3               DT_0.33                    
+  [5] HDF5Array_1.31.6            TH.data_1.1-2              
+  [7] vctrs_0.6.5                 spatstat.random_3.2-3      
+  [9] digest_0.6.35               png_0.1-8                  
+ [11] shape_1.4.6.1               proxy_0.4-27               
+ [13] git2r_0.33.0                ggrepel_0.9.5              
+ [15] spicyR_1.15.4               deldir_2.0-4               
+ [17] magick_2.8.3                MASS_7.3-60.2              
+ [19] reshape2_1.4.4              httpuv_1.6.15              
+ [21] foreach_1.5.2               withr_3.0.0                
+ [23] xfun_0.43                   survival_3.5-8             
+ [25] memoise_2.0.1               RTriangle_1.6-0.13         
+ [27] cytomapper_1.15.4           ggbeeswarm_0.7.2           
+ [29] RProtoBufLib_2.15.1         drc_3.0-1                  
+ [31] systemfonts_1.0.6           zoo_1.8-12                 
+ [33] GlobalOptions_0.1.2         V8_4.4.2                   
+ [35] promises_1.3.0              httr_1.4.7                 
+ [37] rstatix_0.7.2               rhdf5filters_1.15.5        
+ [39] ps_1.7.6                    rhdf5_2.47.7               
+ [41] rstudioapi_0.16.0           UCSC.utils_0.99.7          
+ [43] units_0.8-5                 generics_0.1.3             
+ [45] archive_1.1.8               processx_3.8.4             
+ [47] curl_5.2.1                  concaveman_1.1.0           
+ [49] zlibbioc_1.49.3             ScaledMatrix_1.11.1        
+ [51] ggraph_2.2.1                polyclip_1.10-6            
+ [53] GenomeInfoDbData_1.2.12     SparseArray_1.3.7          
+ [55] fftwtools_0.9-11            xtable_1.8-4               
+ [57] doParallel_1.0.17           evaluate_0.23              
+ [59] S4Arrays_1.3.7              hms_1.1.3                  
+ [61] irlba_2.3.5.1               colorspace_2.1-0           
+ [63] spatstat.data_3.0-4         magrittr_2.0.3             
+ [65] later_1.3.2                 viridis_0.6.5              
+ [67] lattice_0.22-6              spatstat.geom_3.2-9        
+ [69] getPass_0.2-4               XML_3.99-0.16.1            
+ [71] scuttle_1.13.1              cowplot_1.1.3              
+ [73] class_7.3-22                svgPanZoom_0.3.4           
+ [75] pillar_1.9.0                nlme_3.1-164               
+ [77] iterators_1.0.14            EBImage_4.45.1             
+ [79] compiler_4.4.0              beachmat_2.19.4            
+ [81] stringi_1.8.3               sf_1.0-16                  
+ [83] tensor_1.5                  minqa_1.2.6                
+ [85] ClassifyR_3.7.7             plyr_1.8.9                 
+ [87] crayon_1.5.2                abind_1.4-5                
+ [89] scater_1.31.2               locfit_1.5-9.9             
+ [91] sp_2.1-3                    graphlayouts_1.1.1         
+ [93] bit_4.0.5                   terra_1.7-71               
+ [95] sandwich_3.1-0              whisker_0.4.1              
+ [97] codetools_0.2-20            multcomp_1.4-25            
+ [99] BiocSingular_1.19.0         bslib_0.7.0                
+[101] e1071_1.7-14                GetoptLong_1.0.5           
+[103] mime_0.12                   MultiAssayExperiment_1.29.2
+[105] splines_4.4.0               Rcpp_1.0.12                
+[107] sparseMatrixStats_1.15.1    knitr_1.46                 
+[109] utf8_1.2.4                  clue_0.3-65                
+[111] lme4_1.1-35.3               fs_1.6.4                   
+[113] nnls_1.5                    DelayedMatrixStats_1.25.4  
+[115] ggsignif_0.6.4              Matrix_1.7-0               
+[117] scam_1.2-16                 callr_3.7.6                
+[119] statmod_1.5.0               tzdb_0.4.0                 
+[121] svglite_2.1.3               tweenr_2.0.3               
+[123] pkgconfig_2.0.3             tools_4.4.0                
+[125] cachem_1.0.8                viridisLite_0.4.2          
+[127] DBI_1.2.2                   numDeriv_2016.8-1.1        
+[129] fastmap_1.1.1               rmarkdown_2.26             
+[131] shinydashboard_0.7.2        broom_1.0.5                
+[133] sass_0.4.9                  carData_3.0-5              
+[135] farver_2.1.1                tidygraph_1.3.1            
+[137] mgcv_1.9-1                  yaml_2.3.8                 
+[139] cli_3.6.2                   lifecycle_1.0.4            
+[141] mvtnorm_1.2-4               backports_1.4.1            
+[143] cytolib_2.15.3              timechange_0.3.0           
+[145] gtable_0.3.5                rjson_0.2.21               
+[147] parallel_4.4.0              limma_3.59.10              
+[149] jsonlite_1.8.8              edgeR_4.1.31               
+[151] bitops_1.0-7                bit64_4.0.5                
+[153] Rtsne_0.17                  FlowSOM_2.11.0             
+[155] spatstat.utils_3.0-4        BiocNeighbors_1.21.2       
+[157] flowCore_2.15.3             jquerylib_0.1.4            
+[159] highr_0.10                  shiny_1.8.1.1              
+[161] ConsensusClusterPlus_1.67.0 htmltools_0.5.8.1          
+[163] distances_0.1.10            glue_1.7.0                 
+[165] XVector_0.43.1              RCurl_1.98-1.14            
+[167] rprojroot_2.0.4             classInt_0.4-10            
+[169] jpeg_0.1-10                 boot_1.3-30                
+[171] igraph_2.0.3                R6_2.5.1                   
+[173] labeling_0.4.3              cluster_2.1.6              
+[175] Rhdf5lib_1.25.3             nloptr_2.0.3               
+[177] DelayedArray_0.29.9         tidyselect_1.2.1           
+[179] vipor_0.4.7                 plotrix_3.8-4              
+[181] ggforce_0.4.2               raster_3.6-26              
+[183] car_3.1-2                   rsvd_1.0.5                 
+[185] munsell_0.5.1               KernSmooth_2.23-22         
+[187] data.table_1.15.4           htmlwidgets_1.6.4          
+[189] rlang_1.1.3                 spatstat.sparse_3.0-3      
+[191] spatstat.explore_3.2-7      lmerTest_3.1-3             
+[193] colorRamps_2.3.4            Cairo_1.6-2                
+[195] ggnewscale_0.4.10           fansi_1.0.6                
+[197] beeswarm_0.4.0             </code></pre>
+</details>
+<br>
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-sessioninfo" data-toggle="collapse" data-target="#workflowr-sessioninfo" style="display: block;">
+<span class="glyphicon glyphicon-wrench" aria-hidden="true"></span>
+Session information
+</button>
+</p>
+<div id="workflowr-sessioninfo" class="collapse">
+<pre class="r"><code>sessionInfo()</code></pre>
+<pre><code>R version 4.4.0 (2024-04-24)
+Platform: x86_64-pc-linux-gnu
+Running under: Ubuntu 22.04.4 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.20.so;  LAPACK version 3.10.0
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+time zone: Etc/UTC
+tzcode source: system (glibc)
+
+attached base packages:
+[1] grid      stats4    stats     graphics  grDevices utils     datasets 
+[8] methods   base     
+
+other attached packages:
+ [1] lubridate_1.9.3             stringr_1.5.1              
+ [3] purrr_1.0.2                 readr_2.1.5                
+ [5] tibble_3.2.1                tidyverse_2.0.0            
+ [7] pheatmap_1.0.12             forcats_1.0.0              
+ [9] ggridges_0.5.6              gridExtra_2.3              
+[11] ggpubr_0.6.0                gtools_3.9.5               
+[13] ComplexHeatmap_2.19.0       CATALYST_1.27.2            
+[15] dplyr_1.1.4                 diffcyt_1.24.0             
+[17] tidyr_1.3.1                 lisaClust_1.11.1           
+[19] ggplot2_3.5.1               patchwork_1.2.0            
+[21] circlize_0.4.16             RColorBrewer_1.1-3         
+[23] BiocParallel_1.37.1         scales_1.3.0               
+[25] imcRtools_1.9.2             SpatialExperiment_1.13.2   
+[27] SingleCellExperiment_1.25.1 SummarizedExperiment_1.33.3
+[29] Biobase_2.63.1              GenomicRanges_1.55.4       
+[31] GenomeInfoDb_1.39.14        IRanges_2.37.1             
+[33] S4Vectors_0.41.7            BiocGenerics_0.49.1        
+[35] MatrixGenerics_1.15.1       matrixStats_1.3.0          
+[37] workflowr_1.7.1            
+
+loaded via a namespace (and not attached):
+  [1] vroom_1.6.5                 tiff_0.1-12                
+  [3] goftest_1.2-3               DT_0.33                    
+  [5] HDF5Array_1.31.6            TH.data_1.1-2              
+  [7] vctrs_0.6.5                 spatstat.random_3.2-3      
+  [9] digest_0.6.35               png_0.1-8                  
+ [11] shape_1.4.6.1               proxy_0.4-27               
+ [13] git2r_0.33.0                ggrepel_0.9.5              
+ [15] spicyR_1.15.4               deldir_2.0-4               
+ [17] magick_2.8.3                MASS_7.3-60.2              
+ [19] reshape2_1.4.4              httpuv_1.6.15              
+ [21] foreach_1.5.2               withr_3.0.0                
+ [23] xfun_0.43                   survival_3.5-8             
+ [25] memoise_2.0.1               RTriangle_1.6-0.13         
+ [27] cytomapper_1.15.4           ggbeeswarm_0.7.2           
+ [29] RProtoBufLib_2.15.1         drc_3.0-1                  
+ [31] systemfonts_1.0.6           zoo_1.8-12                 
+ [33] GlobalOptions_0.1.2         V8_4.4.2                   
+ [35] promises_1.3.0              httr_1.4.7                 
+ [37] rstatix_0.7.2               rhdf5filters_1.15.5        
+ [39] ps_1.7.6                    rhdf5_2.47.7               
+ [41] rstudioapi_0.16.0           UCSC.utils_0.99.7          
+ [43] units_0.8-5                 generics_0.1.3             
+ [45] archive_1.1.8               processx_3.8.4             
+ [47] curl_5.2.1                  concaveman_1.1.0           
+ [49] zlibbioc_1.49.3             ScaledMatrix_1.11.1        
+ [51] ggraph_2.2.1                polyclip_1.10-6            
+ [53] GenomeInfoDbData_1.2.12     SparseArray_1.3.7          
+ [55] fftwtools_0.9-11            xtable_1.8-4               
+ [57] doParallel_1.0.17           evaluate_0.23              
+ [59] S4Arrays_1.3.7              hms_1.1.3                  
+ [61] irlba_2.3.5.1               colorspace_2.1-0           
+ [63] spatstat.data_3.0-4         magrittr_2.0.3             
+ [65] later_1.3.2                 viridis_0.6.5              
+ [67] lattice_0.22-6              spatstat.geom_3.2-9        
+ [69] getPass_0.2-4               XML_3.99-0.16.1            
+ [71] scuttle_1.13.1              cowplot_1.1.3              
+ [73] class_7.3-22                svgPanZoom_0.3.4           
+ [75] pillar_1.9.0                nlme_3.1-164               
+ [77] iterators_1.0.14            EBImage_4.45.1             
+ [79] compiler_4.4.0              beachmat_2.19.4            
+ [81] stringi_1.8.3               sf_1.0-16                  
+ [83] tensor_1.5                  minqa_1.2.6                
+ [85] ClassifyR_3.7.7             plyr_1.8.9                 
+ [87] crayon_1.5.2                abind_1.4-5                
+ [89] scater_1.31.2               locfit_1.5-9.9             
+ [91] sp_2.1-3                    graphlayouts_1.1.1         
+ [93] bit_4.0.5                   terra_1.7-71               
+ [95] sandwich_3.1-0              whisker_0.4.1              
+ [97] codetools_0.2-20            multcomp_1.4-25            
+ [99] BiocSingular_1.19.0         bslib_0.7.0                
+[101] e1071_1.7-14                GetoptLong_1.0.5           
+[103] mime_0.12                   MultiAssayExperiment_1.29.2
+[105] splines_4.4.0               Rcpp_1.0.12                
+[107] sparseMatrixStats_1.15.1    knitr_1.46                 
+[109] utf8_1.2.4                  clue_0.3-65                
+[111] lme4_1.1-35.3               fs_1.6.4                   
+[113] nnls_1.5                    DelayedMatrixStats_1.25.4  
+[115] ggsignif_0.6.4              Matrix_1.7-0               
+[117] scam_1.2-16                 callr_3.7.6                
+[119] statmod_1.5.0               tzdb_0.4.0                 
+[121] svglite_2.1.3               tweenr_2.0.3               
+[123] pkgconfig_2.0.3             tools_4.4.0                
+[125] cachem_1.0.8                viridisLite_0.4.2          
+[127] DBI_1.2.2                   numDeriv_2016.8-1.1        
+[129] fastmap_1.1.1               rmarkdown_2.26             
+[131] shinydashboard_0.7.2        broom_1.0.5                
+[133] sass_0.4.9                  carData_3.0-5              
+[135] farver_2.1.1                tidygraph_1.3.1            
+[137] mgcv_1.9-1                  yaml_2.3.8                 
+[139] cli_3.6.2                   lifecycle_1.0.4            
+[141] mvtnorm_1.2-4               backports_1.4.1            
+[143] cytolib_2.15.3              timechange_0.3.0           
+[145] gtable_0.3.5                rjson_0.2.21               
+[147] parallel_4.4.0              limma_3.59.10              
+[149] jsonlite_1.8.8              edgeR_4.1.31               
+[151] bitops_1.0-7                bit64_4.0.5                
+[153] Rtsne_0.17                  FlowSOM_2.11.0             
+[155] spatstat.utils_3.0-4        BiocNeighbors_1.21.2       
+[157] flowCore_2.15.3             jquerylib_0.1.4            
+[159] highr_0.10                  shiny_1.8.1.1              
+[161] ConsensusClusterPlus_1.67.0 htmltools_0.5.8.1          
+[163] distances_0.1.10            glue_1.7.0                 
+[165] XVector_0.43.1              RCurl_1.98-1.14            
+[167] rprojroot_2.0.4             classInt_0.4-10            
+[169] jpeg_0.1-10                 boot_1.3-30                
+[171] igraph_2.0.3                R6_2.5.1                   
+[173] labeling_0.4.3              cluster_2.1.6              
+[175] Rhdf5lib_1.25.3             nloptr_2.0.3               
+[177] DelayedArray_0.29.9         tidyselect_1.2.1           
+[179] vipor_0.4.7                 plotrix_3.8-4              
+[181] ggforce_0.4.2               raster_3.6-26              
+[183] car_3.1-2                   rsvd_1.0.5                 
+[185] munsell_0.5.1               KernSmooth_2.23-22         
+[187] data.table_1.15.4           htmlwidgets_1.6.4          
+[189] rlang_1.1.3                 spatstat.sparse_3.0-3      
+[191] spatstat.explore_3.2-7      lmerTest_3.1-3             
+[193] colorRamps_2.3.4            Cairo_1.6-2                
+[195] ggnewscale_0.4.10           fansi_1.0.6                
+[197] beeswarm_0.4.0             </code></pre>
+</div>
+</div>
+</div>
+
+
+<!-- Adjust MathJax settings so that all math formulae are shown using
+TeX fonts only; see
+https://docs.mathjax.org/en/latest/web/configuration.html. This will make
+the presentation more consistent at the cost of the webpage sometimes
+taking slightly longer to load. Note that this only works because the
+footer is added to webpages before the MathJax javascript. -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

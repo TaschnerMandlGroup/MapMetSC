@@ -100,7 +100,7 @@ data_combined_rec <- data_combined_rec[-1]
 ## Filter out columns and rows
 
 ```{r filter}
-col_filter <- c("R", "PBMC_R", "CLB", "CLB_D")
+col_filter <- c("R", "PBMC_R", "CHLA", "CHLA_D")
 rows_data <- read_excel(file.path(params$path, 'array_all.xlsx'), sheet = "filter")
 rows_inf <- rows_data[rows_data$Array=="INF-3","Secreted factor"]
 rows_che <- rows_data[rows_data$Array=="CHE-1","Secreted factor"]
@@ -109,17 +109,17 @@ setdiff(rows_che$`Secreted factor`, rownames(data_combined_che))
 ```
 ## Create heatmap 
 
-```{r heatmap-inf-filtered, fig.width=7, fig.height=4}
+```{r heatmap-inf-filtered, fig.width=5, fig.height=3}
 df <- as.data.frame(data_combined_inf)
 row_filter_inf <- rows_inf$`Secreted factor`
 
 Heatmap(scale(t(df[row_filter_inf, col_filter])), 
         column_title = "INF-3-filtered",
-        row_order = c("R", "PBMC_R", "CLB", "CLB_D"),
+        row_order = c("R", "PBMC_R", "CHLA", "CHLA_D"),
         col=viridis(100)
         )
 ```
-```{r heatmap-inf, fig.width=11, fig.height=4}
+```{r heatmap-inf, fig.width=8, fig.height=3}
 data_combined_inf <- data_combined_inf %>%
   filter(rownames(data_combined_inf) != "POS-Ave")
 
@@ -127,23 +127,23 @@ df <- as.data.frame(data_combined_inf)
 
 Heatmap(scale(t(df[,col_filter])), 
         column_title = "INF-3_all",
-        row_order = c("R", "PBMC_R", "CLB", "CLB_D"),
+        row_order = c("R", "PBMC_R", "CHLA", "CHLA_D"),
         col=viridis(100)
         )
 ```
 
-```{r heatmap-che-filtered, fig.width=7, fig.height=4}
+```{r heatmap-che-filtered, fig.width=6, fig.height=3}
 df <- as.data.frame(data_combined_che)
 row_filter_che <- rows_che$`Secreted factor`
 
 Heatmap(scale(t(df[row_filter_che, col_filter])), 
         column_title = "CHE-1-filtered",
-        row_order = c("R", "PBMC_R", "CLB", "CLB_D"),
+        row_order = c("R", "PBMC_R", "CHLA", "CHLA_D"),
         col=viridis(100)
         )
 ```
 
-```{r heatmap-che, fig.width=11, fig.height=4}
+```{r heatmap-che, fig.width=8, fig.height=3}
 data_combined_che <- data_combined_che %>%
   filter(rownames(data_combined_che) != "POS-Ave")
 
@@ -151,22 +151,22 @@ df <- as.data.frame(data_combined_che)
 
 Heatmap(scale(t(df[,col_filter])), 
         column_title = "CHE-1-all",
-        row_order = c("R", "PBMC_R", "CLB", "CLB_D"),
+        row_order = c("R", "PBMC_R", "CHLA", "CHLA_D"),
         col=viridis(100)
         )
 ```
 
-```{r heatmap-rec-filtered, fig.width=3, fig.height=4}
+```{r heatmap-rec-filtered, fig.width=3, fig.height=3}
 df <- as.data.frame(data_combined_rec)
 row_filter_rec <- rows_rec$`Secreted factor`
 
 Heatmap(scale(t(df[row_filter_rec, col_filter])), 
         column_title = "REC-1-filtered",
-        row_order = c("R", "PBMC_R", "CLB", "CLB_D"),
+        row_order = c("R", "PBMC_R", "CHLA", "CHLA_D"),
         col=viridis(100)
         )
 ```
-```{r heatmap-rec, fig.width=11, fig.height=4}
+```{r heatmap-rec, fig.width=8, fig.height=3}
 data_combined_rec <- data_combined_rec %>%
   filter(rownames(data_combined_rec) != "POS-Ave")
 
@@ -174,11 +174,11 @@ df <- as.data.frame(data_combined_rec)
 
 Heatmap(scale(t(df[,col_filter])), 
         column_title = "REC-1-all",
-        row_order = c("R", "PBMC_R", "CLB", "CLB_D"),
+        row_order = c("R", "PBMC_R", "CHLA", "CHLA_D"),
         col=viridis(100)
         )
 ```
-```{r heatmap-combined-filtered, fig.width=20, fig.height=4}
+```{r heatmap-combined-filtered, fig.width=16, fig.height=3}
 data_all <- rbind(data_combined_inf[row_filter_inf,], data_combined_che[row_filter_che,], data_combined_rec[row_filter_rec,])
 annot <- c(rep("INF-3", nrow(data_combined_inf[row_filter_inf,])), rep("CHE-1", nrow(data_combined_che[row_filter_che,])), rep("REC-1", nrow(data_combined_rec[row_filter_rec,])))
 
@@ -189,22 +189,22 @@ column_ha <- HeatmapAnnotation(assay = annot, col=list(assay=col_vector))
 
 Heatmap(scale(t(df[,col_filter])), 
         column_title = "all assays-filtered",
-        row_order = c("R", "PBMC_R", "CLB", "CLB_D"),
+        row_order = c("R", "PBMC_R", "CHLA", "CHLA_D"),
         cluster_columns =F,
         top_annotation = column_ha,
         col=viridis(100)
         )
 ```
-```{r heatmap-combined-clustered-filtered, fig.width=20, fig.height=4}
+```{r heatmap-combined-clustered-filtered, fig.width=16, fig.height=3}
 Heatmap(scale(t(df[,col_filter])), 
         column_title = "all assays - filtered (clustered)",
-        row_order = c("R", "PBMC_R", "CLB", "CLB_D"),
+        row_order = c("R", "PBMC_R", "CHLA", "CHLA_D"),
         top_annotation = column_ha,
         col=viridis(100)
         )
 ```
 
-```{r heatmap-combined-all, fig.width=20, fig.height=4}
+```{r heatmap-combined-all, fig.width=19, fig.height=3}
 data_all <- rbind(data_combined_inf, data_combined_che, data_combined_rec)
 annot <- c(rep("INF-3", nrow(data_combined_inf)), rep("CHE-1", nrow(data_combined_che)), rep("REC-1", nrow(data_combined_rec)))
 
@@ -215,16 +215,16 @@ column_ha <- HeatmapAnnotation(assay = annot, col=list(assay=col_vector))
 
 Heatmap(scale(t(df[,col_filter])), 
         column_title = "all assays-all",
-        row_order = c("R", "PBMC_R", "CLB", "CLB_D"),
+        row_order = c("R", "PBMC_R", "CHLA", "CHLA_D"),
         cluster_columns =F,
         top_annotation = column_ha,
         col=viridis(100)
         )
 ```
-```{r heatmap-combined-clustered-all, fig.width=20, fig.height=4}
+```{r heatmap-combined-clustered-all, fig.width=19, fig.height=3}
 Heatmap(scale(t(df[,col_filter])), 
         column_title = "all assays - all (clustered)",
-        row_order = c("R", "PBMC_R", "CLB", "CLB_D"),
+        row_order = c("R", "PBMC_R", "CHLA", "CHLA_D"),
         top_annotation = column_ha,
         col=viridis(100)
         )

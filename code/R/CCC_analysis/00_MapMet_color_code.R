@@ -31,6 +31,7 @@ PATIENT_GROUPS = c("I" = "Control",
                    "III" = "ATRXmut",
                    "IV" = "MYCNwt/ATRXwt")
 
+# UMAP color code
 
 COLOR_CODE_RNA_v3 = c("NB (8)" = "#e31a1c",
                       "T (5)" = "#1f78b4",   

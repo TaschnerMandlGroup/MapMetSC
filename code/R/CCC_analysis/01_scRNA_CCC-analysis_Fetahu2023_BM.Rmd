@@ -2504,6 +2504,7 @@ de_results <- DElegate::findDE(object = fetahu.NB,
 marker_results <- DElegate::FindAllMarkers2(object = fetahu.NB,
                                             group_column = "seurat_clusters")
 top_10 <- dplyr::filter(marker_results, feature_rank < 11)
+
 DEG_tumor <- DoHeatmap(fetahu.NB, features = top_10$feature, assay = "RNA")
 
 pdf(paste0(params$out,"figures/fetahu2023.scRNA.markers.heatmap_2024-03-25.pdf"))

@@ -16,7 +16,7 @@ library(openxlsx)
 library(dplyr)
 
 path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
-meta_path <- file.path(path, '20231128_metadata_complete.csv')
+meta_path <- file.path('/mnt/Multimodal_Imaging_Daria/archive/metadata/20240604_metadata_complete.csv')
 meta_all = read.csv(meta_path)
 
 custom_order <- c("PTDE", "BMDE", "BMRE1", "BMRE2", "BMREL", "BM")
@@ -42,18 +42,18 @@ meta_all$Sample_ID <- anon_sample_id
 meta_all$Stainer <- anon_stainer
 
 #Save metadata with anonoymization codes for later reference
-meta_all <- select(meta_all, -X)
-write.csv(meta_all, file.path(path, "results/Manuscript/1_Figure/R/Suppl_Table1_anonymization-codes.csv"))
+#meta_all <- select(meta_all, -X)
+write.csv(meta_all, file.path(path, "results/Manuscript/1_Figure/R/20240604_Suppl_Table1_anonymization-codes.csv"))
 
 #Save metadata with only anonymized IDs 
 meta_anon <- select(meta_all, -c("Sample", "Study_ID"))
 names(meta_anon)[names(meta_anon) == 'Sample_ID'] <- 'Sample'
 names(meta_anon)[names(meta_anon) == 'Patient_ID'] <- 'Study_ID'
-write.csv(meta_anon, file.path(path, "results/Manuscript/1_Figure/R/metadata_complete_anon.csv"))
+write.csv(meta_anon, file.path(path, "results/Manuscript/1_Figure/R/20240604_metadata_complete_anon.csv"))
 
 #Save metadata split by sample_metadata, clinical and genetic patient metadata
 meta_sample <- meta_all[,c("Sample_ID", "Patient_ID", "Tissue", "control", "Timepoint", "Puncture_side", "Infiltration_right", "Infiltration_left", "Staining_date", "Stainer", "IMC_date", "IMC_score", "exclude")]          
-meta_patient_clinical <- meta_all[meta_all$control=="no",c("Patient_ID", "stage4", "rez_dat", "prog_dat", "event_dat", "tod_dat1", "efs", "tod", "efs_dur", "tod_dur", "age_at_diag", "therapy")]
+meta_patient_clinical <- meta_all[meta_all$control=="no",c("Patient_ID", "stage4", "rez_dat", "prog_dat", "event_dat", "tod_dat1", "efs", "tod", "efs_dur", "tod_dur", "age_at_diag", "therapy", "Gender")]
 names(meta_patient_clinical)[names(meta_patient_clinical) == 'stage4'] <- 'stage'
 meta_patient_clinical <- distinct(meta_patient_clinical)
 
@@ -62,6 +62,6 @@ meta_patient_genetic <- distinct(meta_patient_genetic)
 
 
 list_of_datasets <- list("sample_spec_metadata" = meta_sample, "patient_spec_clinical" = meta_patient_clinical, "patient_spec_genetic" = meta_patient_genetic)
-write.xlsx(list_of_datasets, file = file.path(path, "results/Manuscript/1_Figure/R/Suppl_Table1.xlsx"))
+write.xlsx(list_of_datasets, file = file.path(path, "results/Manuscript/1_Figure/R/20240604_Suppl_Table1.xlsx"))
 ```
 

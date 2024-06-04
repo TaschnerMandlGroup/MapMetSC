@@ -24,11 +24,12 @@ library(dittoSeq)
 library(paletteer)
 library(bruceR)
 library(circlize)
+library(tidyr)
 library(viridis)
 
-path <- "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS"
+path <- "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
 
-spe <- readRDS(file.path(path,"results/Manuscript/spe_clustered.rds"))
+spe <- readRDS(file.path(path,"data/spe_final.rds"))
 
 ```
 
@@ -37,7 +38,7 @@ First, we will define the color code for the metadata. Find all built-in R color
 
 ```{r define-color-code, message=FALSE}
 
-meta_path <- file.path(path, '20231128_metadata_complete.csv')
+meta_path <- file.path(path, '20240604_metadata_complete_anon.csv')
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
 col_vector_74 = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
@@ -62,9 +63,10 @@ col_DE_year = setNames(sample(col_vector_74, length(unique(DE_year))), unique(DE
 col_timepoint = setNames(c('#7fc97f', '#beaed4', '#fdc086' , '#ffff99', '#386cb0'), unique(meta_all$Timepoint))
 col_aberrations = setNames(c('#a6611a','#018571','#80cdc1','#f5f5f5'), c(0,1,2,9))
 col_stages = setNames(c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c'), unique(meta_all$stage4))
-col_efs_dur = colorRamp2(c(min(meta_all$efs_dur, na.rm = TRUE), max(meta_all$efs_dur, na.rm = TRUE)/2, max(meta_all$efs_dur, na.rm = TRUE)), paletteer_c("ggthemes::Red-Green Diverging", 3))
+#col_efs_dur = colorRamp2(c(min(meta_all$efs_dur, na.rm = TRUE), max(meta_all$efs_dur, na.rm = TRUE)/2, max(meta_all$efs_dur, na.rm = TRUE)), paletteer_c("ggthemes::Red-Green #Diverging", 3))
 col_tissue = setNames(c('aquamarine4','brown'), unique(meta_all$Tissue))
 col_control = setNames(c('mediumseagreen', 'gray77'), unique(meta_all$control))
+col_gender = setNames(c('gray77', 'palegreen3', 'firebrick1'), c('', "male", "female"))
 col_exclude = setNames(c('#018571','#a6611a','#80cdc1'), unique(exclude))
 col_progress = setNames(c('gray77', 'palegreen3', 'firebrick1'), c('n.a.', 0, 1))
 ```
@@ -85,7 +87,7 @@ columnAnnotation(sample=meta_all$Sample, col=list(sample=col_sample), annotation
   columnAnnotation(tissue=meta_all$Tissue, col=list(tissue=col_tissue)) %v%
   columnAnnotation(stage=meta_all$stage4, col=list(stage=col_stages)) %v%
   columnAnnotation(progression=meta_all$efs, col=list(progression=col_progress))  %v%
-  columnAnnotation(efs_dur=meta_all$efs_dur, col=list(efs_dur=col_efs_dur)) %v%
+  #columnAnnotation(efs_dur=meta_all$efs_dur, col=list(efs_dur=col_efs_dur)) %v%
   columnAnnotation(MYCN_amp=meta_all$MYCN_amp, col=list(MYCN_amp=col_aberrations)) %v%#, annotation_legend_param = list(MYCN_amp = list(title='aberration', labels = c('no', 'yes', 'het', 'NA'))))  %v%
   columnAnnotation(ALK_amp=meta_all$ALK_amp, col=list(ALK_amp=col_aberrations), show_legend=FALSE) %v%
   columnAnnotation(ALK_mut=meta_all$ALK_mut, col=list(ALK_mut=col_aberrations), show_legend=FALSE) %v%
@@ -170,10 +172,10 @@ draw(lgd, test = "add labels and title")
 
 ```{r meta_data-timepoint, message=FALSE, fig.height=17, fig.width=8}
 meta_positive <-meta_all[meta_all$control == 'no',]
-meta_pos_reduced <- meta_positive[c("Study_ID", "Tissue", "Timepoint", "MYCN_amp", "ALK_amp", "ALK_mut", "ATRX_del", "TERT_rear", "X1p_loss", "X1q_gain", "X11q_loss", "efs", "age_at_diag")]
+meta_pos_reduced <- meta_positive[c("Study_ID", "Tissue", "Timepoint", "MYCN_amp", "ALK_amp", "ALK_mut", "ATRX_del", "TERT_rear", "X1p_loss", "X1q_gain", "X11q_loss", "efs", "Gender", "age_at_diag")]
 meta_pos_reduced$new <- 1 
 meta_pos_reduced_tidy <- meta_pos_reduced %>% pivot_wider(names_from = c("Tissue", "Timepoint"), values_from = "new")
-meta_timepoint <- meta_pos_reduced_tidy[, c("Study_ID", "PT_DE", "BM_DE", "BM_RE1", "BM_RE2", "BM_REL", "MYCN_amp", "ALK_amp", "ALK_mut", "ATRX_del", "TERT_rear", "X1p_loss", "X1q_gain", "X11q_loss", "efs", "age_at_diag")]
+meta_timepoint <- meta_pos_reduced_tidy[, c("Study_ID", "PT_DE", "BM_DE", "BM_RE1", "BM_RE2", "BM_REL", "MYCN_amp", "ALK_amp", "ALK_mut", "ATRX_del", "TERT_rear", "X1p_loss", "X1q_gain", "X11q_loss", "efs", "Gender", "age_at_diag")]
 meta_timepoint[is.na(meta_timepoint)] <- 0
 meta_timepoint <- as.data.frame(meta_timepoint)
 rownames(meta_timepoint) <- meta_timepoint$Study_ID
@@ -222,16 +224,18 @@ type <- factor(type, levels=rev(order))
 
 column_ha = rowAnnotation(MYCN_amp = meta_timepoint$MYCN_amp,
                           X1p_loss=meta_timepoint$X1p_loss,
+                          gender=meta_timepoint$Gender,
                           progression=meta_timepoint$efs,
                           age=anno_barplot(meta_timepoint$age_at_diag, height = unit(3, "cm")),
                               col=list(MYCN_amp=col_aberrations,
                                        X1p_loss=col_aberrations,
-                                       progression=col_progress
+                                       progression=col_progress,
+                                       gender=col_gender
                                        ),
                               show_legend=T)
 
 setEPS()
-postscript(file.path(path, "results/Manuscript/1_Figure/R/cohort_overview.eps"), height=18, width=5)
+postscript("/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/1_Figure/R/20240604_cohort_overview.eps", height=18, width=5)
 
 Heatmap(meta_timepoint[, c("PT_DE", "BM_DE", "BM_RE1", "BM_RE2", "BM_REL")], 
         show_row_dend = FALSE,

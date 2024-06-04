@@ -79,7 +79,7 @@ spe$fm_id <- str_match(spe$sample, "_.*_(.*)_")[,2]
 spe$tissue <- str_match(spe$sample, "^.*_.*_(.*)")[,2] 
 spe$tissue[spe$tissue=="TU"] = "PT"
 
-meta <- read.csv(file.path(path, 'metadata_complete_anon.csv'))
+meta <- read.csv(file.path(path, '20240604_metadata_complete_anon.csv'))
 
 spe$puncture_side <- meta$Puncture_side[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$infiltration_right <- meta$Infiltration_right[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
@@ -130,6 +130,7 @@ spe$ALK_mut <- meta$ALK_mut[match(paste(spe$fm_id, spe$tissue), paste(meta$Sampl
 
 spe$age_diag <- meta$age_at_diag[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 spe$therapy <- meta$therapy[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
+spe$gender <- meta$Gender[match(paste(spe$fm_id, spe$tissue), paste(meta$Sample, meta$Tissue))]
 
 spe$ROI <- str_match(spe$sample_id, "^.*_.*_.*_.*_(.*)")[,2]
 spe$year <- gsub(spe$sample_id, pattern="^.*_.*_(.*)-.*", replacement="\\1")

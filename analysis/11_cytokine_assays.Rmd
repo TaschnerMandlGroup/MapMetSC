@@ -178,11 +178,97 @@ Heatmap(data_sep_scale,
         col=viridis(100)
         )
 ```
+We will then calculate the log2FC between mono- and co-cultures.
+```{r log2FC}
+df_unscaled <- cbind(df[,col_filter_chla], df[,col_filter_clb])
+
+# Create the new columns with the specified calculations
+df_unscaled <- df_unscaled %>%
+  mutate(
+    log2FC_CHLA_D_PBMC_I = log2(CHLA_D / PBMC_I),
+    log2FC_CLB_D_PBMC_R = log2(CLB_D / PBMC_R),
+    log2FC_CHLA_D_CHLA = log2(CHLA_D / CHLA),
+    log2FC_CLB_D_CLB = log2(CLB_D / CLB)
+  )
+
+# Add the new column based on the condition
+df_unscaled <- df_unscaled %>%
+  mutate(threshold = if_else(
+    log2FC_CHLA_D_PBMC_I > 0.5 & 
+    log2FC_CLB_D_PBMC_R > 0.5 & 
+    log2FC_CHLA_D_CHLA > 0.5 & 
+    log2FC_CLB_D_CLB > 0.5, 
+    1, 
+    0
+  ))
+```
+
+Let's plot the heatmap adding this annotation.
+```{r heatmap-threshold, fig.width=19, fig.height=5}
+#Annotation
+column_ha <- HeatmapAnnotation(assay = annot,
+                               threshold = as.factor(df_unscaled$threshold),
+                               col=list(assay=col_vector))
+
+#Separate scaling per cel line
+col_filter_chla <- c("I", "PBMC_I", "CHLA", "CHLA_D")
+col_filter_clb <- c("R", "PBMC_R", "CLB", "CLB_D")
+data_sep_scale <- rbind(scale(t(df_unscaled[,col_filter_chla])), scale(t(df_unscaled[,col_filter_clb])))
+
+h <- Heatmap(data_sep_scale, 
+        column_title = "all assays-all- CHLA90 and CLB-MA",
+        row_order = c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D"),
+        cluster_columns =T,
+        top_annotation = column_ha,
+        col=viridis(100)
+        )
+
+h
+```
+
+The data can then be written to memory for annotation by experts. 
+
 ```{r write-csv}
 #write unscaled data
-df_unscaled <- cbind(df[,col_filter_chla], df[,col_filter_clb])
-write.csv(df_unscaled[,c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D")],file.path(params$path, 'heatmap.csv'))
-write.xlsx(df_unscaled[,c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D")],file.path(params$path, 'heatmap.xlsx'), , rowNames=TRUE)
+write.csv(df_unscaled[,c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D","log2FC_CHLA_D_PBMC_I", "log2FC_CLB_D_PBMC_R", "log2FC_CHLA_D_CHLA", "log2FC_CLB_D_CLB", "threshold")],file.path(params$path, 'heatmap_th.csv'))
+write.xlsx(df_unscaled[,c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D","log2FC_CHLA_D_PBMC_I", "log2FC_CLB_D_PBMC_R", "log2FC_CHLA_D_CHLA", "log2FC_CLB_D_CLB", "threshold")],file.path(params$path, 'heatmap_th.xlsx') , rowNames=TRUE)
+```
+
+The excel sheet is then read again after annotation.
+
+```{r}
+data_annotated <- read.xlsx(file.path(params$path, 'heatmap_annotated.xlsx'), rowNames=TRUE, sheet="PBMC and Direct")[,1:15]
+```
+
+We then plot the heatmap showing the annotation about literature on T cell exhaustion.
+
+```{r heatmap-exhaustion, fig.width=19, fig.height=5}
+#sort data by clustering from heatmap before
+order <- colnames(data_sep_scale)[h@column_order] #row_order is wrong - don'T know why
+df_ordered <- data_annotated[order, ]
+annot <- annot[order]
+
+increased_cytokines <- df_ordered$threshold==1
+df_increased <- df_ordered[increased_cytokines,]
+  
+#Annotation
+column_ha <- HeatmapAnnotation(assay = annot[increased_cytokines],
+                               threshold = as.factor(df_increased$threshold),
+                               T_cell_exhaustion = as.factor(df_increased$T.cell.exhaustion),
+                               col=list(assay=col_vector))
+
+#Separate scaling per cel line
+col_filter_chla <- c("I", "PBMC_I", "CHLA", "CHLA_D")
+col_filter_clb <- c("R", "PBMC_R", "CLB", "CLB_D")
+data_sep_scale <- rbind(scale(t(df_increased[,col_filter_chla])), scale(t(df_increased[,col_filter_clb])))
+
+Heatmap(data_sep_scale, 
+        column_title = "all assays-all- CHLA90 and CLB-MA",
+        row_order = c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D"),
+        cluster_columns =F,
+        top_annotation = column_ha,
+        col=viridis(100)
+        )
 ```
 
 ## Session Info

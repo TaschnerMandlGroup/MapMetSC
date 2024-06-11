@@ -32,14 +32,36 @@ PATIENT_GROUPS = c("I" = "Control",
                    "IV" = "MYCNwt/ATRXwt")
 
 # UMAP color code
+COLOR_CODE_RNA_v3 = c("NB (8)" = "palegreen4",
+                      "T (5)" = "#cc0000",   
+                      "T (6)" = "darkred", 
+                      "T (9)" = "#f44336",   
+                      "M (1)" = "#1f78b4", 
+                      "M (2)" = "#66a8de",    
+                      "M (10)" = "#39BEB1")
 
-COLOR_CODE_RNA_v3 = c("NB (8)" = "#e31a1c",
-                      "T (5)" = "#1f78b4",   
-                      "T (6)" = "#66a8de", 
-                      "T (9)" = "#39BEB1",   
-                      "M (1)" = "darkorange3", 
-                      "M (2)" = "#ff7f00",    
-                      "M (10)" = "#df912c")
+COLOR_CODE_RNA_v3_EXT = c("NB (8)" = "palegreen4",
+                      "T (5)" = "#cc0000",   
+                      "T (6)" = "darkred", 
+                      "T (9)" = "#f44336",
+                      "T (18)" = "#ac2020",
+                      "NK (4)" = "#0B5394",
+                      "M (1)" = "#1f78b4", 
+                      "M (2)" = "#66a8de",    
+                      "M (10)" = "#39BEB1",
+                      "M (15)"= "#124e77",
+                      "B (19)" = "#992669",  
+                      "B (3)" = "#fc58a9",   
+                      "B (7)" = "#9e3b75",   
+                      "B (11)" = "#7f0d71",   
+                      "B (16)" = "#8a1bca",   
+                      "pDC (12)" = "#15acbc",   
+                      "E (13)" = "#113556",   
+                      "SC (14)" = "#7f5b22",  
+                      "SC (17)" = "#997439",
+                      "SC (20)" = "#573807",  
+                      "other (21)" = "#000000")
+
 
 COLOR_CODE_RNA_v2 = c("NB (8)" = "#e31a1c",
                    "T (5)" = "#1f78b4",   

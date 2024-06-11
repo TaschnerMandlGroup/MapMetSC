@@ -60,7 +60,7 @@ CD4/CD8/S100B/GZMB expression per T-cell cluster. Second, as the CD4 RNA
 expression is known to be low, we also do a label transfer based on closest
 expression profile (with SingleR). 
 <br>
-Analysis done in R v4.2.3 in a docker (mapmet_v2024-01-19.Dockerfile) container2
+Analysis done in R v4.2.3 in a docker (mapmet_v2024-01-19.Dockerfile) container
 <br>
 docker exec -it --user root d04b26a70393 /bin/bash
 <br>

@@ -178,13 +178,15 @@ Heatmap(data_sep_scale,
         col=viridis(100)
         )
 ```
-We will then calculate the log2FC between mono- and co-cultures.
+We will then calculate the log2FC between mono- and co-cultures and filter those that are increasing upon co-culture in nMNA, MNA or both.
 ```{r log2FC}
 df_unscaled <- cbind(df[,col_filter_chla], df[,col_filter_clb])
 
 # Create the new columns with the specified calculations
 df_unscaled <- df_unscaled %>%
   mutate(
+    log2FC_CHLA_D_I = log2(CHLA_D / I),
+    log2FC_CLB_D_R = log2(CLB_D / R),
     log2FC_CHLA_D_PBMC_I = log2(CHLA_D / PBMC_I),
     log2FC_CLB_D_PBMC_R = log2(CLB_D / PBMC_R),
     log2FC_CHLA_D_CHLA = log2(CHLA_D / CHLA),
@@ -193,14 +195,66 @@ df_unscaled <- df_unscaled %>%
 
 # Add the new column based on the condition
 df_unscaled <- df_unscaled %>%
-  mutate(threshold = if_else(
-    log2FC_CHLA_D_PBMC_I > 0.5 & 
-    log2FC_CLB_D_PBMC_R > 0.5 & 
-    log2FC_CHLA_D_CHLA > 0.5 & 
-    log2FC_CLB_D_CLB > 0.5, 
+  mutate(both = if_else(
+    log2FC_CHLA_D_I >= 0.3 & 
+    log2FC_CLB_D_R >= 0.3 & 
+    log2FC_CHLA_D_PBMC_I >= 0.3 & 
+    log2FC_CLB_D_PBMC_R >= 0.3 & 
+    log2FC_CHLA_D_CHLA >= 0.3 & 
+    log2FC_CLB_D_CLB >= 0.3, 
+    1, 
+    0
+  )) %>%
+    mutate(nMNA = if_else(
+    log2FC_CHLA_D_I >= 0.3 & 
+    log2FC_CHLA_D_PBMC_I >= 0.3 & 
+    log2FC_CHLA_D_CHLA >= 0.3 & 
+    both == 0, 
+    1, 
+    0
+  )) %>%
+    mutate(MNA = if_else(
+    log2FC_CLB_D_R >= 0.3 & 
+    log2FC_CLB_D_PBMC_R >= 0.3 & 
+    log2FC_CLB_D_CLB >= 0.3 &
+    both == 0, 
     1, 
     0
   ))
+
+df_up <- df_unscaled %>% filter(both == 1 | nMNA == 1 | MNA == 1)
+```
+
+Let's plot a heatmap of the enriched cytokines only.
+
+```{r heatmap-enriched, fig.width=19, fig.height=7}
+df <- df_up
+
+#Annotation
+col_vector <- c("0"="#ffffbf", "1"="#fc8d59")
+column_ha <- HeatmapAnnotation(nMNA = df_up$nMNA,
+                               MNA = df_up$MNA,
+                               both = df_up$both,
+                               col=list(nMNA=col_vector,
+                                        MNA=col_vector,
+                                        both=col_vector))
+
+#Separate scaling per cell line
+col_filter_chla <- c("I", "PBMC_I", "CHLA", "CHLA_D")
+col_filter_clb <- c("R", "PBMC_R", "CLB", "CLB_D")
+data_sep_scale <- rbind(scale(t(df_up[,col_filter_chla])), scale(t(df_up[,col_filter_clb])))
+
+setEPS()
+postscript("/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/cytokines/heatmap_cytokines_both.eps", height=3.5, width=8)
+Heatmap(data_sep_scale[, df_up$both==1], 
+        column_title = "Cytokine assays- CHLA90 and CLB-MA",
+        row_order = c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D"),
+        cluster_columns =T,
+        #top_annotation = column_ha,
+        col=viridis(100)
+        )
+dev.off()
+
 ```
 
 Let's plot the heatmap adding this annotation.

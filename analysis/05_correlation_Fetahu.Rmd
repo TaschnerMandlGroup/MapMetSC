@@ -172,6 +172,7 @@ We will plot the predicted metalabels in a UMAP.
 p1 <- dittoDimPlot(protein, var = "predicted_metacluster", 
              reduction.use = "UMAP", size = 0.3, labels.size=2,
              do.label = F,
+             order = "randomize",
              legend.show=F) +
   scale_color_manual(values = metadata(protein)$color_vectors$col_predicted_meta) +
   theme(legend.title = element_blank()) +

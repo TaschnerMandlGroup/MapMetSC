@@ -244,14 +244,18 @@ col_filter_chla <- c("I", "PBMC_I", "CHLA", "CHLA_D")
 col_filter_clb <- c("R", "PBMC_R", "CLB", "CLB_D")
 data_sep_scale <- rbind(scale(t(df_up[,col_filter_chla])), scale(t(df_up[,col_filter_clb])))
 
+# Define a diverging color palette
+diverging_palette <- coolwarm_hcl <- colorspace::diverging_hcl(11, h = c(250, 10), c = 100, l = c(37, 88), power = c(0.7, 1.7))
+
 setEPS()
-postscript("/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/cytokines/heatmap_cytokines_both.eps", height=3.5, width=8)
-Heatmap(data_sep_scale[, df_up$both==1], 
+postscript("/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/cytokines/20240728_heatmap_cytokines_nMNA.eps", height=3.5, width=8)
+Heatmap(data_sep_scale[, df_up$nMNA==1], 
         column_title = "Cytokine assays- CHLA90 and CLB-MA",
         row_order = c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D"),
         cluster_columns =T,
         #top_annotation = column_ha,
-        col=viridis(100)
+        #col=viridis(100)
+        col=diverging_palette
         )
 dev.off()
 

@@ -497,16 +497,18 @@ names(metadata(spe)$color_vectors$col_celltype_ordered) <- recode(names(metadata
 As a last step, we generate UMAP and bubble plots for the final celltypes/metaclusters.
 ```{r umap-final-celltypes, fig.width=10}
 p1 <- dittoDimPlot(spe, var = "celltype_ordered", 
-             reduction.use = "UMAP", size = 1, 
+             reduction.use = "UMAP", size = 0.3, 
              do.label = F,
+             order = "randomize",
              legend.show=T) +
   scale_color_manual(values = metadata(spe)$color_vectors$col_celltype_ordered) +
   theme(legend.title = element_blank()) +
   ggtitle("Celltypes on UMAP")
 
 p2 <- dittoDimPlot(spe, var = "metacluster", 
-             reduction.use = "UMAP", size = 1, labels.size=4,
+             reduction.use = "UMAP", size = 0.3, labels.size=4,
              do.label = T,
+             order = "randomize",
              legend.show=F) +
   scale_color_manual(values = metadata(spe)$color_vectors$col_metacluster) +
   theme(legend.title = element_blank()) +

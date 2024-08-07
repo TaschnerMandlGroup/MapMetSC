@@ -15,17 +15,17 @@ To use `MapMetSC`, please refer to and first proceed with [MapMetIP](https://git
 
 ## Usage
   
-To be able to run the provided Rmd files, clone the repository via
+Clone the repository via
  ```bash
  git clone https://github.com/TaschnerMandlGroup/MapMetSC.git
  ```
-For reproducibility, we provide a docker image. Pull the docker image using:
+For reproducibility, build a docker image from the Dockerfile:
  ```bash
- docker pull lazdaria/mapmetsc:v1.0
+ docker build -t mapmet_sc .
  ```
- and run the container:
+ and run a container from that image:
  ```bash
-docker run -p 8787:8787 -e PASSWORD=mapmetsc -v <path/to/MapMetSC>:/home/rstudio/MapMetSC -v <path/to/singlecelldata>:/mnt/data
+docker run -p 8787:8787 -e PASSWORD=mapmetsc -v <path/to/MapMetSC>:/home/rstudio/MapMetSC -v <path/to/extracted/singlecelldata>:/mnt/data mapmet_sc
  ```
  An RStudio server session can then be accessed via your browser at `localhost:8787` with the `username: rstudio` and `password: mapmetsc`.
   

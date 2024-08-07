@@ -31,7 +31,7 @@ docker run -p 8787:8787 -e PASSWORD=mapmetsc -v <path/to/MapMetSC>:/home/rstudio
 
  ### Cell-cell communication (CCC) analysis
  
- To reproduce CCC analysis results on [public single-cell RNA-sequencing data](10.5281/zenodo.7707614), as described in Lazic et al., we provide a separate docker image. Pull the image from docker hub via:
+ To reproduce CCC analysis results on public single-cell RNA-sequencing data from [Fetahu et al.](10.5281/zenodo.7707614), as described in Lazic et al., we provide a separate docker image. Pull the image from docker hub via:
  ```bash
  docker image pull swernig/mapmet_paper:v1.2
 ```

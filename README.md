@@ -28,6 +28,14 @@ For reproducibility, build a docker image from the Dockerfile:
 docker run -p 8787:8787 -e PASSWORD=mapmetsc -v <path/to/MapMetSC>:/home/rstudio/MapMetSC -v <path/to/extracted/singlecelldata>:/mnt/data mapmet_sc
  ```
  An RStudio server session can then be accessed via your browser at `localhost:8787` with the `username: rstudio` and `password: mapmetsc`.
+
+ ### Cell-cell communication (CCC) analysis
+ 
+ To reproduce CCC analysis results on [public single-cell RNA-sequencing data](10.5281/zenodo.7707614), as described in Lazic et al., we provide a separate docker image. Pull the image from docker hub via:
+ ```bash
+ docker image pull swernig/mapmet_paper:v1.2
+```
+Afterwards, proceed with RMD files the folder [CCC_analysis](https://github.com/TaschnerMandlGroup/MapMetSC/tree/main/CCC_analysis).
   
 ## Contributors
 

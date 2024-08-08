@@ -11,7 +11,14 @@ This repository provides scripts to reproduce figures published in Lazic et al (
 - [MapMetSC](https://github.com/TaschnerMandlGroup/MapMetSC): `R` based single-cell analysis worfklow 
 
 ## Data 
-To use `MapMetSC`, please refer to and first proceed with [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP) to download files, process images and extract **single-cell data**.
+
+Single-cell data can either be obtained by downloading raw images from Zenodo [(MapMetIP_FullDataset.zip)](10.5281/zenodo.10275924) and processing these using [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP) or by directly downloading MapMetIP-processed data from Zenodo [(MapMetIP_ProcessedDataset.zip)](10.5281/zenodo.10275924). For download, replace path/to/extract/directory with the absolute path to the directory, where the data should be stored.
+
+ ```bash
+wget -P <path/to/extract/directory> https://zenodo.org/records/13220635/files/MapMetIP_ProcessedDataset.zip
+unzip <path/to/extract/directory>/MapMetIP_ProcessedDataset.zip -d <path/to/extract/directory>
+rm <path/to/extract/directory>/MapMetIP_ProcessedDataset.zip
+ ```
 
 ## Usage
   
@@ -29,9 +36,11 @@ docker run -p 8787:8787 -e PASSWORD=mapmetsc -v <path/to/MapMetSC>:/home/rstudio
  ```
  An RStudio server session can then be accessed via your browser at `localhost:8787` with the `username: rstudio` and `password: mapmetsc`.
 
+To reproduce results from Lazic et al., proceed with the provided [RMD files](https://github.com/TaschnerMandlGroup/MapMetSC/tree/main/analysis). Alternatively, already rendered [html files](https://github.com/TaschnerMandlGroup/MapMetSC/tree/main/docs) are provided to demonstrate each step of the pipeline. 
+
  ### Cell-cell communication (CCC) analysis
  
- To reproduce CCC analysis results on public single-cell RNA-sequencing data from [Fetahu et al.](10.5281/zenodo.7707614), as described in Lazic et al., we provide a separate docker image. Pull the image from docker hub via:
+To reproduce CCC analysis results on public single-cell RNA-sequencing data from [Fetahu et al.](10.5281/zenodo.7707614), as described in Lazic et al., we provide a separate docker image. Pull the image from docker hub via:
  ```bash
  docker image pull swernig/mapmet_paper:v1.2
 ```

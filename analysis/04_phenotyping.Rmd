@@ -8,7 +8,7 @@ editor_options:
   chunk_output_type: inline
 params: 
   input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data/20240808"
 ---
 
 ```{r setup, include=FALSE}

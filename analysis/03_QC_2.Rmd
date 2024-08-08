@@ -8,7 +8,7 @@ editor_options:
   chunk_output_type: inline
 params: 
   input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data/20240808"
 ---
 
 ```{r setup, include=FALSE}
@@ -56,7 +56,7 @@ morph_names <- c("area",
 ```
 
 ## Threshold identification for BM samples
-Next, we plot distributions of morphological features in histograms to identify feature-individual thresholds for the exclusion segmentation artifacts. We start with BM samples.
+Next, we plot distributions of morphological features in histograms to identify feature-individual thresholds for the exclusion of segmentation artifacts. We start with BM samples.
 
 ```{r plot-histograms-bm}
 morph_mat_bm <- as.matrix(t(colData(spe_bm)[,morph_names]))
@@ -92,7 +92,9 @@ id <- sub(".*_", "", outlier_cell)
 image <- sub("_[^_]*$", "", outlier_cell)
 print(paste("The outlier cell with ", feat, "=", value, " with ID", id, "is in image", image,"."))
 ```
+
 Let's inspect this cell in the image and mask.
+
 ```{r visualize-outliers, fig.show='hide'}
 masks <- loadImages(file.path(params$input, "masks", paste0(image, ".tif")), as.is = TRUE)
 img <- loadImages(file.path(params$input, "img", paste0(image, ".tif")))
@@ -166,6 +168,7 @@ morph_mat_order <- morph_mat_bm[feat,order(morph_mat_bm[feat,], decreasing=F)]
 outlier_cell <- names(morph_mat_order[1])
 print(paste("The outlier cell with ", feat, "=", morph_mat_order[outlier_cell], " with ID", sub(".*_", "", outlier_cell), "is in image", sub("_[^_]*$", "", outlier_cell),". Check, whether this cell is an artifact by inspecting the large segmentation masks in napari."))
 ```
+
 Using the code above and cross-checking images of corresponding nuclei in napari, we can identify a lower threshold of **100** for nuclear area for PT samples. There is however no upper threshold, since the largest cells are also correctly segmented.
 
 ## Exclusion of segmentation artifacts
@@ -180,11 +183,13 @@ spe <- spe[,!outliers]
 morph_mat <- as.matrix(t(colData(spe)[,morph_names]))
 rownames(morph_mat) <- gsub('-0','',rownames(morph_mat))
 ```
+
 We excluded `r sum(outliers)` cells based on these thresholds. 
 
 ## Clipping and scaling of morphological features
 
 Before we save the SPE object, we will clip and scale morphological features for **visualization purposes**. 
+
 ```{r clip-morph}
 
 norm_minmax <- function(x){(x- min(x)) /(max(x)-min(x))}
@@ -215,6 +220,7 @@ spe$aspect_ratio_clipped <- unname(morph_mat_clipped["aspect_ratio",])
 ```
 
 We plot the distribution of clipped morphological features...
+
 ```{r histograms-separate-x-axis}
 plot_list <- list()
 
@@ -232,7 +238,9 @@ plot <- plot_grid(plotlist = plot_list, nrow=ceiling(ncol(df)/3), ncol=3) #chang
 
 plot
 ```
+
 ...and visualize the masks in one PT and one BM sample.
+
 ```{r visualize-clipped-morph}
 morph_names_clipped <- c("area_clipped", "solidity_clipped", "aspect_ratio_clipped")
 

@@ -8,7 +8,7 @@ editor_options:
   chunk_output_type: inline
 params: 
   input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data/20240808"
 ---
 
 ```{r setup, include=FALSE}
@@ -67,17 +67,18 @@ colnames(intensity_mat) <- spe$sample_id
 intensity_mat_mean_80 <- intensity_mat[grepl("mean-80", rownames(intensity_mat)),]
 
 #exclusion of all-zero cells
-intensity_mat_imc <- intensity_mat_mean_80[!grepl("IF2_GD2|IF3_CD45/56|DAPI", rownames(intensity_mat_mean_80)),]
+intensity_mat_imc <- intensity_mat_mean_80[!grepl("IF2_GD2|IF3_CD45|DAPI", rownames(intensity_mat_mean_80)),]
 non_zeros <- as.logical(colSums(intensity_mat_imc)!=0)
 
 spe <- spe[, non_zeros]
 mat <- intensity_mat_mean_80[, non_zeros]
 ```
+
 We excluded `r length(non_zeros[non_zeros==FALSE])` cells in this first quality control step.
 
 For the next quality control step, we will only consider IMC and nuclear IF channels. 
 ```{r cell-exclusion-2}
-mat <- mat[!grepl("IF2_GD2|IF3_CD45/56", rownames(mat)),]
+mat <- mat[!grepl("IF2_GD2|IF3_CD45", rownames(mat)),]
 ```
 
 ### Quality control step 2
@@ -108,6 +109,7 @@ Heatmap(mat[,rand_cells],
 ```
 
 We will cluster the data to identify cells that swam off.
+
 ```{r phenograph-clustering}
 set.seed(230619)
 
@@ -120,6 +122,7 @@ spe$pg_clusters_lostcells <- clusters
 ```
 
 Next, we will have a look at the mean marker expression per cluster in a heatmap.
+
 ```{r data-visualization-2, fig.width=11, fig.height=9}
 mean <- aggregate(mat, list(clusters), mean)
 mean_t <- t(mean)
@@ -145,10 +148,11 @@ Heatmap(mean_t,
         )
 ```
 
-We can see that cluster 11 represent cells that swam off (DAPI expression without IMC marker expression).
+We can see that cluster 30 represents cells that swam off (DAPI expression without IMC marker expression).
 To be sure that we only exclude cells that are really not present on the IMC channels, we will identify the samples with the highest number of cells from clsuter 11.
+
 ```{r sanity-check}
-c <- "11"
+c <- "30"
 mat <- t(mat)
 
 data <- data.frame(sample=colnames(mat), clusters)
@@ -167,7 +171,7 @@ max_sample <- clust$sample[1]
 write.csv(clust, file.path(params$output,"lost_cells.csv"))
 ```
 
-Sample `r max_sample` has the highest number of cells from cluster 11. For a last sanity check, we will color the lost cells in the segmentation mask of that sample and save the colored mask for a more thorough check in napari. 
+Sample `r max_sample` has the highest number of cells from cluster 11. For a last sanity check, we will color the lost cells in the segmentation mask of that sample and plot the DAPI and the Iridium image, and the segmentation mask.
 
 ```{r sanity-check-2, fig.show='hide'}
 
@@ -178,7 +182,7 @@ mcols(masks) <- DataFrame(sample_id = names(masks))
 mcols(img) <- DataFrame(sample_id = names(img))
 channelNames(img) <- rownames(spe)[1:44]
 
-c = 11
+c = 30
 tmp <- spe[,spe$sample_id == max_sample]
 tmp$lost_cell <- "no"
 tmp[,tmp$pg_clusters_lostcells==c]$lost_cell <- "yes"

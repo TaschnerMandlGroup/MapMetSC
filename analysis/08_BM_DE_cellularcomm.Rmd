@@ -237,6 +237,7 @@ plot_list[[d]] <- ggplot(result, aes(x="", y=Freq, fill=dis_var, group=dis_var))
 
 do.call("grid.arrange", c(plot_list, ncol=1))
 ```
+
 ```{r boxplots}
 het_t <- as.vector(unname(tumor_het[clustered_samples]))
 perc_tumor <- round((as.vector(unname(table(sce_tumor$sample_id)[clustered_samples]))/as.vector(unname(table(sce$sample_id)[clustered_samples])))*100,3)

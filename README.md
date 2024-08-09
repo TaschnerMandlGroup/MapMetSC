@@ -26,9 +26,9 @@ Clone the repository via
  ```bash
  git clone https://github.com/TaschnerMandlGroup/MapMetSC.git
  ```
-For reproducibility, build a docker image from the Dockerfile:
+For reproducibility, we provide a docker image. Pull the docker image using:
  ```bash
- docker build -t mapmet_sc .
+ docker pull lazdaria/mapmetsc:v1.0
  ```
  and run a container from that image:
  ```bash

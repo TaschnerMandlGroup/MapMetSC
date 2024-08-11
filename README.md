@@ -12,13 +12,14 @@ This repository provides scripts to reproduce figures published in Lazic et al (
 
 ## Data 
 
-Single-cell data can either be obtained by downloading raw images from Zenodo [(MapMetIP_FullDataset.zip)](10.5281/zenodo.10275924) and processing these using [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP) or by directly downloading MapMetIP-processed data from Zenodo [(MapMetIP_ProcessedDataset.zip)](10.5281/zenodo.10275924). For download, replace path/to/extract/directory with the absolute path to the directory, where the data should be stored.
+Single-cell data can either be obtained by downloading raw images from Zenodo [(MapMetIP_FullDataset.zip)](10.5281/zenodo.13220634) and processing these using [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP) or by directly downloading MapMetIP-processed data from Zenodo [(MapMetIP_ProcessedDataset.zip)](10.5281/zenodo.13220634). For download, replace path/to/extract/directory with the absolute path to the directory, where the data should be stored.
 
  ```bash
 wget -P <path/to/extract/directory> https://zenodo.org/records/13220635/files/MapMetIP_ProcessedDataset.zip
 unzip <path/to/extract/directory>/MapMetIP_ProcessedDataset.zip -d <path/to/extract/directory>
 rm <path/to/extract/directory>/MapMetIP_ProcessedDataset.zip
  ```
+Alternatively, the R object containing already MapMetSC-processed single cell data with all annotations (cell types, metaclusters, spatial neighborhoods, etc.) can be downloaded from Zenodo [(MapMet_final_scobject.rds)](10.5281/zenodo.13220634).
 
 ## Usage
   

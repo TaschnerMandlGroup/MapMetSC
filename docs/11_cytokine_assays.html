@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="LazDaria" />
+
+<meta name="date" content="2024-08-11" />
+
+<title>Heatmap - Cytokine Assays</title>
+
+<script src="site_libs/header-attrs-2.25/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/paper.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/textmate.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<link rel="icon" href="https://github.com/workflowr/workflowr-assets/raw/main/img/reproducible.png">
+<!-- Add a small amount of space between sections. -->
+<style type="text/css">
+div.section {
+  padding-top: 12px;
+}
+</style>
+
+
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+<link rel="stylesheet" href="style.css" type="text/css" />
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">MapMetSC</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Home</a>
+</li>
+<li>
+  <a href="about.html">About</a>
+</li>
+<li>
+  <a href="license.html">License</a>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Heatmap - Cytokine Assays</h1>
+<h4 class="author">LazDaria</h4>
+<h4 class="date">2024-08-11</h4>
+
+</div>
+
+
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
+<span class="glyphicon glyphicon-list" aria-hidden="true"></span>
+workflowr <span class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span>
+</button>
+</p>
+<div id="workflowr-report" class="collapse">
+<ul class="nav nav-tabs">
+<li class="active">
+<a data-toggle="tab" href="#summary">Summary</a>
+</li>
+<li>
+<a data-toggle="tab" href="#checks"> Checks <span
+class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> </a>
+</li>
+<li>
+<a data-toggle="tab" href="#versions">Past versions</a>
+</li>
+</ul>
+<div class="tab-content">
+<div id="summary" class="tab-pane fade in active">
+<p>
+<strong>Last updated:</strong> 2024-08-11
+</p>
+<p>
+<strong>Checks:</strong> <span
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 6
+<span class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> 1
+</p>
+<p>
+<strong>Knit directory:</strong> <code>MapMetSC/</code> <span
+class="glyphicon glyphicon-question-sign" aria-hidden="true"
+title="This is the local directory in which the code in this file was executed.">
+</span>
+</p>
+<p>
+This reproducible <a href="https://rmarkdown.rstudio.com">R Markdown</a>
+analysis was created with <a
+  href="https://github.com/workflowr/workflowr">workflowr</a> (version
+1.7.1). The <em>Checks</em> tab describes the reproducibility checks
+that were applied when the results were created. The <em>Past
+versions</em> tab lists the development history.
+</p>
+<hr>
+</div>
+<div id="checks" class="tab-pane fade">
+<div id="workflowr-checks" class="panel-group">
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguncommittedchanges">
+<span class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> <strong>R Markdown file:</strong> uncommitted
+changes </a>
+</p>
+</div>
+<div id="strongRMarkdownfilestronguncommittedchanges"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>The R Markdown file has unstaged changes. To know which version of
+the R Markdown file created these results, you’ll want to first commit
+it to the Git repo. If you’re still working on the analysis, you can
+ignore this warning. When you’re finished, you can run
+<code>wflow_publish</code> to commit the R Markdown file and build the
+HTML.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongEnvironmentstrongempty">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Environment:</strong> empty </a>
+</p>
+</div>
+<div id="strongEnvironmentstrongempty" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! The global environment was empty. Objects defined in the
+global environment can affect the analysis in your R Markdown file in
+unknown ways. For reproduciblity it’s best to always run the code in an
+empty environment.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSeedstrongcodesetseed20240314code">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Seed:</strong>
+<code>set.seed(20240314)</code> </a>
+</p>
+</div>
+<div id="strongSeedstrongcodesetseed20240314code"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>The command <code>set.seed(20240314)</code> was run prior to running
+the code in the R Markdown file. Setting a seed ensures that any results
+that rely on randomness, e.g. subsampling or permutations, are
+reproducible.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongSessioninformationstrongrecorded">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Session information:</strong>
+recorded </a>
+</p>
+</div>
+<div id="strongSessioninformationstrongrecorded"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Recording the operating system, R version, and package
+versions is critical for reproducibility.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongCachestrongnone">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Cache:</strong> none </a>
+</p>
+</div>
+<div id="strongCachestrongnone" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Nice! There were no cached chunks for this analysis, so you can be
+confident that you successfully produced the results during this
+run.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongFilepathsstrongrelative">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>File paths:</strong> relative </a>
+</p>
+</div>
+<div id="strongFilepathsstrongrelative" class="panel-collapse collapse">
+<div class="panel-body">
+<p>Great job! Using relative paths to the files within your workflowr
+project makes it easier to run your code on other machines.</p>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p class="panel-title">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMetSCtreee212c665a84c7b41ac229691cf1bca2eb016285atargetblanke212c66a">
+<span class="glyphicon glyphicon-ok text-success"
+aria-hidden="true"></span> <strong>Repository version:</strong>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/tree/e212c665a84c7b41ac229691cf1bca2eb016285a" target="_blank">e212c66</a>
+</a>
+</p>
+</div>
+<div
+id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMetSCtreee212c665a84c7b41ac229691cf1bca2eb016285atargetblanke212c66a"
+class="panel-collapse collapse">
+<div class="panel-body">
+<p>
+Great! You are using Git for version control. Tracking code development
+and connecting the code version to the results is critical for
+reproducibility.
+</p>
+<p>
+The results in this page were generated with repository version
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/tree/e212c665a84c7b41ac229691cf1bca2eb016285a" target="_blank">e212c66</a>.
+See the <em>Past versions</em> tab to see a history of the changes made
+to the R Markdown and HTML files.
+</p>
+<p>
+Note that you need to be careful to ensure that all relevant files for
+the analysis have been committed to Git prior to generating the results
+(you can use <code>wflow_publish</code> or
+<code>wflow_git_commit</code>). workflowr only checks the R Markdown
+file, but you know if there are other scripts or data files that it
+depends on. Below is the status of the Git repository when the results
+were generated:
+</p>
+<pre><code>
+Unstaged changes:
+    Modified:   analysis/11_cytokine_assays.Rmd
+
+</code></pre>
+<p>
+Note that any generated files, e.g. HTML, png, CSS, etc., are not
+included in this status report because it is ok for generated content to
+have uncommitted changes.
+</p>
+</div>
+</div>
+</div>
+</div>
+<hr>
+</div>
+<div id="versions" class="tab-pane fade">
+
+<p>
+These are the previous versions of the repository in which changes were
+made to the R Markdown (<code>analysis/11_cytokine_assays.Rmd</code>)
+and HTML (<code>docs/11_cytokine_assays.html</code>) files. If you’ve
+configured a remote Git repository (see <code>?wflow_git_remote</code>),
+click on the hyperlinks in the table below to view the files as they
+were in that past version.
+</p>
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+File
+</th>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+<th>
+Message
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/e212c665a84c7b41ac229691cf1bca2eb016285a/analysis/11_cytokine_assays.Rmd" target="_blank">e212c66</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-08-11
+</td>
+<td>
+update
+</td>
+</tr>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/4c327cc78a97407aaedb4a1d03a27700073d80d5/analysis/11_cytokine_assays.Rmd" target="_blank">4c327cc</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-07-28
+</td>
+<td>
+changes to figures 20240728
+</td>
+</tr>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/8875e14fa39fd34d629153d78af436ea72f37ef4/analysis/11_cytokine_assays.Rmd" target="_blank">8875e14</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-06-24
+</td>
+<td>
+cytokine heatmap update
+</td>
+</tr>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/f29ef30811b45944f7e2920df117a44bec42e345/analysis/11_cytokine_assays.Rmd" target="_blank">f29ef30</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-06-05
+</td>
+<td>
+cytokines
+</td>
+</tr>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/79db2367c87061f42fadfd6f4e084e07ae85a3bf/analysis/11_cytokine_assays.Rmd" target="_blank">79db236</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-06-04
+</td>
+<td>
+cytokine assays
+</td>
+</tr>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/a48843641345500706cdd9938b5bbc33e90e89d8/analysis/11_cytokine_assays.Rmd" target="_blank">a488436</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-06-03
+</td>
+<td>
+update
+</td>
+</tr>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/636298d505541a91d70c56f8e4dbfb025c69a969/analysis/11_cytokine_assays.Rmd" target="_blank">636298d</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-06-03
+</td>
+<td>
+CHLA-90
+</td>
+</tr>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/4a0b65a3a13f84c2f28a3a162055fe19f7b335af/analysis/11_cytokine_assays.Rmd" target="_blank">4a0b65a</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-05-31
+</td>
+<td>
+cytokine assays
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr>
+</div>
+</div>
+</div>
+<div id="cyto" class="section level1">
+<h1>Heatmap for cytokine assays</h1>
+<p>In this Rmd file, we will plot a heatmap to visualize the abundance
+of cytokines in co-cultivation experiments.</p>
+</div>
+<div id="load-libraries" class="section level1">
+<h1>Load libraries</h1>
+<details>
+<summary>
+Load libraries
+</summary>
+<pre class="r"><code>library(readxl)
+library(dplyr)</code></pre>
+<pre><code>
+Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>The following objects are masked from &#39;package:stats&#39;:
+
+    filter, lag</code></pre>
+<pre><code>The following objects are masked from &#39;package:base&#39;:
+
+    intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(stringr)
+library(tidyr)
+library(ComplexHeatmap)</code></pre>
+<pre><code>Loading required package: grid</code></pre>
+<pre><code>========================================
+ComplexHeatmap version 2.12.1
+Bioconductor page: http://bioconductor.org/packages/ComplexHeatmap/
+Github page: https://github.com/jokergoo/ComplexHeatmap
+Documentation: http://jokergoo.github.io/ComplexHeatmap-reference
+
+If you use it in published research, please cite either one:
+- Gu, Z. Complex heatmaps reveal patterns and correlations in multidimensional 
+    genomic data. Bioinformatics 2016.
+- Gu, Z. Complex Heatmap Visualization. iMeta 2022.
+
+
+The new InteractiveComplexHeatmap package can directly export static 
+complex heatmaps into an interactive Shiny app with zero effort. Have a try!
+
+This message can be suppressed by:
+  suppressPackageStartupMessages(library(ComplexHeatmap))
+========================================</code></pre>
+<pre class="r"><code>library(viridis)</code></pre>
+<pre><code>Loading required package: viridisLite</code></pre>
+<pre class="r"><code>library(openxlsx)
+library(bruceR)</code></pre>
+<pre><code>
+bruceR (v2023.9)
+Broadly Useful Convenient and Efficient R functions
+
+Packages also loaded:
+✔ data.table    ✔ emmeans
+✔ dplyr         ✔ lmerTest
+✔ tidyr         ✔ effectsize
+✔ stringr       ✔ performance
+✔ ggplot2       ✔ interactions
+
+Main functions of `bruceR`:
+cc()            Describe()  TTEST()
+add()           Freq()      MANOVA()
+.mean()         Corr()      EMMEANS()
+set.wd()        Alpha()     PROCESS()
+import()        EFA()       model_summary()
+print_table()   CFA()       lavaan_summary()
+
+For full functionality, please install all dependencies:
+install.packages(&quot;bruceR&quot;, dep=TRUE)
+
+Online documentation:
+https://psychbruce.github.io/bruceR
+
+To use this package in publications, please cite:
+Bao, H.-W.-S. (2023). bruceR: Broadly useful convenient and efficient R functions (Version 2023.9) [Computer software]. https://CRAN.R-project.org/package=bruceR</code></pre>
+<pre><code>
+NEWS: A new version of bruceR (2024.6) is available (2024-06-13)!
+
+***** Please update *****
+install.packages(&quot;bruceR&quot;, dep=TRUE)</code></pre>
+</details>
+<div id="read-data" class="section level2">
+<h2>Read data</h2>
+<p>First, we load normalized data from three cytokine assays from
+Supplementary Table 4 provided on Zenodo <a
+href="https://doi.org/10.5281/zenodo.13220634">(Supplementary_Tables/20240713_Suppl_Table4.xlsx)</a>.</p>
+<pre class="r"><code>data_inf &lt;- read_excel(file.path(params$input, &#39;Supplementary_Tables/20240713_Suppl_Table4.xlsx&#39;), sheet = &quot;INF3&quot;)
+data_che &lt;- read_excel(file.path(params$input, &#39;Supplementary_Tables/20240713_Suppl_Table4.xlsx&#39;), sheet = &quot;CHE1&quot;)
+data_rec &lt;- read_excel(file.path(params$input, &#39;Supplementary_Tables/20240713_Suppl_Table4.xlsx&#39;), sheet = &quot;REC1&quot;)
+
+#Remove positive controls
+data_inf &lt;- data_inf[!grepl(&quot;POS&quot;, data_inf$Normalization),]
+data_che &lt;- data_che[!grepl(&quot;POS&quot;, data_che$Normalization),]
+data_rec &lt;- data_rec[!grepl(&quot;POS&quot;, data_rec$Normalization),]
+
+head(data_che)</code></pre>
+<pre><code># A tibble: 6 × 17
+  Normalization     R `PBMC R` CLB...4 CLB...5 `CLB D...6` `CLB D...7`
+  &lt;chr&gt;         &lt;dbl&gt;    &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;       &lt;dbl&gt;       &lt;dbl&gt;
+1 6Ckine        494.      551.    711.   576.        1297.        809.
+2 Axl           256.      314.    362.   272.         731.        736.
+3 BTC           255.      504.    394.   425.        2611.       1575.
+4 CCL28         231.      650.    494.   583.        1533.       1196.
+5 CTACK         259.      440.    538.   269.         723.        870.
+6 CXCL16         85.0    9226.    168.    84.1       8105.       8821.
+# ℹ 10 more variables: `CLB T...8` &lt;dbl&gt;, `CLB T...9` &lt;dbl&gt;, I &lt;dbl&gt;,
+#   `PBMC I` &lt;dbl&gt;, CHLA...12 &lt;dbl&gt;, CHLA...13 &lt;dbl&gt;, `CHLA D...14` &lt;dbl&gt;,
+#   `CHLA D...15` &lt;dbl&gt;, `CHLA T...16` &lt;dbl&gt;, `CHLA T...17` &lt;dbl&gt;</code></pre>
+</div>
+<div id="rename-column-names" class="section level2">
+<h2>Rename column names</h2>
+<pre class="r"><code># Rename columns: remove dots and numbers, replace spaces with underscores
+clean_colnames &lt;- function(colname) {
+  colname %&gt;%
+    str_replace_all(&quot;\\.\\d*$&quot;, &quot;&quot;) %&gt;%  # Remove trailing numbers after a dot
+    str_replace_all(&quot;\\.\\.\\.+\\d*&quot;, &quot;&quot;) %&gt;%  # Remove dots and trailing numbers
+    str_replace_all(&quot; &quot;, &quot;_&quot;)                  # Replace spaces with underscores
+}
+
+# Apply the renaming function
+colnames(data_inf) &lt;- sapply(colnames(data_inf), clean_colnames)
+colnames(data_che) &lt;- sapply(colnames(data_che), clean_colnames)
+colnames(data_rec) &lt;- sapply(colnames(data_rec), clean_colnames)</code></pre>
+</div>
+<div id="compute-mean-between-duplicate-rows" class="section level2">
+<h2>Compute mean between duplicate rows</h2>
+<pre class="r"><code># Combine duplicate columns by calculating the mean
+combine_duplicate_columns &lt;- function(df) {
+  df %&gt;%
+     pivot_longer(-Normalization, names_to = &quot;colname&quot;, values_to = &quot;value&quot;) %&gt;%
+     group_by(Normalization, colname) %&gt;%
+     summarise(mean_value = mean(value, na.rm = TRUE), .groups = &#39;drop&#39;) %&gt;%
+     pivot_wider(names_from = colname, values_from = mean_value)
+}
+
+# Apply the function to combine duplicate columns
+data_combined_inf &lt;- combine_duplicate_columns(data_inf)
+data_combined_che &lt;- combine_duplicate_columns(data_che)
+data_combined_rec &lt;- combine_duplicate_columns(data_rec)
+
+# Remove dots from the column names
+colnames(data_combined_inf) &lt;- str_replace_all(colnames(data_combined_inf), &quot;\\.&quot;, &quot;&quot;)
+colnames(data_combined_che) &lt;- str_replace_all(colnames(data_combined_che), &quot;\\.&quot;, &quot;&quot;)
+colnames(data_combined_rec) &lt;- str_replace_all(colnames(data_combined_rec), &quot;\\.&quot;, &quot;&quot;)
+
+#Set first column as rownames
+data_combined_inf &lt;- as.data.frame(data_combined_inf)
+rownames(data_combined_inf) &lt;- data_combined_inf$Normalization
+data_combined_inf &lt;- data_combined_inf[-1]
+
+data_combined_che &lt;- as.data.frame(data_combined_che)
+rownames(data_combined_che) &lt;- data_combined_che$Normalization
+data_combined_che &lt;- data_combined_che[-1]
+
+data_combined_rec &lt;- as.data.frame(data_combined_rec)
+rownames(data_combined_rec) &lt;- data_combined_rec$Normalization
+data_combined_rec &lt;- data_combined_rec[-1]</code></pre>
+</div>
+<div id="calculate-log2fc" class="section level2">
+<h2>Calculate log2FC</h2>
+<p>We will then calculate the log2FC between mono- and co-cultures and
+filter those that are increasing upon co-culture in nMNA, MNA or
+both.</p>
+<pre class="r"><code>data_all &lt;- rbind(data_combined_inf, data_combined_che, data_combined_rec)
+df &lt;- as.data.frame(data_all)
+col_filter_chla &lt;- c(&quot;I&quot;, &quot;PBMC_I&quot;, &quot;CHLA&quot;, &quot;CHLA_D&quot;)
+col_filter_clb &lt;- c(&quot;R&quot;, &quot;PBMC_R&quot;, &quot;CLB&quot;, &quot;CLB_D&quot;)
+
+df_unscaled &lt;- cbind(df[,col_filter_chla], df[,col_filter_clb])
+
+# Create the new columns with the specified calculations
+df_unscaled &lt;- df_unscaled %&gt;%
+  mutate(
+    log2FC_CHLA_D_I = log2(CHLA_D / I),
+    log2FC_CLB_D_R = log2(CLB_D / R),
+    log2FC_CHLA_D_PBMC_I = log2(CHLA_D / PBMC_I),
+    log2FC_CLB_D_PBMC_R = log2(CLB_D / PBMC_R),
+    log2FC_CHLA_D_CHLA = log2(CHLA_D / CHLA),
+    log2FC_CLB_D_CLB = log2(CLB_D / CLB)
+  )
+
+# Add the new column based on the condition
+df_unscaled &lt;- df_unscaled %&gt;%
+  mutate(both = if_else(
+    log2FC_CHLA_D_I &gt;= 0.3 &amp; 
+    log2FC_CLB_D_R &gt;= 0.3 &amp; 
+    log2FC_CHLA_D_PBMC_I &gt;= 0.3 &amp; 
+    log2FC_CLB_D_PBMC_R &gt;= 0.3 &amp; 
+    log2FC_CHLA_D_CHLA &gt;= 0.3 &amp; 
+    log2FC_CLB_D_CLB &gt;= 0.3, 
+    1, 
+    0
+  )) %&gt;%
+    mutate(nMNA = if_else(
+    log2FC_CHLA_D_I &gt;= 0.3 &amp; 
+    log2FC_CHLA_D_PBMC_I &gt;= 0.3 &amp; 
+    log2FC_CHLA_D_CHLA &gt;= 0.3 &amp; 
+    both == 0, 
+    1, 
+    0
+  )) %&gt;%
+    mutate(MNA = if_else(
+    log2FC_CLB_D_R &gt;= 0.3 &amp; 
+    log2FC_CLB_D_PBMC_R &gt;= 0.3 &amp; 
+    log2FC_CLB_D_CLB &gt;= 0.3 &amp;
+    both == 0, 
+    1, 
+    0
+  ))
+
+df_up &lt;- df_unscaled %&gt;% filter(both == 1 | nMNA == 1 | MNA == 1)</code></pre>
+</div>
+<div id="create-heatmap" class="section level2">
+<h2>Create heatmap</h2>
+<p>Let’s plot a heatmap of the cytokines enriched in nMNA only:</p>
+<pre class="r"><code>df &lt;- df_up
+
+#Annotation
+col_vector &lt;- c(&quot;0&quot;=&quot;#ffffbf&quot;, &quot;1&quot;=&quot;#fc8d59&quot;)
+column_ha &lt;- HeatmapAnnotation(nMNA = df_up$nMNA,
+                               MNA = df_up$MNA,
+                               both = df_up$both,
+                               col=list(nMNA=col_vector,
+                                        MNA=col_vector,
+                                        both=col_vector))
+
+#Separate scaling per cell line
+col_filter_chla &lt;- c(&quot;I&quot;, &quot;PBMC_I&quot;, &quot;CHLA&quot;, &quot;CHLA_D&quot;)
+col_filter_clb &lt;- c(&quot;R&quot;, &quot;PBMC_R&quot;, &quot;CLB&quot;, &quot;CLB_D&quot;)
+data_sep_scale &lt;- rbind(scale(t(df_up[,col_filter_chla])), scale(t(df_up[,col_filter_clb])))
+
+# Define a diverging color palette
+diverging_palette &lt;- coolwarm_hcl &lt;- colorspace::diverging_hcl(11, h = c(250, 10), c = 100, l = c(37, 88), power = c(0.7, 1.7))
+
+Heatmap(data_sep_scale[, df_up$nMNA==1], 
+        column_title = &quot;Cytokine assays- CHLA90 and CLB-MA&quot;,
+        row_order = c(&quot;I&quot;, &quot;R&quot;, &quot;PBMC_I&quot;, &quot;PBMC_R&quot;, &quot;CHLA&quot;, &quot;CLB&quot;, &quot;CHLA_D&quot;, &quot;CLB_D&quot;),
+        cluster_columns =T,
+        col=diverging_palette
+        )</code></pre>
+<p><img src="figure/11_cytokine_assays.Rmd/heatmap-nMNA-1.png" width="1824" style="display: block; margin: auto;" /></p>
+<p>in MNA only:</p>
+<pre class="r"><code>Heatmap(data_sep_scale[, df_up$MNA==1], 
+        column_title = &quot;Cytokine assays- CHLA90 and CLB-MA&quot;,
+        row_order = c(&quot;I&quot;, &quot;R&quot;, &quot;PBMC_I&quot;, &quot;PBMC_R&quot;, &quot;CHLA&quot;, &quot;CLB&quot;, &quot;CHLA_D&quot;, &quot;CLB_D&quot;),
+        cluster_columns =T,
+        col=diverging_palette
+        )</code></pre>
+<p><img src="figure/11_cytokine_assays.Rmd/heatmap-MNA-1.png" width="1824" style="display: block; margin: auto;" /></p>
+<p>or in both:</p>
+<pre class="r"><code>Heatmap(data_sep_scale[, df_up$both==1], 
+        column_title = &quot;Cytokine assays- CHLA90 and CLB-MA&quot;,
+        row_order = c(&quot;I&quot;, &quot;R&quot;, &quot;PBMC_I&quot;, &quot;PBMC_R&quot;, &quot;CHLA&quot;, &quot;CLB&quot;, &quot;CHLA_D&quot;, &quot;CLB_D&quot;),
+        cluster_columns =T,
+        col=diverging_palette
+        )</code></pre>
+<p><img src="figure/11_cytokine_assays.Rmd/heatmap-both-1.png" width="1824" style="display: block; margin: auto;" /></p>
+</div>
+<div id="session-info" class="section level2">
+<h2>Session Info</h2>
+<details>
+<summary>
+SessionInfo
+</summary>
+<pre><code>R version 4.2.0 (2022-04-22)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 20.04.4 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+attached base packages:
+[1] grid      stats     graphics  grDevices utils     datasets  methods  
+[8] base     
+
+other attached packages:
+ [1] ggplot2_3.4.4         interactions_1.1.5    lmerTest_3.1-3       
+ [4] lme4_1.1-35.1         Matrix_1.6-5          performance_0.10.8   
+ [7] effectsize_0.8.6      emmeans_1.9.0         data.table_1.14.10   
+[10] bruceR_2023.9         openxlsx_4.2.5.2      viridis_0.6.4        
+[13] viridisLite_0.4.2     ComplexHeatmap_2.12.1 tidyr_1.3.0          
+[16] stringr_1.5.1         dplyr_1.1.4           readxl_1.4.3         
+
+loaded via a namespace (and not attached):
+ [1] nlme_3.1-157        matrixStats_1.1.0   fs_1.6.3           
+ [4] insight_0.19.7      doParallel_1.0.17   RColorBrewer_1.1-3 
+ [7] rprojroot_2.0.4     numDeriv_2016.8-1.1 tools_4.2.0        
+[10] bslib_0.6.1         utf8_1.2.4          R6_2.5.1           
+[13] BiocGenerics_0.42.0 colorspace_2.1-0    GetoptLong_1.0.5   
+[16] withr_3.0.0         tidyselect_1.2.0    gridExtra_2.3      
+[19] compiler_4.2.0      git2r_0.33.0        cli_3.6.2          
+[22] Cairo_1.6-2         sandwich_3.1-0      bayestestR_0.13.1  
+[25] sass_0.4.8          scales_1.3.0        mvtnorm_1.2-4      
+[28] digest_0.6.34       minqa_1.2.6         rmarkdown_2.25     
+[31] pkgconfig_2.0.3     htmltools_0.5.7     highr_0.10         
+[34] fastmap_1.1.1       rlang_1.1.3         GlobalOptions_0.1.2
+[37] rstudioapi_0.15.0   shape_1.4.6         jquerylib_0.1.4    
+[40] generics_0.1.3      zoo_1.8-12          jsonlite_1.8.8     
+[43] zip_2.3.0           magrittr_2.0.3      parameters_0.21.3  
+[46] Rcpp_1.0.12         munsell_0.5.0       S4Vectors_0.34.0   
+[49] fansi_1.0.6         lifecycle_1.0.4     stringi_1.8.3      
+[52] multcomp_1.4-25     whisker_0.4.1       yaml_2.3.8         
+[55] MASS_7.3-56         parallel_4.2.0      promises_1.2.1     
+[58] crayon_1.5.2        lattice_0.20-45     splines_4.2.0      
+[61] pander_0.6.5        jtools_2.2.2        circlize_0.4.15    
+[64] magick_2.8.2        knitr_1.45          pillar_1.9.0       
+[67] boot_1.3-28         rjson_0.2.21        estimability_1.4.1 
+[70] codetools_0.2-18    stats4_4.2.0        glue_1.7.0         
+[73] evaluate_0.23       nloptr_2.0.3        png_0.1-8          
+[76] vctrs_0.6.5         httpuv_1.6.13       foreach_1.5.2      
+[79] cellranger_1.1.0    gtable_0.3.4        purrr_1.0.2        
+[82] datawizard_0.9.1    clue_0.3-65         cachem_1.0.8       
+[85] xfun_0.41           xtable_1.8-4        coda_0.19-4        
+[88] later_1.3.2         survival_3.3-1      tibble_3.2.1       
+[91] iterators_1.0.14    IRanges_2.30.1      workflowr_1.7.1    
+[94] cluster_2.1.3       TH.data_1.1-2      </code></pre>
+</details>
+<br>
+<p>
+<button type="button" class="btn btn-default btn-workflowr btn-workflowr-sessioninfo" data-toggle="collapse" data-target="#workflowr-sessioninfo" style="display: block;">
+<span class="glyphicon glyphicon-wrench" aria-hidden="true"></span>
+Session information
+</button>
+</p>
+<div id="workflowr-sessioninfo" class="collapse">
+<pre class="r"><code>sessionInfo()</code></pre>
+<pre><code>R version 4.2.0 (2022-04-22)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 20.04.4 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+attached base packages:
+[1] grid      stats     graphics  grDevices utils     datasets  methods  
+[8] base     
+
+other attached packages:
+ [1] ggplot2_3.4.4         interactions_1.1.5    lmerTest_3.1-3       
+ [4] lme4_1.1-35.1         Matrix_1.6-5          performance_0.10.8   
+ [7] effectsize_0.8.6      emmeans_1.9.0         data.table_1.14.10   
+[10] bruceR_2023.9         openxlsx_4.2.5.2      viridis_0.6.4        
+[13] viridisLite_0.4.2     ComplexHeatmap_2.12.1 tidyr_1.3.0          
+[16] stringr_1.5.1         dplyr_1.1.4           readxl_1.4.3         
+
+loaded via a namespace (and not attached):
+ [1] nlme_3.1-157        matrixStats_1.1.0   fs_1.6.3           
+ [4] insight_0.19.7      doParallel_1.0.17   RColorBrewer_1.1-3 
+ [7] rprojroot_2.0.4     numDeriv_2016.8-1.1 tools_4.2.0        
+[10] bslib_0.6.1         utf8_1.2.4          R6_2.5.1           
+[13] BiocGenerics_0.42.0 colorspace_2.1-0    GetoptLong_1.0.5   
+[16] withr_3.0.0         tidyselect_1.2.0    gridExtra_2.3      
+[19] compiler_4.2.0      git2r_0.33.0        cli_3.6.2          
+[22] Cairo_1.6-2         sandwich_3.1-0      bayestestR_0.13.1  
+[25] sass_0.4.8          scales_1.3.0        mvtnorm_1.2-4      
+[28] digest_0.6.34       minqa_1.2.6         rmarkdown_2.25     
+[31] pkgconfig_2.0.3     htmltools_0.5.7     highr_0.10         
+[34] fastmap_1.1.1       rlang_1.1.3         GlobalOptions_0.1.2
+[37] rstudioapi_0.15.0   shape_1.4.6         jquerylib_0.1.4    
+[40] generics_0.1.3      zoo_1.8-12          jsonlite_1.8.8     
+[43] zip_2.3.0           magrittr_2.0.3      parameters_0.21.3  
+[46] Rcpp_1.0.12         munsell_0.5.0       S4Vectors_0.34.0   
+[49] fansi_1.0.6         lifecycle_1.0.4     stringi_1.8.3      
+[52] multcomp_1.4-25     whisker_0.4.1       yaml_2.3.8         
+[55] MASS_7.3-56         parallel_4.2.0      promises_1.2.1     
+[58] crayon_1.5.2        lattice_0.20-45     splines_4.2.0      
+[61] pander_0.6.5        jtools_2.2.2        circlize_0.4.15    
+[64] magick_2.8.2        knitr_1.45          pillar_1.9.0       
+[67] boot_1.3-28         rjson_0.2.21        estimability_1.4.1 
+[70] codetools_0.2-18    stats4_4.2.0        glue_1.7.0         
+[73] evaluate_0.23       nloptr_2.0.3        png_0.1-8          
+[76] vctrs_0.6.5         httpuv_1.6.13       foreach_1.5.2      
+[79] cellranger_1.1.0    gtable_0.3.4        purrr_1.0.2        
+[82] datawizard_0.9.1    clue_0.3-65         cachem_1.0.8       
+[85] xfun_0.41           xtable_1.8-4        coda_0.19-4        
+[88] later_1.3.2         survival_3.3-1      tibble_3.2.1       
+[91] iterators_1.0.14    IRanges_2.30.1      workflowr_1.7.1    
+[94] cluster_2.1.3       TH.data_1.1-2      </code></pre>
+</div>
+</div>
+</div>
+
+
+<!-- Adjust MathJax settings so that all math formulae are shown using
+TeX fonts only; see
+https://docs.mathjax.org/en/latest/web/configuration.html. This will make
+the presentation more consistent at the cost of the webpage sometimes
+taking slightly longer to load. Note that this only works because the
+footer is added to webpages before the MathJax javascript. -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

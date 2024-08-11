@@ -17,6 +17,9 @@ knitr::opts_chunk$set(echo = TRUE,
                       warning=FALSE)
 ```
 
+# Heatmap for cytokine assays {#cyto}
+
+In this Rmd file, we will plot a heatmap to visualize the abundance of cytokines in co-cultivation experiments. 
 
 # Load libraries
 <details>
@@ -35,12 +38,12 @@ library(bruceR)
 </details>
 
 ## Read data
-First, we load normalized data from three cytokine assays.
+First, we load normalized data from three cytokine assays from Supplementary Table 4 provided on Zenodo [(Supplementary_Tables/20240713_Suppl_Table4.xlsx)](https://doi.org/10.5281/zenodo.13220634). 
 
-```{r read-data}
-data_inf <- read_excel(file.path(params$path, 'array_all.xlsx'), sheet = "INF3")
-data_che <- read_excel(file.path(params$path, 'array_all.xlsx'), sheet = "CHE1")
-data_rec <- read_excel(file.path(params$path, 'array_all.xlsx'), sheet = "REC1")
+```{r read-data, message=FALSE}
+data_inf <- read_excel(file.path(params$input, 'Supplementary_Tables/20240713_Suppl_Table4.xlsx'), sheet = "INF3")
+data_che <- read_excel(file.path(params$input, 'Supplementary_Tables/20240713_Suppl_Table4.xlsx'), sheet = "CHE1")
+data_rec <- read_excel(file.path(params$input, 'Supplementary_Tables/20240713_Suppl_Table4.xlsx'), sheet = "REC1")
 
 #Remove positive controls
 data_inf <- data_inf[!grepl("POS", data_inf$Normalization),]
@@ -66,11 +69,6 @@ colnames(data_inf) <- sapply(colnames(data_inf), clean_colnames)
 colnames(data_che) <- sapply(colnames(data_che), clean_colnames)
 colnames(data_rec) <- sapply(colnames(data_rec), clean_colnames)
 ```
-
-
-# Heatmap for cytokine assay {#cyto}
-
-In this chapter, we will generate a heatmap for cytokine assays performed using RayBioTech. 
 
 ## Compute mean between duplicate rows
 
@@ -108,80 +106,16 @@ rownames(data_combined_rec) <- data_combined_rec$Normalization
 data_combined_rec <- data_combined_rec[-1]
 ```
 
-## Filter out columns and rows
+## Calculate log2FC 
 
-```{r filter}
-col_filter <- c("I", "PBMC_I", "CHLA", "CHLA_D", "R", "PBMC_R", "CLB", "CLB_D")
-rows_data <- read_excel(file.path(params$path, 'array_all.xlsx'), sheet = "filter")
-rows_inf <- rows_data[rows_data$Array=="INF-3","Secreted factor"]$`Secreted factor`
-rows_che <- rows_data[rows_data$Array=="CHE-1","Secreted factor"]$`Secreted factor`
-rows_rec <- rows_data[rows_data$Array=="REC-1","Secreted factor"]$`Secreted factor`
-setdiff(rows_che, rownames(data_combined_che))
-```
-## Create heatmap 
+We will then calculate the log2FC between mono- and co-cultures and filter those that are increasing upon co-culture in nMNA, MNA or both.
 
-### Plot for one array and one cell line only
-
-```{r heatmap-inf-filtered, fig.width=5, fig.height=3}
-df <- as.data.frame(data_combined_inf)
-
-cols_filter <- c("I", "PBMC_I", "CHLA", "CHLA_D")
-
-Heatmap(scale(t(df[rows_inf, cols_filter])), 
-        column_title = "INF-3-filtered",
-        row_order = cols_filter,
-        col=viridis(100)
-        )
-```
-
-```{r heatmap-inf, fig.width=8, fig.height=3}
-df <- as.data.frame(data_combined_inf)
-
-Heatmap(scale(t(df[,cols_filter])), 
-        column_title = "INF-3_all",
-        row_order = cols_filter,
-        col=viridis(100)
-        )
-```
-### Plot for all arrays and all cell lines combined
-
-```{r heatmap-combined-all-sepscale, fig.width=19, fig.height=3}
+```{r log2FC}
 data_all <- rbind(data_combined_inf, data_combined_che, data_combined_rec)
 df <- as.data.frame(data_all)
-
-#Annotation
-annot <- c(rep("INF-3", nrow(data_combined_inf)), rep("CHE-1", nrow(data_combined_che)), rep("REC-1", nrow(data_combined_rec)))
-col_vector <- c("INF-3"="#fc8d59", "CHE-1"="#ffffbf", "REC-1"="#91bfdb")
-column_ha <- HeatmapAnnotation(assay = annot, col=list(assay=col_vector))
-
-#Separate scaling per cel line
 col_filter_chla <- c("I", "PBMC_I", "CHLA", "CHLA_D")
 col_filter_clb <- c("R", "PBMC_R", "CLB", "CLB_D")
-data_sep_scale <- rbind(scale(t(df[,col_filter_chla])), scale(t(df[,col_filter_clb])))
-# chla_scaled <- apply(df[,col_filter_chla], 1, RESCALE, to=0:1)
-# clb_scaled <- apply(df[,col_filter_clb], 1, RESCALE, to=0:1)
-# data_sep_scale <- rbind(chla_scaled, clb_scaled )
 
-Heatmap(data_sep_scale, 
-        column_title = "all assays-all- CHLA90 and CLB-MA",
-        row_order = c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D"),
-        cluster_columns =F,
-        top_annotation = column_ha,
-        col=viridis(100)
-        )
-```
-
-```{r heatmap-combined-clustered-all, fig.width=19, fig.height=5}
-Heatmap(data_sep_scale, 
-        column_title = "all assays-all- CHLA90 and CLB-MA",
-        row_order = c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D"),
-        cluster_columns =T,
-        top_annotation = column_ha,
-        col=viridis(100)
-        )
-```
-We will then calculate the log2FC between mono- and co-cultures and filter those that are increasing upon co-culture in nMNA, MNA or both.
-```{r log2FC}
 df_unscaled <- cbind(df[,col_filter_chla], df[,col_filter_clb])
 
 # Create the new columns with the specified calculations
@@ -227,9 +161,10 @@ df_unscaled <- df_unscaled %>%
 df_up <- df_unscaled %>% filter(both == 1 | nMNA == 1 | MNA == 1)
 ```
 
-Let's plot a heatmap of the enriched cytokines only.
+## Create heatmap 
+Let's plot a heatmap of the cytokines enriched in nMNA only:
 
-```{r heatmap-enriched, fig.width=19, fig.height=7}
+```{r heatmap-nMNA, fig.width=19, fig.height=7}
 df <- df_up
 
 #Annotation
@@ -249,85 +184,32 @@ data_sep_scale <- rbind(scale(t(df_up[,col_filter_chla])), scale(t(df_up[,col_fi
 # Define a diverging color palette
 diverging_palette <- coolwarm_hcl <- colorspace::diverging_hcl(11, h = c(250, 10), c = 100, l = c(37, 88), power = c(0.7, 1.7))
 
-setEPS()
-postscript("/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/cytokines/20240728_heatmap_cytokines_nMNA.eps", height=3.5, width=8)
 Heatmap(data_sep_scale[, df_up$nMNA==1], 
         column_title = "Cytokine assays- CHLA90 and CLB-MA",
         row_order = c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D"),
         cluster_columns =T,
-        #top_annotation = column_ha,
-        #col=viridis(100)
         col=diverging_palette
         )
-dev.off()
-
 ```
 
-Let's plot the heatmap adding this annotation.
-```{r heatmap-threshold, fig.width=19, fig.height=5}
-#Annotation
-column_ha <- HeatmapAnnotation(assay = annot,
-                               threshold = as.factor(df_unscaled$threshold),
-                               col=list(assay=col_vector))
+in MNA only:
 
-#Separate scaling per cel line
-col_filter_chla <- c("I", "PBMC_I", "CHLA", "CHLA_D")
-col_filter_clb <- c("R", "PBMC_R", "CLB", "CLB_D")
-data_sep_scale <- rbind(scale(t(df_unscaled[,col_filter_chla])), scale(t(df_unscaled[,col_filter_clb])))
-
-h <- Heatmap(data_sep_scale, 
-        column_title = "all assays-all- CHLA90 and CLB-MA",
+```{r heatmap-MNA, fig.width=19, fig.height=7}
+Heatmap(data_sep_scale[, df_up$MNA==1], 
+        column_title = "Cytokine assays- CHLA90 and CLB-MA",
         row_order = c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D"),
         cluster_columns =T,
-        top_annotation = column_ha,
-        col=viridis(100)
+        col=diverging_palette
         )
-
-h
 ```
 
-The data can then be written to memory for annotation by experts. 
-
-```{r write-csv}
-#write unscaled data
-write.csv(df_unscaled[,c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D","log2FC_CHLA_D_PBMC_I", "log2FC_CLB_D_PBMC_R", "log2FC_CHLA_D_CHLA", "log2FC_CLB_D_CLB", "threshold")],file.path(params$path, 'heatmap_th.csv'))
-write.xlsx(df_unscaled[,c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D","log2FC_CHLA_D_PBMC_I", "log2FC_CLB_D_PBMC_R", "log2FC_CHLA_D_CHLA", "log2FC_CLB_D_CLB", "threshold")],file.path(params$path, 'heatmap_th.xlsx') , rowNames=TRUE)
-```
-
-The excel sheet is then read again after annotation.
-
-```{r}
-data_annotated <- read.xlsx(file.path(params$path, 'heatmap_annotated.xlsx'), rowNames=TRUE, sheet="PBMC and Direct")[,1:15]
-```
-
-We then plot the heatmap showing the annotation about literature on T cell exhaustion.
-
-```{r heatmap-exhaustion, fig.width=19, fig.height=5}
-#sort data by clustering from heatmap before
-order <- colnames(data_sep_scale)[h@column_order] #row_order is wrong - don'T know why
-df_ordered <- data_annotated[order, ]
-annot <- annot[order]
-
-increased_cytokines <- df_ordered$threshold==1
-df_increased <- df_ordered[increased_cytokines,]
-  
-#Annotation
-column_ha <- HeatmapAnnotation(assay = annot[increased_cytokines],
-                               threshold = as.factor(df_increased$threshold),
-                               T_cell_exhaustion = as.factor(df_increased$T.cell.exhaustion),
-                               col=list(assay=col_vector))
-
-#Separate scaling per cel line
-col_filter_chla <- c("I", "PBMC_I", "CHLA", "CHLA_D")
-col_filter_clb <- c("R", "PBMC_R", "CLB", "CLB_D")
-data_sep_scale <- rbind(scale(t(df_increased[,col_filter_chla])), scale(t(df_increased[,col_filter_clb])))
-
-Heatmap(data_sep_scale, 
-        column_title = "all assays-all- CHLA90 and CLB-MA",
+or in both:
+```{r heatmap-both, fig.width=19, fig.height=7}
+Heatmap(data_sep_scale[, df_up$both==1], 
+        column_title = "Cytokine assays- CHLA90 and CLB-MA",
         row_order = c("I", "R", "PBMC_I", "PBMC_R", "CHLA", "CLB", "CHLA_D", "CLB_D"),
-        cluster_columns =F,
-        top_annotation = column_ha,
-        col=viridis(100)
+        cluster_columns =T,
+        col=diverging_palette
         )
 ```
 

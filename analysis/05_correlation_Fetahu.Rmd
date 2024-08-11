@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
   public: "/mnt/Multimodal_Imaging_Daria/Publication/public_datasets"
 ---
 
@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 # Validation using scRNA-seq data by Fetahu et al. {#fetahu}
-To evaluate the validity of metacluster annnotations, we compare the cell expression profiles to our previously generated scRNA-seq dataset of NB bone marrow samples ([Fetahu et al.](https://doi.org/10.1038/s41467-023-39210-0)). 
+To evaluate the validity of metacluster annnotations, we compare the cell expression profiles to our previously generated scRNA-seq dataset of NB bone marrow samples ([Fetahu et al.](https://doi.org/10.1038/s41467-023-39210-0) downloaded from [Zenodo](https://doi.org/10.5281/zenodo.7707614). 
 
 ## Load libraries
 <details>
@@ -58,9 +58,10 @@ DefaultAssay(rna) <- "RNA"
 ```
 
 ## Set common features 
-Next, we will set common features between the reference and query dataset. Therefore, we have to rename the features in the imaging dataset to the names of the corresponding genes. 
+Next, we will set common features between the reference and query dataset. Therefore, we have to rename the features in the imaging dataset to the names of the corresponding genes. A csv files with protein-gene mappings can be obtained from Zenodo [(R_intermediary/protein2gene.csv)](https://doi.org/10.5281/zenodo.13220634)
+
 ```{r set-common-features}
-protein2gene <- read.csv(file.path(params$public,"protein2gene.csv"), sep=";")
+protein2gene <- read.csv(file.path(params$input,"R_intermediary/protein2gene.csv"), sep=";")
 
 code <- setNames(protein2gene$genes, protein2gene$protein)
 rownames(protein) <- recode(rownames(protein), !!!code)
@@ -78,6 +79,7 @@ common_features <- intersect(row.names(rna), row.names(protein))
 ## Visualize public data
 
 Will will first visualize the scRNA-seq data. Therefore we first define a color code with similar colors for similar celltypes between IMC and scRNA-seq.
+
 ```{r define-colors}
 col_clusters <- c("B (3)" = rgb(145,2,144, maxColorValue = 255),
                   "B (16)" = rgb(253,218,236, maxColorValue = 255),

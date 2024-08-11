@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -19,7 +19,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 # Identifying cellular communities in diagnostic primary tumors {#pt-dx}
-Following the path of tumor progression, we start with an analysis of the primary site at diagnosis. Therfore, we perform hierarchical clustering of tumor cell composition profiles in primary tumors.
+Following the path of tumor progression, we start with an analysis of the primary site at diagnosis. Therefore, we perform hierarchical clustering of tumor cell composition profiles in primary tumors.
 
 ## Load libraries
 <details>
@@ -66,7 +66,7 @@ sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna <- recode(sce$mna, `1` = 'MNA', `2` = 'het', `0` = 'nMNA', `9` = 'unknown')
 sce$mna <- as.factor(mna)
 
-sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$patient <- factor(spe[keep_rows, keep_cols]$patient_id)
 sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 
@@ -87,6 +87,7 @@ sce$condition <- 'na'
 # Add celltype information to metadata
 metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
 ```
+
 ## Cluster cellular communities
 
 Next, we cluster proportions of tumor cell types across all diagnostic PT samples (instead of conditions) and plot the result in barplots:
@@ -132,7 +133,9 @@ cellular_communities$community_cluster <- recode(cellular_communities$community_
 ```
 
 ## Plot TME cellular profiles 
+
 We will then plot the cellular profiles of the TME for these samples. 
+
 ```{r plot-TME, fig.width=12, fig.height=5}
 #order samples based on above clustering
 sce$sample_id <- factor(paste0(spe[keep_rows, keep_cols]$fm_id, "_", spe[keep_rows, keep_cols]$tissue), levels=clustered_samples)
@@ -147,6 +150,7 @@ p_ME
 ## Compute tumor and TME heterogeneity
 
 We compute tumor and TME intra-sample heterogeneity.
+
 ```{r heterogeneity}
 proportions <- plotAbundances(sce, k = "celltype", by = "sample")
 prop <- proportions$data %>%
@@ -169,7 +173,9 @@ tumor_het <- apply(tumor_prop,2, entropy)
 ```
 
 ## Plot metadata 
+
 Then we plot intra-sample heterogeneity together with sample-specific metadata for the clustered sammples.
+
 ```{r plot-metadata}
 #access sample-level data
 sample_summary <- as.data.frame(colData(sce)) %>%
@@ -202,7 +208,7 @@ col_tumor_het = colorRamp2(c(min(tumor_het, na.rm = TRUE), (max(tumor_het, na.rm
 
 # Plot metadata
 columnAnnotation(MYCN_amp=sample_summary$mna, col=list(MYCN_amp=col_code)) %v%
-  columnAnnotation(X1q_loss=sample_summary$X1p_loss, col=list(X1q_loss=col_code)) %v%
+  columnAnnotation(X1p_loss=sample_summary$X1p_loss, col=list(X1p_loss=col_code)) %v%
   columnAnnotation(progression=sample_summary$progress, col=list(progression=col_code)) %v%
   columnAnnotation(age=sample_summary$age_diag, col=list(age=col_age_diag)) %v%
   columnAnnotation(TUM_het=tumor_het, col=list(TUM_het=col_tumor_het)) %v%
@@ -213,6 +219,7 @@ columnAnnotation(MYCN_amp=sample_summary$mna, col=list(MYCN_amp=col_code)) %v%
 ## Plot continous and discrete summary statistics
 
 We then plot summary statistics of continuous and discrete metadata in boxplots and piecharts, respectively.
+
 ```{r piecharts}
 rownames(cellular_communities) <- sapply(strsplit(as.vector(rownames(cellular_communities)), "_"), function(x) paste(x[length(x) - 1], x[length(x)], sep = "_"))
 sample_summary[rownames(cellular_communities),"community_clusters"] <- cellular_communities$community_cluster
@@ -270,6 +277,7 @@ do.call("grid.arrange", c(plot_list, ncol=3))
 ## Plot metaclusters
 
 Finally, we plot the proportions of metaclusters in the clustered samples.
+
 ```{r plot-metaclusters}
 sce$cluster_id <- sce$metacluster
 metadata(sce)$cluster_codes <- data.frame(celltype = factor(sce$metacluster))

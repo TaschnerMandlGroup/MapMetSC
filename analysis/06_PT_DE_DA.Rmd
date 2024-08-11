@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -76,7 +76,7 @@ sce$X1p_loss <- factor(spe[keep_rows, keep_cols]$X1p_loss)
 X1p_loss <- recode(sce$X1p_loss, `1` = 'yes', `2` = 'het', `0` = 'no', `9` = 'unknown')
 sce$X1p_loss <- as.factor(X1p_loss)
 
-sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$patient <- factor(spe[keep_rows, keep_cols]$patient_id)
 sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 
@@ -149,27 +149,8 @@ ggplot(df_normalized, aes(fill=cluster_id, y=normalized_count, x=condition)) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
 
-And overlayed with data points.
-
-```{r mean-abundance}
-df_summary <- df_normalized %>%
-  group_by(cluster_id, condition) %>%
-  summarize(mean_Freq = mean(Freq), .groups = 'drop')
-
-# Plotting the barplot with dodge and overlaying the data points, faceted by condition
-p <- ggplot(df_summary, aes(x = cluster_id, y = mean_Freq, fill = cluster_id)) +
-  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
-  geom_point(data = df_normalized, aes(x = cluster_id, y = Freq, color = cluster_id), 
-             position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8), size = 2) +
-  facet_wrap(~ condition, scales = "free_y") +
-  theme_minimal() +
-  labs(title = "Mean frequency by cell type and condition", x = "cell type", y = "mean frequency") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  scale_fill_manual(values = col_vector) +
-  scale_color_manual(values = col_vector)
-```
-
 ## Differential abundance analysis
+
 We first prepare data for DA analysis using the `diffcyt` package. 
 
 ```{r prepare-data}
@@ -205,7 +186,7 @@ d_se <- transformData(d_se)
 d_counts <- calcCounts(d_se)
 ```
 
-Subsequently, we perform the DA analysis comparing celltype proportions between to genetic subgroups. 
+Subsequently, we perform the DA analysis comparing celltype proportions between two genetic subgroups. 
 
 ```{r da-analysis}
 # Create design matrix
@@ -231,7 +212,9 @@ FDR_cutoff = 0.1
 rowData(res_DA)[rowData(res_DA)$p_adj<FDR_cutoff,]
 res<- data.frame(rowData(res_DA))
 ```
+
 ## Visualization of DA results
+
 Finally, we visualize DA results in boxplots and barplots showing the logFC.
 
 ```{r visualize-da, fig.width=12, fig.height=10}

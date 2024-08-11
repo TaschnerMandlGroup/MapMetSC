@@ -34,7 +34,7 @@ For reproducibility, we provide a docker image. Pull the docker image using:
  ```bash
 docker run -p 8787:8787 -e PASSWORD=mapmetsc -v <path/to/MapMetSC>:/home/rstudio/MapMetSC -v <path/to/extracted/singlecelldata>:/mnt/data lazdaria/mapmetsc:v1.0
  ```
- An RStudio server session can then be accessed via your browser at `localhost:8787` with the `username: rstudio` and `password: mapmetsc`.
+ An RStudio server session can then be accessed via your browser at `localhost:8787` with the `username: rstudio` and `password: mapmetsc`. Due to a bug fix for the `testInteractions` function in later versions of imcRtools, we provide another docker image ([lazdaria/mapmetsc_spatial:v1.0](https://hub.docker.com/repository/docker/lazdaria/mapmetsc_spatial/general)) for [spatial analysis](https://github.com/TaschnerMandlGroup/MapMetSC/tree/main/analysis/10_spatial_analysis.Rmd).
 
 To reproduce results from Lazic et al., proceed with the provided [RMD files](https://github.com/TaschnerMandlGroup/MapMetSC/tree/main/analysis). Alternatively, already rendered [html files](https://github.com/TaschnerMandlGroup/MapMetSC/tree/main/docs) are provided to demonstrate each step of the pipeline. 
 

@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data/20240808"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -44,7 +44,6 @@ library(gridGraphics)
 ## Read SPE object
 
 We will first read the spatial experiment object (SPE) generated in the [read data section](#read-data). Please make sure, `path` points to the folder where you stored the SPE object.
-
 
 ```{r read-steinbock}
 
@@ -148,11 +147,11 @@ Heatmap(mean_t,
         )
 ```
 
-We can see that cluster 30 represents cells that swam off (DAPI expression without IMC marker expression).
-To be sure that we only exclude cells that are really not present on the IMC channels, we will identify the samples with the highest number of cells from clsuter 11.
+We can see that cluster 11 represents cells that swam off (DAPI expression without IMC marker expression).
+To be sure that we only exclude cells that are really not present on the IMC channels, we will identify the samples with the highest number of cells from cluster 11.
 
 ```{r sanity-check}
-c <- "30"
+c <- "11"
 mat <- t(mat)
 
 data <- data.frame(sample=colnames(mat), clusters)
@@ -175,14 +174,14 @@ Sample `r max_sample` has the highest number of cells from cluster 11. For a las
 
 ```{r sanity-check-2, fig.show='hide'}
 
-masks <- loadImages(file.path(params$input, "masks", paste0(max_sample, ".tif")), as.is = TRUE)
-img <- loadImages(file.path(params$input, "img", paste0(max_sample, ".tif")))
+masks <- loadImages(file.path(params$input, "MapMetIP_ProcessedDataset/masks", paste0(max_sample, ".tif")), as.is = TRUE)
+img <- loadImages(file.path(params$input, "MapMetIP_ProcessedDataset/img", paste0(max_sample, ".tif")))
 
 mcols(masks) <- DataFrame(sample_id = names(masks))
 mcols(img) <- DataFrame(sample_id = names(img))
 channelNames(img) <- rownames(spe)[1:44]
 
-c = 30
+c = 11
 tmp <- spe[,spe$sample_id == max_sample]
 tmp$lost_cell <- "no"
 tmp[,tmp$pg_clusters_lostcells==c]$lost_cell <- "yes"

@@ -11,7 +11,7 @@
 
 <meta name="author" content="LazDaria" />
 
-<meta name="date" content="2024-03-31" />
+<meta name="date" content="2024-08-11" />
 
 <title>Differential abundance between clinical conditions in diagnostic bone marrow samples</title>
 
@@ -355,7 +355,7 @@ div.tocify {
 <h1 class="title toc-ignore">Differential abundance between clinical
 conditions in diagnostic bone marrow samples</h1>
 <h4 class="author">LazDaria</h4>
-<h4 class="date">2024-03-31</h4>
+<h4 class="date">2024-08-11</h4>
 
 </div>
 
@@ -384,7 +384,7 @@ aria-hidden="true"></span> </a>
 <div class="tab-content">
 <div id="summary" class="tab-pane fade in active">
 <p>
-<strong>Last updated:</strong> 2024-03-31
+<strong>Last updated:</strong> 2024-08-11
 </p>
 <p>
 <strong>Checks:</strong> <span
@@ -422,10 +422,10 @@ changes </a>
 <div id="strongRMarkdownfilestronguncommittedchanges"
 class="panel-collapse collapse">
 <div class="panel-body">
-<p>The R Markdown is untracked by Git. To know which version of the R
-Markdown file created these results, you’ll want to first commit it to
-the Git repo. If you’re still working on the analysis, you can ignore
-this warning. When you’re finished, you can run
+<p>The R Markdown file has unstaged changes. To know which version of
+the R Markdown file created these results, you’ll want to first commit
+it to the Git repo. If you’re still working on the analysis, you can
+ignore this warning. When you’re finished, you can run
 <code>wflow_publish</code> to commit the R Markdown file and build the
 HTML.</p>
 </div>
@@ -518,15 +518,15 @@ project makes it easier to run your code on other machines.</p>
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettree15fd37f46250c1df9fd9e521941d0bf373ed8627targetblank15fd37fa">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMetSCtreeb8e7cb886271b1db2e7f2e68e3b61637d8735921targetblankb8e7cb8a">
 <span class="glyphicon glyphicon-ok text-success"
 aria-hidden="true"></span> <strong>Repository version:</strong>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/15fd37f46250c1df9fd9e521941d0bf373ed8627" target="_blank">15fd37f</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/tree/b8e7cb886271b1db2e7f2e68e3b61637d8735921" target="_blank">b8e7cb8</a>
 </a>
 </p>
 </div>
 <div
-id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettree15fd37f46250c1df9fd9e521941d0bf373ed8627targetblank15fd37fa"
+id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMetSCtreeb8e7cb886271b1db2e7f2e68e3b61637d8735921targetblankb8e7cb8a"
 class="panel-collapse collapse">
 <div class="panel-body">
 <p>
@@ -536,7 +536,7 @@ reproducibility.
 </p>
 <p>
 The results in this page were generated with repository version
-<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/15fd37f46250c1df9fd9e521941d0bf373ed8627" target="_blank">15fd37f</a>.
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/tree/b8e7cb886271b1db2e7f2e68e3b61637d8735921" target="_blank">b8e7cb8</a>.
 See the <em>Past versions</em> tab to see a history of the changes made
 to the R Markdown and HTML files.
 </p>
@@ -550,14 +550,23 @@ depends on. Below is the status of the Git repository when the results
 were generated:
 </p>
 <pre><code>
-Untracked files:
-    Untracked:  analysis/08_BM_DE_DA.Rmd
-    Untracked:  analysis/08_BM_DE_cellularcomm.Rmd
-
 Unstaged changes:
+    Modified:   analysis/01_read_data.Rmd
+    Modified:   analysis/02_QC_1.Rmd
+    Modified:   analysis/03_QC_2.Rmd
+    Modified:   analysis/04_phenotyping.Rmd
+    Modified:   analysis/05_correlation_Fetahu.Rmd
+    Modified:   analysis/05_correlation_Jansky.Rmd
+    Modified:   analysis/05_correlation_Lee.Rmd
+    Modified:   analysis/06_PT_DE_DA.Rmd
     Modified:   analysis/06_PT_DE_cellularcomm.Rmd
     Modified:   analysis/07_BM_CRTLvsINF_DA.Rmd
     Modified:   analysis/07_PTvsBM_DA.Rmd
+    Modified:   analysis/08_BM_DE_DA.Rmd
+    Modified:   analysis/08_BM_DE_cellularcomm.Rmd
+    Modified:   analysis/09_BM_TH_DA-paired.Rmd
+    Modified:   analysis/09_BM_TH_DA.Rmd
+    Modified:   analysis/09_BM_TH_cellularcomm.Rmd
 
 </code></pre>
 <p>
@@ -572,10 +581,74 @@ have uncommitted changes.
 <hr>
 </div>
 <div id="versions" class="tab-pane fade">
+
 <p>
-There are no past versions. Publish this analysis with
-<code>wflow_publish()</code> to start tracking its development.
+These are the previous versions of the repository in which changes were
+made to the R Markdown (<code>analysis/08_BM_DE_DA.Rmd</code>) and HTML
+(<code>docs/08_BM_DE_DA.html</code>) files. If you’ve configured a
+remote Git repository (see <code>?wflow_git_remote</code>), click on the
+hyperlinks in the table below to view the files as they were in that
+past version.
 </p>
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+File
+</th>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+<th>
+Message
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/edd6f9efc7464d9ea4f7abf52e3d2b0b8438de6f/analysis/08_BM_DE_DA.Rmd" target="_blank">edd6f9e</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-31
+</td>
+<td>
+Figure 5+6
+</td>
+</tr>
+<tr>
+<td>
+html
+</td>
+<td>
+<a href="https://rawcdn.githack.com/TaschnerMandlGroup/MapMetSC/edd6f9efc7464d9ea4f7abf52e3d2b0b8438de6f/docs/08_BM_DE_DA.html" target="_blank">edd6f9e</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-31
+</td>
+<td>
+Figure 5+6
+</td>
+</tr>
+</tbody>
+</table>
+</div>
 <hr>
 </div>
 </div>
@@ -758,7 +831,7 @@ sce$mna &lt;- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna &lt;- recode(sce$mna, `1` = &#39;MNA&#39;, `2` = &#39;het&#39;, `0` = &#39;nMNA&#39;, `9` = &#39;unknown&#39;)
 sce$mna &lt;- as.factor(mna)
 
-sce$patient &lt;- factor(spe[keep_rows, keep_cols]$study_id)
+sce$patient &lt;- factor(spe[keep_rows, keep_cols]$patient_id)
 sce$fm_id &lt;- spe[keep_rows, keep_cols]$fm_id
 sce$tissue &lt;- factor(spe[keep_rows, keep_cols]$tissue)
 
@@ -804,8 +877,45 @@ p &lt;- plotAbundances(sce, k = &quot;celltype&quot;, by = &quot;sample&quot;, c
                     linkage=&quot;ward.D&quot;, distance=&quot;manhattan&quot;) 
 
 p</code></pre>
-<p><img src="figure/08_BM_DE_DA.Rmd/cohort-overview-1.png" width="960" style="display: block; margin: auto;" />
-We save the order of the clustered samples to be able to plot
+<p><img src="figure/08_BM_DE_DA.Rmd/cohort-overview-1.png" width="960" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-cohort-overview-1">
+Past versions of cohort-overview-1.png
+</button>
+</p>
+<div id="fig-cohort-overview-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/edd6f9efc7464d9ea4f7abf52e3d2b0b8438de6f/docs/figure/08_BM_DE_DA.Rmd/cohort-overview-1.png" target="_blank">edd6f9e</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-31
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>We save the order of the clustered samples to be able to plot
 corresponding metadata.</p>
 <pre class="r"><code>condition &lt;- levels(sce$condition)
 clustered_samples &lt;- list()
@@ -890,6 +1000,43 @@ plot_list[[d]] &lt;- ggboxplot(df, x = &quot;condition&quot;, y = d,
 
 do.call(&quot;grid.arrange&quot;, c(plot_list, ncol=3))</code></pre>
 <p><img src="figure/08_BM_DE_DA.Rmd/plot-metadata-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-plot-metadata-1">
+Past versions of plot-metadata-1.png
+</button>
+</p>
+<div id="fig-plot-metadata-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/edd6f9efc7464d9ea4f7abf52e3d2b0b8438de6f/docs/figure/08_BM_DE_DA.Rmd/plot-metadata-1.png" target="_blank">edd6f9e</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-31
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 </div>
 <div id="differential-abundance-analysis" class="section level2">
 <h2>Differential abundance analysis</h2>
@@ -1011,6 +1158,43 @@ for(i in 1:length(unique(p$data$cluster_id))){
 
 grid.arrange(grobs = plot_list_fc, ncol = 5)</code></pre>
 <p><img src="figure/08_BM_DE_DA.Rmd/visualize-da-1.png" width="1152" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-visualize-da-1">
+Past versions of visualize-da-1.png
+</button>
+</p>
+<div id="fig-visualize-da-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/edd6f9efc7464d9ea4f7abf52e3d2b0b8438de6f/docs/figure/08_BM_DE_DA.Rmd/visualize-da-1.png" target="_blank">edd6f9e</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-31
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <pre class="r"><code>df &lt;- res[, c(&quot;logFC&quot;, &quot;p_adj&quot;)]
 df$p_adj_signif &lt;- stars.pval(df$p_adj)
 df$p_adj_signif[df$p_adj_signif==&quot; &quot;] &lt;- &quot;ns&quot;
@@ -1028,6 +1212,43 @@ p1 &lt;- ggplot(df, aes(fill=cluster, y=logFC, x=cluster)) +
   
 p1</code></pre>
 <p><img src="figure/08_BM_DE_DA.Rmd/barplot-logFC-1.png" width="480" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-barplot-logFC-1">
+Past versions of barplot-logFC-1.png
+</button>
+</p>
+<div id="fig-barplot-logFC-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/edd6f9efc7464d9ea4f7abf52e3d2b0b8438de6f/docs/figure/08_BM_DE_DA.Rmd/barplot-logFC-1.png" target="_blank">edd6f9e</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-31
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 </div>
 <div id="session-info" class="section level2">
 <h2>Session Info</h2>
@@ -1066,95 +1287,93 @@ other attached packages:
 [15] GenomicRanges_1.48.0        GenomeInfoDb_1.32.4        
 [17] IRanges_2.30.1              S4Vectors_0.34.0           
 [19] BiocGenerics_0.42.0         MatrixGenerics_1.8.1       
-[21] matrixStats_1.1.0           workflowr_1.7.1            
+[21] matrixStats_1.1.0          
 
 loaded via a namespace (and not attached):
-  [1] scattermore_1.2             flowWorkspace_4.8.0        
-  [3] R.methodsS3_1.8.2           knitr_1.45                 
-  [5] irlba_2.3.5.1               multcomp_1.4-25            
-  [7] DelayedArray_0.22.0         R.utils_2.12.3             
-  [9] data.table_1.14.10          RCurl_1.98-1.14            
- [11] doParallel_1.0.17           generics_0.1.3             
- [13] flowCore_2.8.0              ScaledMatrix_1.4.1         
- [15] callr_3.7.3                 cowplot_1.1.2              
- [17] TH.data_1.1-2               ggpointdensity_0.1.0       
- [19] xml2_1.3.6                  httpuv_1.6.13              
- [21] viridis_0.6.4               xfun_0.41                  
- [23] jquerylib_0.1.4             evaluate_0.23              
- [25] promises_1.2.1              fansi_1.0.6                
- [27] Rgraphviz_2.40.0            igraph_1.6.0               
- [29] DBI_1.2.1                   purrr_1.0.2                
- [31] ggcyto_1.24.1               ggnewscale_0.4.9           
- [33] backports_1.4.1             cytolib_2.8.0              
- [35] RcppParallel_5.1.7          deldir_2.0-2               
- [37] sparseMatrixStats_1.8.0     vctrs_0.6.5                
- [39] abind_1.4-5                 cachem_1.0.8               
- [41] withr_3.0.0                 ggforce_0.4.1              
- [43] aws.signature_0.6.0         cluster_2.1.3              
- [45] crayon_1.5.2                drc_3.0-1                  
- [47] edgeR_3.38.4                pkgconfig_2.0.3            
- [49] labeling_0.4.3              tweenr_2.0.2               
- [51] nlme_3.1-157                vipor_0.4.7                
- [53] rlang_1.1.3                 lifecycle_1.0.4            
- [55] sandwich_3.1-0              rsvd_1.0.5                 
- [57] rprojroot_2.0.4             polyclip_1.10-6            
- [59] graph_1.74.0                Matrix_1.6-5               
- [61] carData_3.0-5               Rhdf5lib_1.18.2            
- [63] boot_1.3-28                 zoo_1.8-12                 
- [65] base64enc_0.1-3             beeswarm_0.4.0             
- [67] whisker_0.4.1               ggridges_0.5.5             
- [69] GlobalOptions_0.1.2         processx_3.8.3             
- [71] pheatmap_1.0.12             png_0.1-8                  
- [73] viridisLite_0.4.2           rjson_0.2.21               
- [75] bitops_1.0-7                getPass_0.2-4              
- [77] R.oo_1.25.0                 ConsensusClusterPlus_1.60.0
- [79] rhdf5filters_1.8.0          DelayedMatrixStats_1.18.2  
- [81] shape_1.4.6                 stringr_1.5.1              
- [83] jpeg_0.1-10                 ggsignif_0.6.4             
- [85] aws.s3_0.3.21               beachmat_2.12.0            
- [87] scales_1.3.0                magrittr_2.0.3             
- [89] plyr_1.8.9                  hexbin_1.28.3              
- [91] zlibbioc_1.42.0             compiler_4.2.0             
- [93] dqrng_0.3.2                 RColorBrewer_1.1-3         
- [95] plotrix_3.8-4               clue_0.3-65                
- [97] lme4_1.1-35.1               cli_3.6.2                  
- [99] XVector_0.36.0              ncdfFlow_2.42.1            
-[101] ps_1.7.6                    FlowSOM_2.4.0              
-[103] MASS_7.3-56                 tidyselect_1.2.0           
-[105] stringi_1.8.3               RProtoBufLib_2.8.0         
-[107] highr_0.10                  yaml_2.3.8                 
-[109] BiocSingular_1.12.0         locfit_1.5-9.8             
-[111] latticeExtra_0.6-30         ggrepel_0.9.5              
-[113] grid_4.2.0                  sass_0.4.8                 
-[115] tools_4.2.0                 parallel_4.2.0             
-[117] CytoML_2.8.0                circlize_0.4.15            
-[119] rstudioapi_0.15.0           foreach_1.5.2              
-[121] git2r_0.33.0                farver_2.1.1               
-[123] Rtsne_0.17                  DropletUtils_1.16.0        
-[125] digest_0.6.34               Rcpp_1.0.12                
-[127] car_3.1-2                   broom_1.0.5                
-[129] scuttle_1.6.3               later_1.3.2                
-[131] httr_1.4.7                  ComplexHeatmap_2.12.1      
-[133] colorspace_2.1-0            XML_3.99-0.16              
-[135] fs_1.6.3                    splines_4.2.0              
-[137] RBGL_1.72.0                 scater_1.24.0              
-[139] jsonlite_1.8.8              nloptr_2.0.3               
-[141] R6_2.5.1                    pillar_1.9.0               
-[143] htmltools_0.5.7             nnls_1.5                   
-[145] glue_1.7.0                  fastmap_1.1.1              
-[147] minqa_1.2.6                 BiocParallel_1.30.4        
-[149] BiocNeighbors_1.14.0        codetools_0.2-18           
-[151] mvtnorm_1.2-4               utf8_1.2.4                 
-[153] lattice_0.20-45             bslib_0.6.1                
-[155] tibble_3.2.1                curl_5.2.0                 
-[157] ggbeeswarm_0.7.2            colorRamps_2.3.1           
-[159] magick_2.8.2                interp_1.1-5               
-[161] survival_3.3-1              limma_3.52.4               
-[163] rmarkdown_2.25              munsell_0.5.0              
-[165] GetoptLong_1.0.5            rhdf5_2.40.0               
-[167] GenomeInfoDbData_1.2.8      iterators_1.0.14           
-[169] HDF5Array_1.24.2            reshape2_1.4.4             
-[171] gtable_0.3.4               </code></pre>
+  [1] utf8_1.2.4                  R.utils_2.12.3             
+  [3] lme4_1.1-35.1               tidyselect_1.2.0           
+  [5] grid_4.2.0                  BiocParallel_1.30.4        
+  [7] Rtsne_0.17                  DropletUtils_1.16.0        
+  [9] aws.signature_0.6.0         flowCore_2.8.0             
+ [11] munsell_0.5.0               ScaledMatrix_1.4.1         
+ [13] codetools_0.2-18            interp_1.1-5               
+ [15] withr_3.0.0                 colorspace_2.1-0           
+ [17] highr_0.10                  knitr_1.45                 
+ [19] rstudioapi_0.15.0           ggsignif_0.6.4             
+ [21] labeling_0.4.3              git2r_0.33.0               
+ [23] GenomeInfoDbData_1.2.8      polyclip_1.10-6            
+ [25] farver_2.1.1                pheatmap_1.0.12            
+ [27] rhdf5_2.40.0                flowWorkspace_4.8.0        
+ [29] rprojroot_2.0.4             vctrs_0.6.5                
+ [31] generics_0.1.3              TH.data_1.1-2              
+ [33] xfun_0.41                   R6_2.5.1                   
+ [35] doParallel_1.0.17           ggbeeswarm_0.7.2           
+ [37] clue_0.3-65                 rsvd_1.0.5                 
+ [39] locfit_1.5-9.8              rhdf5filters_1.8.0         
+ [41] bitops_1.0-7                cachem_1.0.8               
+ [43] DelayedArray_0.22.0         promises_1.2.1             
+ [45] scales_1.3.0                multcomp_1.4-25            
+ [47] beeswarm_0.4.0              gtable_0.3.4               
+ [49] beachmat_2.12.0             RProtoBufLib_2.8.0         
+ [51] sandwich_3.1-0              workflowr_1.7.1            
+ [53] rlang_1.1.3                 GlobalOptions_0.1.2        
+ [55] splines_4.2.0               hexbin_1.28.3              
+ [57] broom_1.0.5                 yaml_2.3.8                 
+ [59] reshape2_1.4.4              abind_1.4-5                
+ [61] backports_1.4.1             httpuv_1.6.13              
+ [63] RBGL_1.72.0                 tools_4.2.0                
+ [65] jquerylib_0.1.4             RColorBrewer_1.1-3         
+ [67] ggridges_0.5.5              Rcpp_1.0.12                
+ [69] plyr_1.8.9                  base64enc_0.1-3            
+ [71] sparseMatrixStats_1.8.0     zlibbioc_1.42.0            
+ [73] purrr_1.0.2                 RCurl_1.98-1.14            
+ [75] FlowSOM_2.4.0               deldir_2.0-2               
+ [77] viridis_0.6.4               GetoptLong_1.0.5           
+ [79] cowplot_1.1.2               zoo_1.8-12                 
+ [81] ggrepel_0.9.5               cluster_2.1.3              
+ [83] colorRamps_2.3.1            fs_1.6.3                   
+ [85] magrittr_2.0.3              magick_2.8.2               
+ [87] ncdfFlow_2.42.1             data.table_1.14.10         
+ [89] scattermore_1.2             circlize_0.4.15            
+ [91] mvtnorm_1.2-4               whisker_0.4.1              
+ [93] ggnewscale_0.4.9            evaluate_0.23              
+ [95] XML_3.99-0.16               jpeg_0.1-10                
+ [97] shape_1.4.6                 ggcyto_1.24.1              
+ [99] compiler_4.2.0              scater_1.24.0              
+[101] tibble_3.2.1                crayon_1.5.2               
+[103] R.oo_1.25.0                 minqa_1.2.6                
+[105] ggpointdensity_0.1.0        htmltools_0.5.7            
+[107] later_1.3.2                 RcppParallel_5.1.7         
+[109] aws.s3_0.3.21               DBI_1.2.1                  
+[111] tweenr_2.0.2                ComplexHeatmap_2.12.1      
+[113] MASS_7.3-56                 boot_1.3-28                
+[115] Matrix_1.6-5                car_3.1-2                  
+[117] cli_3.6.2                   R.methodsS3_1.8.2          
+[119] parallel_4.2.0              igraph_1.6.0               
+[121] pkgconfig_2.0.3             scuttle_1.6.3              
+[123] xml2_1.3.6                  foreach_1.5.2              
+[125] vipor_0.4.7                 bslib_0.6.1                
+[127] dqrng_0.3.2                 XVector_0.36.0             
+[129] drc_3.0-1                   stringr_1.5.1              
+[131] digest_0.6.34               ConsensusClusterPlus_1.60.0
+[133] graph_1.74.0                rmarkdown_2.25             
+[135] edgeR_3.38.4                DelayedMatrixStats_1.18.2  
+[137] curl_5.2.0                  nloptr_2.0.3               
+[139] rjson_0.2.21                nlme_3.1-157               
+[141] lifecycle_1.0.4             jsonlite_1.8.8             
+[143] Rhdf5lib_1.18.2             carData_3.0-5              
+[145] BiocNeighbors_1.14.0        limma_3.52.4               
+[147] viridisLite_0.4.2           fansi_1.0.6                
+[149] pillar_1.9.0                lattice_0.20-45            
+[151] fastmap_1.1.1               httr_1.4.7                 
+[153] plotrix_3.8-4               survival_3.3-1             
+[155] glue_1.7.0                  png_0.1-8                  
+[157] iterators_1.0.14            Rgraphviz_2.40.0           
+[159] HDF5Array_1.24.2            ggforce_0.4.1              
+[161] stringi_1.8.3               sass_0.4.8                 
+[163] nnls_1.5                    BiocSingular_1.12.0        
+[165] CytoML_2.8.0                latticeExtra_0.6-30        
+[167] cytolib_2.8.0               irlba_2.3.5.1              </code></pre>
 </details>
 <br>
 <p>
@@ -1196,95 +1415,93 @@ other attached packages:
 [15] GenomicRanges_1.48.0        GenomeInfoDb_1.32.4        
 [17] IRanges_2.30.1              S4Vectors_0.34.0           
 [19] BiocGenerics_0.42.0         MatrixGenerics_1.8.1       
-[21] matrixStats_1.1.0           workflowr_1.7.1            
+[21] matrixStats_1.1.0          
 
 loaded via a namespace (and not attached):
-  [1] scattermore_1.2             flowWorkspace_4.8.0        
-  [3] R.methodsS3_1.8.2           knitr_1.45                 
-  [5] irlba_2.3.5.1               multcomp_1.4-25            
-  [7] DelayedArray_0.22.0         R.utils_2.12.3             
-  [9] data.table_1.14.10          RCurl_1.98-1.14            
- [11] doParallel_1.0.17           generics_0.1.3             
- [13] flowCore_2.8.0              ScaledMatrix_1.4.1         
- [15] callr_3.7.3                 cowplot_1.1.2              
- [17] TH.data_1.1-2               ggpointdensity_0.1.0       
- [19] xml2_1.3.6                  httpuv_1.6.13              
- [21] viridis_0.6.4               xfun_0.41                  
- [23] jquerylib_0.1.4             evaluate_0.23              
- [25] promises_1.2.1              fansi_1.0.6                
- [27] Rgraphviz_2.40.0            igraph_1.6.0               
- [29] DBI_1.2.1                   purrr_1.0.2                
- [31] ggcyto_1.24.1               ggnewscale_0.4.9           
- [33] backports_1.4.1             cytolib_2.8.0              
- [35] RcppParallel_5.1.7          deldir_2.0-2               
- [37] sparseMatrixStats_1.8.0     vctrs_0.6.5                
- [39] abind_1.4-5                 cachem_1.0.8               
- [41] withr_3.0.0                 ggforce_0.4.1              
- [43] aws.signature_0.6.0         cluster_2.1.3              
- [45] crayon_1.5.2                drc_3.0-1                  
- [47] edgeR_3.38.4                pkgconfig_2.0.3            
- [49] labeling_0.4.3              tweenr_2.0.2               
- [51] nlme_3.1-157                vipor_0.4.7                
- [53] rlang_1.1.3                 lifecycle_1.0.4            
- [55] sandwich_3.1-0              rsvd_1.0.5                 
- [57] rprojroot_2.0.4             polyclip_1.10-6            
- [59] graph_1.74.0                Matrix_1.6-5               
- [61] carData_3.0-5               Rhdf5lib_1.18.2            
- [63] boot_1.3-28                 zoo_1.8-12                 
- [65] base64enc_0.1-3             beeswarm_0.4.0             
- [67] whisker_0.4.1               ggridges_0.5.5             
- [69] GlobalOptions_0.1.2         processx_3.8.3             
- [71] pheatmap_1.0.12             png_0.1-8                  
- [73] viridisLite_0.4.2           rjson_0.2.21               
- [75] bitops_1.0-7                getPass_0.2-4              
- [77] R.oo_1.25.0                 ConsensusClusterPlus_1.60.0
- [79] rhdf5filters_1.8.0          DelayedMatrixStats_1.18.2  
- [81] shape_1.4.6                 stringr_1.5.1              
- [83] jpeg_0.1-10                 ggsignif_0.6.4             
- [85] aws.s3_0.3.21               beachmat_2.12.0            
- [87] scales_1.3.0                magrittr_2.0.3             
- [89] plyr_1.8.9                  hexbin_1.28.3              
- [91] zlibbioc_1.42.0             compiler_4.2.0             
- [93] dqrng_0.3.2                 RColorBrewer_1.1-3         
- [95] plotrix_3.8-4               clue_0.3-65                
- [97] lme4_1.1-35.1               cli_3.6.2                  
- [99] XVector_0.36.0              ncdfFlow_2.42.1            
-[101] ps_1.7.6                    FlowSOM_2.4.0              
-[103] MASS_7.3-56                 tidyselect_1.2.0           
-[105] stringi_1.8.3               RProtoBufLib_2.8.0         
-[107] highr_0.10                  yaml_2.3.8                 
-[109] BiocSingular_1.12.0         locfit_1.5-9.8             
-[111] latticeExtra_0.6-30         ggrepel_0.9.5              
-[113] grid_4.2.0                  sass_0.4.8                 
-[115] tools_4.2.0                 parallel_4.2.0             
-[117] CytoML_2.8.0                circlize_0.4.15            
-[119] rstudioapi_0.15.0           foreach_1.5.2              
-[121] git2r_0.33.0                farver_2.1.1               
-[123] Rtsne_0.17                  DropletUtils_1.16.0        
-[125] digest_0.6.34               Rcpp_1.0.12                
-[127] car_3.1-2                   broom_1.0.5                
-[129] scuttle_1.6.3               later_1.3.2                
-[131] httr_1.4.7                  ComplexHeatmap_2.12.1      
-[133] colorspace_2.1-0            XML_3.99-0.16              
-[135] fs_1.6.3                    splines_4.2.0              
-[137] RBGL_1.72.0                 scater_1.24.0              
-[139] jsonlite_1.8.8              nloptr_2.0.3               
-[141] R6_2.5.1                    pillar_1.9.0               
-[143] htmltools_0.5.7             nnls_1.5                   
-[145] glue_1.7.0                  fastmap_1.1.1              
-[147] minqa_1.2.6                 BiocParallel_1.30.4        
-[149] BiocNeighbors_1.14.0        codetools_0.2-18           
-[151] mvtnorm_1.2-4               utf8_1.2.4                 
-[153] lattice_0.20-45             bslib_0.6.1                
-[155] tibble_3.2.1                curl_5.2.0                 
-[157] ggbeeswarm_0.7.2            colorRamps_2.3.1           
-[159] magick_2.8.2                interp_1.1-5               
-[161] survival_3.3-1              limma_3.52.4               
-[163] rmarkdown_2.25              munsell_0.5.0              
-[165] GetoptLong_1.0.5            rhdf5_2.40.0               
-[167] GenomeInfoDbData_1.2.8      iterators_1.0.14           
-[169] HDF5Array_1.24.2            reshape2_1.4.4             
-[171] gtable_0.3.4               </code></pre>
+  [1] utf8_1.2.4                  R.utils_2.12.3             
+  [3] lme4_1.1-35.1               tidyselect_1.2.0           
+  [5] grid_4.2.0                  BiocParallel_1.30.4        
+  [7] Rtsne_0.17                  DropletUtils_1.16.0        
+  [9] aws.signature_0.6.0         flowCore_2.8.0             
+ [11] munsell_0.5.0               ScaledMatrix_1.4.1         
+ [13] codetools_0.2-18            interp_1.1-5               
+ [15] withr_3.0.0                 colorspace_2.1-0           
+ [17] highr_0.10                  knitr_1.45                 
+ [19] rstudioapi_0.15.0           ggsignif_0.6.4             
+ [21] labeling_0.4.3              git2r_0.33.0               
+ [23] GenomeInfoDbData_1.2.8      polyclip_1.10-6            
+ [25] farver_2.1.1                pheatmap_1.0.12            
+ [27] rhdf5_2.40.0                flowWorkspace_4.8.0        
+ [29] rprojroot_2.0.4             vctrs_0.6.5                
+ [31] generics_0.1.3              TH.data_1.1-2              
+ [33] xfun_0.41                   R6_2.5.1                   
+ [35] doParallel_1.0.17           ggbeeswarm_0.7.2           
+ [37] clue_0.3-65                 rsvd_1.0.5                 
+ [39] locfit_1.5-9.8              rhdf5filters_1.8.0         
+ [41] bitops_1.0-7                cachem_1.0.8               
+ [43] DelayedArray_0.22.0         promises_1.2.1             
+ [45] scales_1.3.0                multcomp_1.4-25            
+ [47] beeswarm_0.4.0              gtable_0.3.4               
+ [49] beachmat_2.12.0             RProtoBufLib_2.8.0         
+ [51] sandwich_3.1-0              workflowr_1.7.1            
+ [53] rlang_1.1.3                 GlobalOptions_0.1.2        
+ [55] splines_4.2.0               hexbin_1.28.3              
+ [57] broom_1.0.5                 yaml_2.3.8                 
+ [59] reshape2_1.4.4              abind_1.4-5                
+ [61] backports_1.4.1             httpuv_1.6.13              
+ [63] RBGL_1.72.0                 tools_4.2.0                
+ [65] jquerylib_0.1.4             RColorBrewer_1.1-3         
+ [67] ggridges_0.5.5              Rcpp_1.0.12                
+ [69] plyr_1.8.9                  base64enc_0.1-3            
+ [71] sparseMatrixStats_1.8.0     zlibbioc_1.42.0            
+ [73] purrr_1.0.2                 RCurl_1.98-1.14            
+ [75] FlowSOM_2.4.0               deldir_2.0-2               
+ [77] viridis_0.6.4               GetoptLong_1.0.5           
+ [79] cowplot_1.1.2               zoo_1.8-12                 
+ [81] ggrepel_0.9.5               cluster_2.1.3              
+ [83] colorRamps_2.3.1            fs_1.6.3                   
+ [85] magrittr_2.0.3              magick_2.8.2               
+ [87] ncdfFlow_2.42.1             data.table_1.14.10         
+ [89] scattermore_1.2             circlize_0.4.15            
+ [91] mvtnorm_1.2-4               whisker_0.4.1              
+ [93] ggnewscale_0.4.9            evaluate_0.23              
+ [95] XML_3.99-0.16               jpeg_0.1-10                
+ [97] shape_1.4.6                 ggcyto_1.24.1              
+ [99] compiler_4.2.0              scater_1.24.0              
+[101] tibble_3.2.1                crayon_1.5.2               
+[103] R.oo_1.25.0                 minqa_1.2.6                
+[105] ggpointdensity_0.1.0        htmltools_0.5.7            
+[107] later_1.3.2                 RcppParallel_5.1.7         
+[109] aws.s3_0.3.21               DBI_1.2.1                  
+[111] tweenr_2.0.2                ComplexHeatmap_2.12.1      
+[113] MASS_7.3-56                 boot_1.3-28                
+[115] Matrix_1.6-5                car_3.1-2                  
+[117] cli_3.6.2                   R.methodsS3_1.8.2          
+[119] parallel_4.2.0              igraph_1.6.0               
+[121] pkgconfig_2.0.3             scuttle_1.6.3              
+[123] xml2_1.3.6                  foreach_1.5.2              
+[125] vipor_0.4.7                 bslib_0.6.1                
+[127] dqrng_0.3.2                 XVector_0.36.0             
+[129] drc_3.0-1                   stringr_1.5.1              
+[131] digest_0.6.34               ConsensusClusterPlus_1.60.0
+[133] graph_1.74.0                rmarkdown_2.25             
+[135] edgeR_3.38.4                DelayedMatrixStats_1.18.2  
+[137] curl_5.2.0                  nloptr_2.0.3               
+[139] rjson_0.2.21                nlme_3.1-157               
+[141] lifecycle_1.0.4             jsonlite_1.8.8             
+[143] Rhdf5lib_1.18.2             carData_3.0-5              
+[145] BiocNeighbors_1.14.0        limma_3.52.4               
+[147] viridisLite_0.4.2           fansi_1.0.6                
+[149] pillar_1.9.0                lattice_0.20-45            
+[151] fastmap_1.1.1               httr_1.4.7                 
+[153] plotrix_3.8-4               survival_3.3-1             
+[155] glue_1.7.0                  png_0.1-8                  
+[157] iterators_1.0.14            Rgraphviz_2.40.0           
+[159] HDF5Array_1.24.2            ggforce_0.4.1              
+[161] stringi_1.8.3               sass_0.4.8                 
+[163] nnls_1.5                    BiocSingular_1.12.0        
+[165] CytoML_2.8.0                latticeExtra_0.6-30        
+[167] cytolib_2.8.0               irlba_2.3.5.1              </code></pre>
 </div>
 </div>
 </div>

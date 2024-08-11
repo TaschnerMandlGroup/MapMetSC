@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -19,6 +19,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 # Sample overview - primary versus metastatic site {#pt-bm}
+
 Next, to understand how metastasis affects tumor cell diversity, we investigate the tumor cellular composition in PT samples as compared to BM samples. 
 
 ## Load libraries
@@ -45,6 +46,7 @@ library(gtools)
 </details>
 
 ## Read data
+
 First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping). 
 
 ```{r read-data}
@@ -79,7 +81,7 @@ sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna <- recode(sce$mna, `1` = 'MNA', `2` = 'het', `0` = 'nMNA', `9` = 'unknown')
 sce$mna <- as.factor(mna)
 
-sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$patient <- factor(spe[keep_rows, keep_cols]$patient_id)
 sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 
@@ -146,6 +148,7 @@ clustered_samples_long <- as.character(clustered_samples_long)
 ## Compute tumor heterogeneity
 
 We compute tumor intra-sample heterogeneity.
+
 ```{r heterogeneity}
 prop <- p$data %>%
   select(-condition) %>%
@@ -164,7 +167,9 @@ tumor_het <- apply(tumor_prop,2, entropy)
 ```
 
 ## Plot metadata 
-Then we plot intra-sample heterogeneity together with sample-specific metadata for the clustered sammples.
+
+Then we plot intra-sample heterogeneity together with sample-specific metadata for the clustered samples.
+
 ```{r plot-metadata}
 #access sample-level data
 sample_summary <- as.data.frame(colData(sce)) %>%
@@ -201,6 +206,7 @@ columnAnnotation(MYCN_amp=sample_summary$mna, col=list(MYCN_amp=col_code)) %v%
 # Differential abundance analysis - PT vs BM 
 
 ## Prepare data
+
 We first prepare data for DA analysis using the `diffcyt` package. 
 
 ```{r prepare-data}
@@ -263,6 +269,7 @@ rowData(res_DA)[rowData(res_DA)$p_adj<FDR_cutoff,]
 res<- data.frame(rowData(res_DA))
 ```
 ## Visualization of DA results
+
 Finally, we visualize DA results in boxplots.
 
 ```{r visualize-da, fig.width=12, fig.height=8}

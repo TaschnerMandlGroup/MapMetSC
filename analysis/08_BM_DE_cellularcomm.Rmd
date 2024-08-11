@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -19,6 +19,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 # Identifying cellular communities in diagnostic bone marrow samples {#bm-dx}
+
 We next explore the contribution of celltypes to disease progression. Therefore, we perform hierarchical clustering of cell composition profiles in bone marrow samples.
 
 ## Load libraries
@@ -44,6 +45,7 @@ library(edgeR)
 </details>
 
 ## Read data
+
 First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping). 
 
 ```{r read-data}
@@ -70,7 +72,7 @@ sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna <- recode(sce$mna, `1` = 'MNA', `2` = 'het', `0` = 'nMNA', `9` = 'unknown')
 sce$mna <- as.factor(mna)
 
-sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$patient <- factor(spe[keep_rows, keep_cols]$patient_id)
 sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 
@@ -87,6 +89,7 @@ sce$condition <- 'na'
 # Add celltype information to metadata
 metadata(sce)$cluster_codes <- data.frame(celltype = factor(spe[keep_rows, keep_cols]$celltype_ordered))
 ```
+
 ## Cluster cellular communities
 
 Next, we cluster proportions of tumor cell types across all diagnostic BM samples (instead of conditions) and plot the result in barplots:
@@ -132,7 +135,9 @@ cellular_communities$community_cluster <- recode(cellular_communities$community_
 ```
 
 ## Plot TME cellular profiles 
+
 We will then plot the cellular profiles of the TME for these samples. 
+
 ```{r plot-TME, fig.width=13, fig.height=6}
 #order samples based on above clustering
 sce$sample_id <- factor(sce$sample_id, levels=clustered_samples)
@@ -147,6 +152,7 @@ p_ME
 ## Compute tumor and TME heterogeneity
 
 We compute tumor and TME intra-sample heterogeneity.
+
 ```{r heterogeneity}
 proportions <- plotAbundances(sce, k = "celltype", by = "sample")
 prop <- proportions$data %>%
@@ -169,7 +175,9 @@ tumor_het <- apply(tumor_prop,2, entropy)
 ```
 
 ## Plot metadata 
+
 Then we plot intra-sample heterogeneity together with sample-specific metadata for the clustered sammples.
+
 ```{r plot-metadata}
 #access sample-level data
 sample_summary <- as.data.frame(colData(sce)) %>%
@@ -208,6 +216,7 @@ columnAnnotation(MYCN_amp=sample_summary$mna, col=list(MYCN_amp=col_code)) %v%
 ## Plot contiunous and discrete summary statistics
 
 We then plot summary statistics of continuous and discrete metadata in boxplots and piecharts, respectively.
+
 ```{r piecharts, fig.height=4, fig.width=5}
 sample_summary[rownames(cellular_communities),"community_clusters"] <- cellular_communities$community_cluster
 
@@ -277,6 +286,7 @@ do.call("grid.arrange", c(plot_list, ncol=3))
 ## Plot metaclusters
 
 Finally, we plot the proportions of metaclusters in the clustered samples.
+
 ```{r plot-metaclusters, fig.width=11, figh.height=5}
 sce_tmp <- sce
 sce_tmp$cluster_id <- sce_tmp$metacluster
@@ -315,7 +325,7 @@ sce_comp$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna <- recode(sce_comp$mna, `1` = 'MNA', `2` = 'het', `0` = 'nMNA', `9` = 'unknown')
 sce_comp$mna <- as.factor(mna)
 
-sce_comp$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce_comp$patient <- factor(spe[keep_rows, keep_cols]$patient_id)
 sce_comp$fm_id <- spe[keep_rows, keep_cols]$fm_id
 sce_comp$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 
@@ -354,6 +364,7 @@ rowData(sce_comp)$marker_class <- ifelse(rownames(sce_comp) %in% type_markers, "
 ```
 
 ## Prepare data
+
 We first prepare data for DA analysis using the `diffcyt` package. 
 
 ```{r prepare-data}
@@ -421,6 +432,7 @@ for (i in 1:ncol(contrasts)){
 ```
 
 ## Visualization of DA results
+
 Finally, we visualize DA results in boxplots and barplots.
 
 ```{r visualize-da, fig.width=12, fig.height=10}

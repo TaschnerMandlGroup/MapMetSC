@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -19,6 +19,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 # Sample overview - before and after metastasis {#crtl-inf}
+
 Next, to understand how metastasis affects the microenvironment at the metastatic site, we investigate the TME composition in control (non-infiltrated) versus tumor-infiltrated BM samples. 
 
 ## Load libraries
@@ -45,6 +46,7 @@ library(gtools)
 </details>
 
 ## Read data
+
 First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping). 
 
 ```{r read-data}
@@ -55,7 +57,7 @@ We will then transform the SPE object into a catalyst-compatible object.
 
 ```{r catalyst-comp-object}
 keep_rows <- rowData(spe)$use_channel 
-keep_cols <- spe$tissue=="BM" & spe$celltype != "other" & (spe$timepoint=="DE"|spe$timepoint=="") & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal" 
+keep_cols <- spe$tissue=="BM" & spe$celltype != "other" & (spe$timepoint=="DE"|spe$timepoint=="NA") & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal" 
 
 sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, keep_cols], exprs=assay(spe, "counts")[keep_rows, keep_cols]))
 
@@ -74,7 +76,7 @@ sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna <- recode(sce$mna, `1` = 'MNA', `2` = 'het', `0` = 'nMNA', `9` = 'unknown')
 sce$mna <- as.factor(mna)
 
-sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$patient <- factor(spe[keep_rows, keep_cols]$patient_id)
 sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 
@@ -122,7 +124,7 @@ p <- plotAbundances(sce, k = "celltype", by = "sample", col_clust=T, k_pal=metad
 p
 ```
 
-We save the order of the clustered samples to be able to plot corresponding metadata.
+We store the order of the clustered samples to be able to plot corresponding metadata.
 
 ```{r store-order}
 condition <- c("crtl", "inf.")
@@ -136,6 +138,7 @@ clustered_samples <- as.character(clustered_samples)
 ## Compute TME heterogeneity
 
 We compute TME intra-sample heterogeneity.
+
 ```{r heterogeneity}
 prop <- p$data %>%
   select(-condition) %>%
@@ -153,6 +156,7 @@ het <- apply(prop,2, entropy)
 
 ## Plot metadata 
 Then we plot intra-sample heterogeneity together with sample-specific metadata for the clustered samples.
+
 ```{r plot-metadata}
 #access sample-level data
 sample_summary <- as.data.frame(colData(sce)) %>%
@@ -188,6 +192,7 @@ columnAnnotation(MYCN_amp=sample_summary$mna, col=list(MYCN_amp=col_code)) %v%
 ```
 
 ## Plot mean granulocyte roundness per sample
+
 To investigate the shift in granulocyte maturity upon metastasis, we plot the mean granulocyte roundness per sample. 
 
 ```{r granulocyte-roundness, fig.width=4, fig.height=5}
@@ -221,6 +226,7 @@ p
 # Differential abundance analysis - CRTL vs INF
 
 ## Prepare data
+
 We first prepare data for DA analysis using the `diffcyt` package. 
 
 ```{r prepare-data}
@@ -275,6 +281,7 @@ rowData(res_DA)[rowData(res_DA)$p_adj<FDR_cutoff,]
 res<- data.frame(rowData(res_DA))
 ```
 ## Visualization of DA results
+
 Finally, we visualize DA results in boxplots.
 
 ```{r visualize-da, fig.width=12, fig.height=20}

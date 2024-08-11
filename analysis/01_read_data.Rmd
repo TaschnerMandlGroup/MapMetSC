@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data/20240808"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -36,6 +36,7 @@ library(paletteer)
 library(dittoSeq)
 library(readxl)
 library(writexl)
+library(dplyr)
 ```
 </details>
 
@@ -46,7 +47,7 @@ In [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP), we exported singl
 
 
 ```{r read-steinbock}
-path <- params$input
+path <- file.path(params$input, "MapMetIP_ProcessedDataset")
 
 spe_0px <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'), intensities_folder = "intensities-0px",regionprops_folder = "regionprops", graphs_folder=NULL) 
 spe_1px <- read_steinbock(path=path, image_file=NULL, panel_file = file.path(path, 'NB_Panel.csv'), intensities_folder = "intensities-1px",regionprops_folder = "regionprops", graphs_folder=NULL) 
@@ -68,11 +69,11 @@ We set the `colnames` of the object to generate unique identifiers per cell.
 colnames(spe) <- paste0(spe$sample_id, "_", spe$ObjectNumber)
 ```
 
-When then read sample and patient-specific metadata from the metadata file provided on Zenodo [(20240808_Suppl_Table1.xlsx)](10.5281/zenodo.10275924). 
+When then read sample and patient-specific metadata from the metadata file provided on Zenodo [(Supplementary_Tables/20240808_Suppl_Table1.xlsx)](https://doi.org/10.5281/zenodo.13220634). 
 
 ```{r read-metadata}
 
-file_path <- file.path(path, '20240808_Suppl_Table1.xlsx')
+file_path <- file.path(params$input, 'Supplementary_Tables/20240808_Suppl_Table1.xlsx')
 sample_spec_metadata <- read_excel(file_path, sheet = "sample_spec_metadata")
 patient_spec_clinical <- read_excel(file_path, sheet = "patient_spec_clinical")
 patient_spec_genetic <- read_excel(file_path, sheet = "patient_spec_genetic")
@@ -87,7 +88,7 @@ meta <- merged_data %>%
 
 and assign it to the colData slot in our SPE object.
 
-```{r read-metadata}
+```{r add-coldata}
 
 spe$sample <- gsub(spe$sample_id, pattern="([UM]).*", replacement="\\1")
 spe$fm_id <- str_match(spe$sample, "_.*_(.*)_")[,2]  

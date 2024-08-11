@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -19,6 +19,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 # DA analysis between clinical conditions in BM samples {#bm-da}
+
 Herein, we explore differential cell type abundances in tumor and TME.
 
 ## Load libraries
@@ -41,6 +42,7 @@ library(BioQC)
 </details>
 
 ## Read data
+
 First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping). 
 
 ```{r read-data}
@@ -80,7 +82,7 @@ sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna <- recode(sce$mna, `1` = 'MNA', `2` = 'het', `0` = 'nMNA', `9` = 'unknown')
 sce$mna <- as.factor(mna)
 
-sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$patient <- factor(spe[keep_rows, keep_cols]$patient_id)
 sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 
@@ -142,6 +144,7 @@ clustered_samples <- as.character(clustered_samples)
 ## Compute heterogeneity
 
 We compute intra-sample heterogeneity.
+
 ```{r heterogeneity}
 proportions <- plotAbundances(sce, k = "celltype", by = "sample")
 prop <- proportions$data %>%
@@ -162,7 +165,9 @@ het <- apply(prop,2, entropy)
 ```
 
 ## Plot metadata 
+
 Then we plot intra-sample heterogeneity together with sample-specific metadata for the clustered samples.
+
 ```{r plot-metadata}
 #access sample-level data
 sample_summary <- as.data.frame(colData(sce)) %>%
@@ -218,6 +223,7 @@ do.call("grid.arrange", c(plot_list, ncol=3))
 ```
 
 ## Differential abundance analysis
+
 We first prepare data for DA analysis using the `diffcyt` package. 
 
 ```{r prepare-data}
@@ -280,6 +286,7 @@ rowData(res_DA)[rowData(res_DA)$p_adj<FDR_cutoff,]
 res<- data.frame(rowData(res_DA))
 ```
 ## Visualization of DA results
+
 Finally, we visualize DA results in boxplots and barplots showing the logFC.
 
 ```{r visualize-da, fig.width=12, fig.height=10}

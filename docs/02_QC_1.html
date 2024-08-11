@@ -11,7 +11,7 @@
 
 <meta name="author" content="LazDaria" />
 
-<meta name="date" content="2024-03-27" />
+<meta name="date" content="2024-08-11" />
 
 <title>Quality control - Part 1</title>
 
@@ -354,7 +354,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">Quality control - Part 1</h1>
 <h4 class="author">LazDaria</h4>
-<h4 class="date">2024-03-27</h4>
+<h4 class="date">2024-08-11</h4>
 
 </div>
 
@@ -362,7 +362,7 @@ div.tocify {
 <p>
 <button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
 <span class="glyphicon glyphicon-list" aria-hidden="true"></span>
-workflowr <span class="glyphicon glyphicon-ok text-success"
+workflowr <span class="glyphicon glyphicon-exclamation-sign text-danger"
 aria-hidden="true"></span>
 </button>
 </p>
@@ -373,8 +373,8 @@ aria-hidden="true"></span>
 </li>
 <li>
 <a data-toggle="tab" href="#checks"> Checks <span
-class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
-</a>
+class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> </a>
 </li>
 <li>
 <a data-toggle="tab" href="#versions">Past versions</a>
@@ -383,13 +383,13 @@ class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
 <div class="tab-content">
 <div id="summary" class="tab-pane fade in active">
 <p>
-<strong>Last updated:</strong> 2024-03-27
+<strong>Last updated:</strong> 2024-08-11
 </p>
 <p>
 <strong>Checks:</strong> <span
-class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 7
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 6
 <span class="glyphicon glyphicon-exclamation-sign text-danger"
-aria-hidden="true"></span> 0
+aria-hidden="true"></span> 1
 </p>
 <p>
 <strong>Knit directory:</strong> <code>MapMetSC/</code> <span
@@ -412,18 +412,21 @@ versions</em> tab lists the development history.
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguptodate">
-<span class="glyphicon glyphicon-ok text-success"
-aria-hidden="true"></span> <strong>R Markdown file:</strong> up-to-date
-</a>
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguncommittedchanges">
+<span class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> <strong>R Markdown file:</strong> uncommitted
+changes </a>
 </p>
 </div>
-<div id="strongRMarkdownfilestronguptodate"
+<div id="strongRMarkdownfilestronguncommittedchanges"
 class="panel-collapse collapse">
 <div class="panel-body">
-<p>Great! Since the R Markdown file has been committed to the Git
-repository, you know the exact version of the code that produced these
-results.</p>
+<p>The R Markdown file has unstaged changes. To know which version of
+the R Markdown file created these results, you’ll want to first commit
+it to the Git repo. If you’re still working on the analysis, you can
+ignore this warning. When you’re finished, you can run
+<code>wflow_publish</code> to commit the R Markdown file and build the
+HTML.</p>
 </div>
 </div>
 </div>
@@ -514,15 +517,15 @@ project makes it easier to run your code on other machines.</p>
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettreeb1b42ebeb24eb9cb0b628f746f029e3e474bac7ctargetblankb1b42eba">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMetSCtreeb8e7cb886271b1db2e7f2e68e3b61637d8735921targetblankb8e7cb8a">
 <span class="glyphicon glyphicon-ok text-success"
 aria-hidden="true"></span> <strong>Repository version:</strong>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/b1b42ebeb24eb9cb0b628f746f029e3e474bac7c" target="_blank">b1b42eb</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/tree/b8e7cb886271b1db2e7f2e68e3b61637d8735921" target="_blank">b8e7cb8</a>
 </a>
 </p>
 </div>
 <div
-id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMettreeb1b42ebeb24eb9cb0b628f746f029e3e474bac7ctargetblankb1b42eba"
+id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMetSCtreeb8e7cb886271b1db2e7f2e68e3b61637d8735921targetblankb8e7cb8a"
 class="panel-collapse collapse">
 <div class="panel-body">
 <p>
@@ -532,7 +535,7 @@ reproducibility.
 </p>
 <p>
 The results in this page were generated with repository version
-<a href="https://github.com/TaschnerMandlGroup/MapMet/tree/b1b42ebeb24eb9cb0b628f746f029e3e474bac7c" target="_blank">b1b42eb</a>.
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/tree/b8e7cb886271b1db2e7f2e68e3b61637d8735921" target="_blank">b8e7cb8</a>.
 See the <em>Past versions</em> tab to see a history of the changes made
 to the R Markdown and HTML files.
 </p>
@@ -546,8 +549,14 @@ depends on. Below is the status of the Git repository when the results
 were generated:
 </p>
 <pre><code>
-Ignored files:
-    Ignored:    analysis/figure/
+Unstaged changes:
+    Modified:   analysis/01_read_data.Rmd
+    Modified:   analysis/02_QC_1.Rmd
+    Modified:   analysis/03_QC_2.Rmd
+    Modified:   analysis/04_phenotyping.Rmd
+    Modified:   analysis/05_correlation_Fetahu.Rmd
+    Modified:   analysis/05_correlation_Jansky.Rmd
+    Modified:   analysis/05_correlation_Lee.Rmd
 
 </code></pre>
 <p>
@@ -598,7 +607,41 @@ Message
 Rmd
 </td>
 <td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/b1b42ebeb24eb9cb0b628f746f029e3e474bac7c/analysis/02_QC_1.Rmd" target="_blank">b1b42eb</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/c3f0d2f8278fc243174f8cf7772241bec9f71e0f/analysis/02_QC_1.Rmd" target="_blank">c3f0d2f</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-08-08
+</td>
+<td>
+new metadata and new container
+</td>
+</tr>
+<tr>
+<td>
+html
+</td>
+<td>
+<a href="https://rawcdn.githack.com/TaschnerMandlGroup/MapMetSC/4ba0e1a0876e66b584b99361416eaceb6dfe00e6/docs/02_QC_1.html" target="_blank">4ba0e1a</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+<td>
+update
+</td>
+</tr>
+<tr>
+<td>
+Rmd
+</td>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/b1b42ebeb24eb9cb0b628f746f029e3e474bac7c/analysis/02_QC_1.Rmd" target="_blank">b1b42eb</a>
 </td>
 <td>
 LazDaria
@@ -615,7 +658,7 @@ LazDaria
 Rmd
 </td>
 <td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/analysis/02_QC_1.Rmd" target="_blank">89a6198</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/analysis/02_QC_1.Rmd" target="_blank">89a6198</a>
 </td>
 <td>
 LazDaria
@@ -632,7 +675,7 @@ LazDaria
 html
 </td>
 <td>
-<a href="https://rawcdn.githack.com/TaschnerMandlGroup/MapMet/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/02_QC_1.html" target="_blank">89a6198</a>
+<a href="https://rawcdn.githack.com/TaschnerMandlGroup/MapMetSC/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/02_QC_1.html" target="_blank">89a6198</a>
 </td>
 <td>
 LazDaria
@@ -649,7 +692,7 @@ LazDaria
 Rmd
 </td>
 <td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/analysis/02_QC_1.Rmd" target="_blank">1d25af4</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/analysis/02_QC_1.Rmd" target="_blank">1d25af4</a>
 </td>
 <td>
 LazDaria
@@ -666,7 +709,7 @@ worfklowR part1
 html
 </td>
 <td>
-<a href="https://rawcdn.githack.com/TaschnerMandlGroup/MapMet/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/02_QC_1.html" target="_blank">1d25af4</a>
+<a href="https://rawcdn.githack.com/TaschnerMandlGroup/MapMetSC/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/02_QC_1.html" target="_blank">1d25af4</a>
 </td>
 <td>
 LazDaria
@@ -727,6 +770,11 @@ https://psychbruce.github.io/bruceR
 
 To use this package in publications, please cite:
 Bao, H.-W.-S. (2023). bruceR: Broadly useful convenient and efficient R functions (Version 2023.9) [Computer software]. https://CRAN.R-project.org/package=bruceR</code></pre>
+<pre><code>
+NEWS: A new version of bruceR (2024.6) is available (2024-06-13)!
+
+***** Please update *****
+install.packages(&quot;bruceR&quot;, dep=TRUE)</code></pre>
 <pre class="r"><code>library(ComplexHeatmap)</code></pre>
 <pre><code>Loading required package: grid</code></pre>
 <pre><code>========================================
@@ -939,7 +987,7 @@ colnames(intensity_mat) &lt;- spe$sample_id
 intensity_mat_mean_80 &lt;- intensity_mat[grepl(&quot;mean-80&quot;, rownames(intensity_mat)),]
 
 #exclusion of all-zero cells
-intensity_mat_imc &lt;- intensity_mat_mean_80[!grepl(&quot;IF2_GD2|IF3_CD45/56|DAPI&quot;, rownames(intensity_mat_mean_80)),]
+intensity_mat_imc &lt;- intensity_mat_mean_80[!grepl(&quot;IF2_GD2|IF3_CD45|DAPI&quot;, rownames(intensity_mat_mean_80)),]
 non_zeros &lt;- as.logical(colSums(intensity_mat_imc)!=0)
 
 spe &lt;- spe[, non_zeros]
@@ -947,7 +995,7 @@ mat &lt;- intensity_mat_mean_80[, non_zeros]</code></pre>
 <p>We excluded 6121 cells in this first quality control step.</p>
 <p>For the next quality control step, we will only consider IMC and
 nuclear IF channels.</p>
-<pre class="r"><code>mat &lt;- mat[!grepl(&quot;IF2_GD2|IF3_CD45/56&quot;, rownames(mat)),]</code></pre>
+<pre class="r"><code>mat &lt;- mat[!grepl(&quot;IF2_GD2|IF3_CD45&quot;, rownames(mat)),]</code></pre>
 </div>
 <div id="quality-control-step-2" class="section level3">
 <h3>Quality control step 2</h3>
@@ -1002,7 +1050,7 @@ Date
 <tbody>
 <tr>
 <td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/02_QC_1.Rmd/data-visualization-1.png" target="_blank">89a6198</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/02_QC_1.Rmd/data-visualization-1.png" target="_blank">89a6198</a>
 </td>
 <td>
 LazDaria
@@ -1013,7 +1061,7 @@ LazDaria
 </tr>
 <tr>
 <td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/02_QC_1.Rmd/data-visualization-1.png" target="_blank">1d25af4</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/02_QC_1.Rmd/data-visualization-1.png" target="_blank">1d25af4</a>
 </td>
 <td>
 LazDaria
@@ -1034,15 +1082,15 @@ Rphenograph_out &lt;- Rphenoannoy(mat, k = 45)</code></pre>
 <pre><code>Run Rphenograph starts:
   -Input data of 2033550 rows and 42 columns
   -k is set to 45</code></pre>
-<pre><code>  Finding nearest neighbors...DONE ~ 881.98 s
+<pre><code>  Finding nearest neighbors...DONE ~ 907.598 s
   Compute jaccard coefficient between nearest-neighbor sets...</code></pre>
 <pre><code>Presorting knn...</code></pre>
-<pre><code>presorting DONE ~ 151.725 s
+<pre><code>presorting DONE ~ 148.634 s
   Start jaccard
-DONE ~ 8.247 s
-  Build undirected graph from the weighted links...DONE ~ 67.224 s
-  Run louvain clustering on the graph ...DONE ~ 2115.043 s</code></pre>
-<pre><code>Run Rphenograph DONE, totally takes 3072.494s.</code></pre>
+DONE ~ 8.362 s
+  Build undirected graph from the weighted links...DONE ~ 66.924 s
+  Run louvain clustering on the graph ...DONE ~ 2147.663 s</code></pre>
+<pre><code>Run Rphenograph DONE, totally takes 3130.547s.</code></pre>
 <pre><code>  Return a community class
   -Modularity value: 0.8756466 
   -Number of clusters: 46</code></pre>
@@ -1098,7 +1146,7 @@ Date
 <tbody>
 <tr>
 <td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/02_QC_1.Rmd/data-visualization-2-1.png" target="_blank">89a6198</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/89a61986b87ba310fb2edffcdfed9a844309a2ac/docs/figure/02_QC_1.Rmd/data-visualization-2-1.png" target="_blank">89a6198</a>
 </td>
 <td>
 LazDaria
@@ -1109,7 +1157,7 @@ LazDaria
 </tr>
 <tr>
 <td>
-<a href="https://github.com/TaschnerMandlGroup/MapMet/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/02_QC_1.Rmd/data-visualization-2-1.png" target="_blank">1d25af4</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/1d25af4dd1578bc679230ee6f515532d4dd3672e/docs/figure/02_QC_1.Rmd/data-visualization-2-1.png" target="_blank">1d25af4</a>
 </td>
 <td>
 LazDaria
@@ -1122,10 +1170,10 @@ LazDaria
 </table>
 </div>
 </div>
-<p>We can see that cluster 11 represent cells that swam off (DAPI
+<p>We can see that cluster 11 represents cells that swam off (DAPI
 expression without IMC marker expression). To be sure that we only
 exclude cells that are really not present on the IMC channels, we will
-identify the samples with the highest number of cells from clsuter
+identify the samples with the highest number of cells from cluster
 11.</p>
 <pre class="r"><code>c &lt;- &quot;11&quot;
 mat &lt;- t(mat)
@@ -1146,10 +1194,10 @@ max_sample &lt;- clust$sample[1]
 write.csv(clust, file.path(params$output,&quot;lost_cells.csv&quot;))</code></pre>
 <p>Sample 20220607_20220201_15-042_BM_003 has the highest number of
 cells from cluster 11. For a last sanity check, we will color the lost
-cells in the segmentation mask of that sample and save the colored mask
-for a more thorough check in napari.</p>
-<pre class="r"><code>masks &lt;- loadImages(file.path(params$input, &quot;masks&quot;, paste0(max_sample, &quot;.tif&quot;)), as.is = TRUE)
-img &lt;- loadImages(file.path(params$input, &quot;img&quot;, paste0(max_sample, &quot;.tif&quot;)))
+cells in the segmentation mask of that sample and plot the DAPI and the
+Iridium image, and the segmentation mask.</p>
+<pre class="r"><code>masks &lt;- loadImages(file.path(params$input, &quot;MapMetIP_ProcessedDataset/masks&quot;, paste0(max_sample, &quot;.tif&quot;)), as.is = TRUE)
+img &lt;- loadImages(file.path(params$input, &quot;MapMetIP_ProcessedDataset/img&quot;, paste0(max_sample, &quot;.tif&quot;)))
 
 mcols(masks) &lt;- DataFrame(sample_id = names(masks))
 mcols(img) &lt;- DataFrame(sample_id = names(img))
@@ -1185,6 +1233,43 @@ p3 &lt;- ggdraw(mask_plot$plot, clip = &quot;on&quot;)
 
 plot_grid(p1, p2, p3)</code></pre>
 <p><img src="figure/02_QC_1.Rmd/plot-grid-1.png" width="672" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-plot-grid-1">
+Past versions of plot-grid-1.png
+</button>
+</p>
+<div id="fig-plot-grid-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/4ba0e1a0876e66b584b99361416eaceb6dfe00e6/docs/figure/02_QC_1.Rmd/plot-grid-1.png" target="_blank">4ba0e1a</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-03-27
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <p>By comparing the DAPI image, the Iridium image and the binary mask
 (highlighting cells from cluster 11 in blue), we see that cluster 11
 definitely represents the cluster of lost cells. We excluded 30285 cells
@@ -1243,77 +1328,74 @@ other attached packages:
 [31] data.table_1.14.10          stringr_1.5.1              
 [33] tidyr_1.3.0                 dplyr_1.1.4                
 [35] bruceR_2023.9               ggplot2_3.4.4              
-[37] workflowr_1.7.1            
 
 loaded via a namespace (and not attached):
-  [1] utf8_1.2.4                shinydashboard_0.7.2     
-  [3] R.utils_2.12.3            tidyselect_1.2.0         
-  [5] htmlwidgets_1.6.4         BiocParallel_1.30.4      
-  [7] DropletUtils_1.16.0       jtools_2.2.2             
-  [9] munsell_0.5.0             codetools_0.2-18         
- [11] withr_3.0.0               colorspace_2.1-0         
- [13] highr_0.10                knitr_1.45               
- [15] rstudioapi_0.15.0         git2r_0.33.0             
- [17] GenomeInfoDbData_1.2.8    datawizard_0.9.1         
- [19] rhdf5_2.40.0              rprojroot_2.0.4          
- [21] coda_0.19-4               vctrs_0.6.5              
- [23] generics_0.1.3            TH.data_1.1-2            
- [25] xfun_0.41                 R6_2.5.1                 
- [27] doParallel_1.0.17         ggbeeswarm_0.7.2         
- [29] clue_0.3-65               locfit_1.5-9.8           
- [31] bitops_1.0-7              rhdf5filters_1.8.0       
- [33] cachem_1.0.8              DelayedArray_0.22.0      
- [35] promises_1.2.1            scales_1.3.0             
- [37] multcomp_1.4-25           beeswarm_0.4.0           
- [39] gtable_0.3.4              beachmat_2.12.0          
- [41] Cairo_1.6-2               processx_3.8.3           
- [43] sandwich_3.1-0            rlang_1.1.3              
- [45] systemfonts_1.0.5         GlobalOptions_0.1.2      
- [47] splines_4.2.0             yaml_2.3.8               
- [49] abind_1.4-5               httpuv_1.6.13            
- [51] tools_4.2.0               SpatialExperiment_1.6.1  
- [53] ellipsis_0.3.2            raster_3.6-26            
- [55] jquerylib_0.1.4           Rcpp_1.0.12              
- [57] sparseMatrixStats_1.8.0   zlibbioc_1.42.0          
- [59] purrr_1.0.2               RCurl_1.98-1.14          
- [61] ps_1.7.6                  GetoptLong_1.0.5         
- [63] zoo_1.8-12                cluster_2.1.3            
- [65] fs_1.6.3                  magrittr_2.0.3           
- [67] magick_2.8.2              RANN_2.6.1               
- [69] mvtnorm_1.2-4             whisker_0.4.1            
- [71] mime_0.12                 evaluate_0.23            
- [73] fftwtools_0.9-11          xtable_1.8-4             
- [75] jpeg_0.1-10               gridExtra_2.3            
- [77] shape_1.4.6               compiler_4.2.0           
- [79] tibble_3.2.1              crayon_1.5.2             
- [81] minqa_1.2.6               R.oo_1.25.0              
- [83] htmltools_0.5.7           later_1.3.2              
- [85] tiff_0.1-12               DBI_1.2.1                
- [87] MASS_7.3-56               boot_1.3-28              
- [89] cli_3.6.2                 R.methodsS3_1.8.2        
- [91] parallel_4.2.0            insight_0.19.7           
- [93] pkgconfig_2.0.3           getPass_0.2-4            
- [95] numDeriv_2016.8-1.1       sp_2.1-2                 
- [97] terra_1.7-65              foreach_1.5.2            
- [99] svglite_2.1.3             vipor_0.4.7              
-[101] bslib_0.6.1               dqrng_0.3.2              
-[103] XVector_0.36.0            estimability_1.4.1       
-[105] callr_3.7.3               digest_0.6.34            
-[107] parameters_0.21.3         rmarkdown_2.25           
-[109] edgeR_3.38.4              DelayedMatrixStats_1.18.2
-[111] shiny_1.8.0               rjson_0.2.21             
-[113] nloptr_2.0.3              lifecycle_1.0.4          
-[115] nlme_3.1-157              jsonlite_1.8.8           
-[117] Rhdf5lib_1.18.2           limma_3.52.4             
-[119] fansi_1.0.6               pillar_1.9.0             
-[121] lattice_0.20-45           fastmap_1.1.1            
-[123] httr_1.4.7                survival_3.3-1           
-[125] glue_1.7.0                bayestestR_0.13.1        
-[127] png_0.1-8                 iterators_1.0.14         
-[129] svgPanZoom_0.3.4          pander_0.6.5             
-[131] stringi_1.8.3             sass_0.4.8               
-[133] HDF5Array_1.24.2          nnls_1.5                 
-[135] rematch2_2.1.2           </code></pre>
+  [1] jtools_2.2.2              workflowr_1.7.1          
+  [3] systemfonts_1.0.5         sp_2.1-2                 
+  [5] shinydashboard_0.7.2      splines_4.2.0            
+  [7] BiocParallel_1.30.4       TH.data_1.1-2            
+  [9] digest_0.6.34             foreach_1.5.2            
+ [11] htmltools_0.5.7           magick_2.8.2             
+ [13] tiff_0.1-12               fansi_1.0.6              
+ [15] magrittr_2.0.3            SpatialExperiment_1.6.1  
+ [17] cluster_2.1.3             doParallel_1.0.17        
+ [19] limma_3.52.4              svgPanZoom_0.3.4         
+ [21] R.utils_2.12.3            svglite_2.1.3            
+ [23] sandwich_3.1-0            jpeg_0.1-10              
+ [25] colorspace_2.1-0          xfun_0.41                
+ [27] crayon_1.5.2              RCurl_1.98-1.14          
+ [29] jsonlite_1.8.8            survival_3.3-1           
+ [31] zoo_1.8-12                iterators_1.0.14         
+ [33] glue_1.7.0                gtable_0.3.4             
+ [35] nnls_1.5                  zlibbioc_1.42.0          
+ [37] XVector_0.36.0            GetoptLong_1.0.5         
+ [39] DelayedArray_0.22.0       DropletUtils_1.16.0      
+ [41] Rhdf5lib_1.18.2           shape_1.4.6              
+ [43] HDF5Array_1.24.2          abind_1.4-5              
+ [45] scales_1.3.0              mvtnorm_1.2-4            
+ [47] DBI_1.2.1                 edgeR_3.38.4             
+ [49] Rcpp_1.0.12               xtable_1.8-4             
+ [51] clue_0.3-65               dqrng_0.3.2              
+ [53] datawizard_0.9.1          htmlwidgets_1.6.4        
+ [55] ellipsis_0.3.2            R.methodsS3_1.8.2        
+ [57] pkgconfig_2.0.3           sass_0.4.8               
+ [59] locfit_1.5-9.8            utf8_1.2.4               
+ [61] tidyselect_1.2.0          rlang_1.1.3              
+ [63] later_1.3.2               munsell_0.5.0            
+ [65] tools_4.2.0               cachem_1.0.8             
+ [67] cli_3.6.2                 generics_0.1.3           
+ [69] evaluate_0.23             fastmap_1.1.1            
+ [71] fftwtools_0.9-11          yaml_2.3.8               
+ [73] rematch2_2.1.2            knitr_1.45               
+ [75] fs_1.6.3                  pander_0.6.5             
+ [77] purrr_1.0.2               RANN_2.6.1               
+ [79] nlme_3.1-157              sparseMatrixStats_1.8.0  
+ [81] mime_0.12                 whisker_0.4.1            
+ [83] R.oo_1.25.0               compiler_4.2.0           
+ [85] rstudioapi_0.15.0         beeswarm_0.4.0           
+ [87] png_0.1-8                 tibble_3.2.1             
+ [89] bslib_0.6.1               stringi_1.8.3            
+ [91] highr_0.10                parameters_0.21.3        
+ [93] lattice_0.20-45           nloptr_2.0.3             
+ [95] vctrs_0.6.5               rhdf5filters_1.8.0       
+ [97] pillar_1.9.0              lifecycle_1.0.4          
+ [99] jquerylib_0.1.4           GlobalOptions_0.1.2      
+[101] estimability_1.4.1        bitops_1.0-7             
+[103] insight_0.19.7            raster_3.6-26            
+[105] httpuv_1.6.13             R6_2.5.1                 
+[107] promises_1.2.1            gridExtra_2.3            
+[109] vipor_0.4.7               codetools_0.2-18         
+[111] boot_1.3-28               MASS_7.3-56              
+[113] rhdf5_2.40.0              rprojroot_2.0.4          
+[115] rjson_0.2.21              withr_3.0.0              
+[117] multcomp_1.4-25           GenomeInfoDbData_1.2.8   
+[119] bayestestR_0.13.1         parallel_4.2.0           
+[121] terra_1.7-65              beachmat_2.12.0          
+[123] coda_0.19-4               minqa_1.2.6              
+[125] rmarkdown_2.25            DelayedMatrixStats_1.18.2
+[127] Cairo_1.6-2               git2r_0.33.0             
+[129] shiny_1.8.0               numDeriv_2016.8-1.1      
+[131] ggbeeswarm_0.7.2         </code></pre>
 </details>
 <br>
 <p>
@@ -1363,77 +1445,74 @@ other attached packages:
 [31] data.table_1.14.10          stringr_1.5.1              
 [33] tidyr_1.3.0                 dplyr_1.1.4                
 [35] bruceR_2023.9               ggplot2_3.4.4              
-[37] workflowr_1.7.1            
 
 loaded via a namespace (and not attached):
-  [1] utf8_1.2.4                shinydashboard_0.7.2     
-  [3] R.utils_2.12.3            tidyselect_1.2.0         
-  [5] htmlwidgets_1.6.4         BiocParallel_1.30.4      
-  [7] DropletUtils_1.16.0       jtools_2.2.2             
-  [9] munsell_0.5.0             codetools_0.2-18         
- [11] withr_3.0.0               colorspace_2.1-0         
- [13] highr_0.10                knitr_1.45               
- [15] rstudioapi_0.15.0         git2r_0.33.0             
- [17] GenomeInfoDbData_1.2.8    datawizard_0.9.1         
- [19] rhdf5_2.40.0              rprojroot_2.0.4          
- [21] coda_0.19-4               vctrs_0.6.5              
- [23] generics_0.1.3            TH.data_1.1-2            
- [25] xfun_0.41                 R6_2.5.1                 
- [27] doParallel_1.0.17         ggbeeswarm_0.7.2         
- [29] clue_0.3-65               locfit_1.5-9.8           
- [31] bitops_1.0-7              rhdf5filters_1.8.0       
- [33] cachem_1.0.8              DelayedArray_0.22.0      
- [35] promises_1.2.1            scales_1.3.0             
- [37] multcomp_1.4-25           beeswarm_0.4.0           
- [39] gtable_0.3.4              beachmat_2.12.0          
- [41] Cairo_1.6-2               processx_3.8.3           
- [43] sandwich_3.1-0            rlang_1.1.3              
- [45] systemfonts_1.0.5         GlobalOptions_0.1.2      
- [47] splines_4.2.0             yaml_2.3.8               
- [49] abind_1.4-5               httpuv_1.6.13            
- [51] tools_4.2.0               SpatialExperiment_1.6.1  
- [53] ellipsis_0.3.2            raster_3.6-26            
- [55] jquerylib_0.1.4           Rcpp_1.0.12              
- [57] sparseMatrixStats_1.8.0   zlibbioc_1.42.0          
- [59] purrr_1.0.2               RCurl_1.98-1.14          
- [61] ps_1.7.6                  GetoptLong_1.0.5         
- [63] zoo_1.8-12                cluster_2.1.3            
- [65] fs_1.6.3                  magrittr_2.0.3           
- [67] magick_2.8.2              RANN_2.6.1               
- [69] mvtnorm_1.2-4             whisker_0.4.1            
- [71] mime_0.12                 evaluate_0.23            
- [73] fftwtools_0.9-11          xtable_1.8-4             
- [75] jpeg_0.1-10               gridExtra_2.3            
- [77] shape_1.4.6               compiler_4.2.0           
- [79] tibble_3.2.1              crayon_1.5.2             
- [81] minqa_1.2.6               R.oo_1.25.0              
- [83] htmltools_0.5.7           later_1.3.2              
- [85] tiff_0.1-12               DBI_1.2.1                
- [87] MASS_7.3-56               boot_1.3-28              
- [89] cli_3.6.2                 R.methodsS3_1.8.2        
- [91] parallel_4.2.0            insight_0.19.7           
- [93] pkgconfig_2.0.3           getPass_0.2-4            
- [95] numDeriv_2016.8-1.1       sp_2.1-2                 
- [97] terra_1.7-65              foreach_1.5.2            
- [99] svglite_2.1.3             vipor_0.4.7              
-[101] bslib_0.6.1               dqrng_0.3.2              
-[103] XVector_0.36.0            estimability_1.4.1       
-[105] callr_3.7.3               digest_0.6.34            
-[107] parameters_0.21.3         rmarkdown_2.25           
-[109] edgeR_3.38.4              DelayedMatrixStats_1.18.2
-[111] shiny_1.8.0               rjson_0.2.21             
-[113] nloptr_2.0.3              lifecycle_1.0.4          
-[115] nlme_3.1-157              jsonlite_1.8.8           
-[117] Rhdf5lib_1.18.2           limma_3.52.4             
-[119] fansi_1.0.6               pillar_1.9.0             
-[121] lattice_0.20-45           fastmap_1.1.1            
-[123] httr_1.4.7                survival_3.3-1           
-[125] glue_1.7.0                bayestestR_0.13.1        
-[127] png_0.1-8                 iterators_1.0.14         
-[129] svgPanZoom_0.3.4          pander_0.6.5             
-[131] stringi_1.8.3             sass_0.4.8               
-[133] HDF5Array_1.24.2          nnls_1.5                 
-[135] rematch2_2.1.2           </code></pre>
+  [1] jtools_2.2.2              workflowr_1.7.1          
+  [3] systemfonts_1.0.5         sp_2.1-2                 
+  [5] shinydashboard_0.7.2      splines_4.2.0            
+  [7] BiocParallel_1.30.4       TH.data_1.1-2            
+  [9] digest_0.6.34             foreach_1.5.2            
+ [11] htmltools_0.5.7           magick_2.8.2             
+ [13] tiff_0.1-12               fansi_1.0.6              
+ [15] magrittr_2.0.3            SpatialExperiment_1.6.1  
+ [17] cluster_2.1.3             doParallel_1.0.17        
+ [19] limma_3.52.4              svgPanZoom_0.3.4         
+ [21] R.utils_2.12.3            svglite_2.1.3            
+ [23] sandwich_3.1-0            jpeg_0.1-10              
+ [25] colorspace_2.1-0          xfun_0.41                
+ [27] crayon_1.5.2              RCurl_1.98-1.14          
+ [29] jsonlite_1.8.8            survival_3.3-1           
+ [31] zoo_1.8-12                iterators_1.0.14         
+ [33] glue_1.7.0                gtable_0.3.4             
+ [35] nnls_1.5                  zlibbioc_1.42.0          
+ [37] XVector_0.36.0            GetoptLong_1.0.5         
+ [39] DelayedArray_0.22.0       DropletUtils_1.16.0      
+ [41] Rhdf5lib_1.18.2           shape_1.4.6              
+ [43] HDF5Array_1.24.2          abind_1.4-5              
+ [45] scales_1.3.0              mvtnorm_1.2-4            
+ [47] DBI_1.2.1                 edgeR_3.38.4             
+ [49] Rcpp_1.0.12               xtable_1.8-4             
+ [51] clue_0.3-65               dqrng_0.3.2              
+ [53] datawizard_0.9.1          htmlwidgets_1.6.4        
+ [55] ellipsis_0.3.2            R.methodsS3_1.8.2        
+ [57] pkgconfig_2.0.3           sass_0.4.8               
+ [59] locfit_1.5-9.8            utf8_1.2.4               
+ [61] tidyselect_1.2.0          rlang_1.1.3              
+ [63] later_1.3.2               munsell_0.5.0            
+ [65] tools_4.2.0               cachem_1.0.8             
+ [67] cli_3.6.2                 generics_0.1.3           
+ [69] evaluate_0.23             fastmap_1.1.1            
+ [71] fftwtools_0.9-11          yaml_2.3.8               
+ [73] rematch2_2.1.2            knitr_1.45               
+ [75] fs_1.6.3                  pander_0.6.5             
+ [77] purrr_1.0.2               RANN_2.6.1               
+ [79] nlme_3.1-157              sparseMatrixStats_1.8.0  
+ [81] mime_0.12                 whisker_0.4.1            
+ [83] R.oo_1.25.0               compiler_4.2.0           
+ [85] rstudioapi_0.15.0         beeswarm_0.4.0           
+ [87] png_0.1-8                 tibble_3.2.1             
+ [89] bslib_0.6.1               stringi_1.8.3            
+ [91] highr_0.10                parameters_0.21.3        
+ [93] lattice_0.20-45           nloptr_2.0.3             
+ [95] vctrs_0.6.5               rhdf5filters_1.8.0       
+ [97] pillar_1.9.0              lifecycle_1.0.4          
+ [99] jquerylib_0.1.4           GlobalOptions_0.1.2      
+[101] estimability_1.4.1        bitops_1.0-7             
+[103] insight_0.19.7            raster_3.6-26            
+[105] httpuv_1.6.13             R6_2.5.1                 
+[107] promises_1.2.1            gridExtra_2.3            
+[109] vipor_0.4.7               codetools_0.2-18         
+[111] boot_1.3-28               MASS_7.3-56              
+[113] rhdf5_2.40.0              rprojroot_2.0.4          
+[115] rjson_0.2.21              withr_3.0.0              
+[117] multcomp_1.4-25           GenomeInfoDbData_1.2.8   
+[119] bayestestR_0.13.1         parallel_4.2.0           
+[121] terra_1.7-65              beachmat_2.12.0          
+[123] coda_0.19-4               minqa_1.2.6              
+[125] rmarkdown_2.25            DelayedMatrixStats_1.18.2
+[127] Cairo_1.6-2               git2r_0.33.0             
+[129] shiny_1.8.0               numDeriv_2016.8-1.1      
+[131] ggbeeswarm_0.7.2         </code></pre>
 </div>
 </div>
 </div>

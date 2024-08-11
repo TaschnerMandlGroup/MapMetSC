@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
   public: "/mnt/Multimodal_Imaging_Daria/Publication/public_datasets"
 ---
 
@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 # Validation using scRNA-seq data by Lee et al. {#lee}
-To evaluate the validity of tumor microenviroment (TME) cell phenotype annnotations, we compare the cell expression profiles to a previously generated scRNA-seq dataset of healthy human bone marrow of ages ranging from 2-84 years ([Lee et al.](https://doi.org/10.3389/fimmu.2023.1127879)). 
+To evaluate the validity of tumor microenviroment (TME) cell phenotype annnotations, we compare the cell expression profiles to a previously generated scRNA-seq dataset of healthy human bone marrow of ages ranging from 2-84 years ([Lee et al.](https://doi.org/10.3389/fimmu.2023.1127879)) downloaded from [Zenodo]](https://doi.org/10.5281/zenodo.10275924). 
 
 ## Load libraries
 <details>
@@ -56,6 +56,8 @@ rna@assays$RNA@data <- rna@assays$RNA@counts
 
 ## Set common tumor markers 
 Next, we will set common markers between the reference and query dataset. Therefore, we have to rename the features in the imaging dataset to the names of the corresponding genes. 
+A csv files with protein-gene mappings can be obtained from Zenodo [(R_intermediary/protein2gene.csv)](https://doi.org/10.5281/zenodo.13220634).
+
 ```{r set-common-tumormarkers}
 protein2gene <- read.csv(file.path(params$public,"protein2gene.csv"), sep=";")
 
@@ -72,7 +74,8 @@ common_features <- intersect(rownames(rna@assays$RNA@data), row.names(protein))
 ```
 ## Visualize public data
 
-Will will first visualize the scRNA-seq data. Therefore we first define a color code with similar colors for similar celltypes between IMC and scRNA-seq.
+Will will first visualize the scRNA-seq data. Therefore we first define a color code with similar colors for similar celltypes between IMC and scRNA-seq. 
+
 ```{r define-colors}
 col_clusters <- read.csv(file.path(params$public, "Lee/celltype_metacluster.csv"), sep=";")
 col_clust <- setNames(col_clusters$color, col_clusters$celltype)
@@ -124,6 +127,7 @@ plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),
 ```
 
 We will plot the predicted metalabels in a UMAP.
+
 ```{r predicted-umap}
 #save predicted labels in separate slot
 protein <- readRDS(file.path(params$output,"spe_final.rds"))

@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
   public: "/mnt/Multimodal_Imaging_Daria/Publication/public_datasets"
 ---
 
@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 # Validation using scRNA-seq data by Jansky et al. {#jansky}
-To evaluate the validity of tumor cell phenotype annotations, we compare the cell expression profiles to a previously generated scRNA-seq dataset of healthy developing adrenal medullas ([Jansky et al.](https://doi.org/10.1038/s41588-021-00806-1)). 
+To evaluate the validity of tumor cell phenotype annotations, we compare the cell expression profiles to a previously generated scRNA-seq dataset of healthy developing adrenal medullas ([Jansky et al.](https://doi.org/10.1038/s41588-021-00806-1)) downloaded from [https://adrenal.kitz-heidelberg.de/developmental_programs_NB_viz/](https://adrenal.kitz-heidelberg.de/developmental_programs_NB_viz/). 
 
 ## Load libraries
 <details>
@@ -55,7 +55,8 @@ rna <- UpdateSeuratObject(object = rna)
 ```
 
 ## Set common tumor markers 
-Next, we will set common markers between the reference and query dataset. Therefore, we have to rename the features in the imaging dataset to the names of the corresponding genes. 
+Next, we will set common markers between the reference and query dataset. Therefore, we have to rename the features in the imaging dataset to the names of the corresponding genes. A csv files with protein-gene mappings can be obtained from Zenodo [(R_intermediary/protein2gene.csv)](https://doi.org/10.5281/zenodo.13220634)
+
 ```{r set-common-tumormarkers}
 protein2gene <- read.csv(file.path(params$public,"protein2gene.csv"), sep=";")
 
@@ -111,6 +112,7 @@ DimPlot(rna, reduction="umap", cols=col_rna_clusters)
 
 ### Combined visualizations
 We will next plot the two together to look at similarity.
+
 ```{r mean-per-cluster-combined, fig.height=8, fig.width=10}
 #Mean expression per cluster
 protein_clusters <- protein$celltype
@@ -218,6 +220,7 @@ hp <- Heatmap(exp_mat,
 d1 <- draw( hp, annotation_legend_list = lgd_list)
 ```
 ...and plot mean expression profiles per clusters (IMC & scRNA-seq) in a PCA plot.
+
 ```{r pca-plot, fig.width=10}
 mean_scaled <- cbind(rna_exp_mat, protein_exp_mat)
 data <- as.data.frame(mean_scaled)

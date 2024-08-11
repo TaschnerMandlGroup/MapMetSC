@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data/20240808"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -96,8 +96,8 @@ print(paste("The outlier cell with ", feat, "=", value, " with ID", id, "is in i
 Let's inspect this cell in the image and mask.
 
 ```{r visualize-outliers, fig.show='hide'}
-masks <- loadImages(file.path(params$input, "masks", paste0(image, ".tif")), as.is = TRUE)
-img <- loadImages(file.path(params$input, "img", paste0(image, ".tif")))
+masks <- loadImages(file.path(params$input, "MapMetIP_ProcessedDataset/masks", paste0(image, ".tif")), as.is = TRUE)
+img <- loadImages(file.path(params$input, "MapMetIP_ProcessedDataset/img", paste0(image, ".tif")))
 
 mcols(masks) <- DataFrame(sample_id = names(masks))
 mcols(img) <- DataFrame(sample_id = names(img))
@@ -244,8 +244,8 @@ plot
 ```{r visualize-clipped-morph}
 morph_names_clipped <- c("area_clipped", "solidity_clipped", "aspect_ratio_clipped")
 
-masks <- loadImages(c(file.path(params$input, "masks/20220525_20220223_06-070_BM_003.tif"),
-                      file.path(params$input, "masks/20220926_20220809_16-005_TU_001.tif")), 
+masks <- loadImages(c(file.path(params$input, "MapMetIP_ProcessedDataset/masks/20220525_20220223_06-070_BM_003.tif"),
+                      file.path(params$input, "MapMetIP_ProcessedDataset/masks/20220926_20220809_16-005_TU_001.tif")), 
                     as.is = TRUE)
 mcols(masks) <- DataFrame(sample_id = names(masks))
 

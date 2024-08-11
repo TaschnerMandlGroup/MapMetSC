@@ -7,7 +7,7 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  path: "/mnt/Multimodal_Imaging_Daria/PIPELINE/NEWEST_RESULTS/results/Manuscript/cytokines"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
 ---
 
 ```{r setup, include=FALSE}
@@ -49,6 +49,7 @@ data_rec <- data_rec[!grepl("POS", data_rec$Normalization),]
 
 head(data_che)
 ```
+
 ## Rename column names
 
 ```{r rename-col}
@@ -68,6 +69,7 @@ colnames(data_rec) <- sapply(colnames(data_rec), clean_colnames)
 
 
 # Heatmap for cytokine assay {#cyto}
+
 In this chapter, we will generate a heatmap for cytokine assays performed using RayBioTech. 
 
 ## Compute mean between duplicate rows

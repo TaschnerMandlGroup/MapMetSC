@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -19,6 +19,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 # Differential abundance analysis between therapeutic timepoints in paired BM {#bm-th-da-paired}
+
 Next, we compare celltype abundances between therapeutic timepoints in paired BM samples, quantitatively.
 
 ## Load libraries
@@ -45,6 +46,7 @@ library(edgeR)
 </details>
 
 ## Read data
+
 First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping). 
 
 ```{r read-data}
@@ -58,15 +60,15 @@ timepoint <- "RE2"
 compartment <- "TME"
 
 if (compartment=="tumor"){
-  BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster == "tumor" & spe$timepoint == "DE"]$study_id )
-  BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster == "tumor" & spe$timepoint == timepoint]$study_id )
+  BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster == "tumor" & spe$timepoint == "DE"]$patient_id )
+  BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$metacluster == "tumor" & spe$timepoint == timepoint]$patient_id )
   paired_patients <- intersect(BM_patients_1, BM_patients_2)
-  keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$metacluster=="tumor" & spe$control=="no" & (spe$timepoint=="DE" | spe$timepoint==timepoint) & spe$study_id%in%paired_patients 
+  keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$metacluster=="tumor" & spe$control=="no" & (spe$timepoint=="DE" | spe$timepoint==timepoint) & spe$patient_id%in%paired_patients 
 }else{
-  BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$timepoint == "DE"]$study_id )
-  BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$timepoint == timepoint]$study_id )
+  BM_patients_1 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$timepoint == "DE"]$patient_id )
+  BM_patients_2 <- unique(spe[,spe$tissue=="BM" & spe$control=="no" & spe$timepoint == timepoint]$patient_id )
   paired_patients <- intersect(BM_patients_1, BM_patients_2)
-  keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal" & spe$control=="no" & (spe$timepoint=="DE" | spe$timepoint==timepoint) & spe$study_id%in%paired_patients 
+  keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$metacluster!="tumor" & spe$metacluster!="mesenchymal" & spe$control=="no" & (spe$timepoint=="DE" | spe$timepoint==timepoint) & spe$patient_id%in%paired_patients 
 }
 
 keep_rows <- rowData(spe)$use_channel 
@@ -76,7 +78,7 @@ sce <- SingleCellExperiment(assays=list(counts=assay(spe, "counts")[keep_rows, k
 sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 sce$sample_id <- factor(paste0(sce$fm_id, "_", sce$tissue))
-sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$patient <- factor(spe[keep_rows, keep_cols]$patient_id)
 sce$timepoint <- factor(spe[keep_rows, keep_cols]$timepoint)
 sce$condition <- factor(sce$timepoint)
 
@@ -106,6 +108,7 @@ rowData(sce)$marker_class <- ifelse(rownames(sce) %in% type_markers, "type",
 # Differential abundance analysis - paired sequential BM samples
 
 ## Prepare data
+
 We first prepare data for DA analysis using the `diffcyt` package. 
 
 ```{r prepare-data}
@@ -166,6 +169,7 @@ res<- data.frame(rowData(res_DA))
 ```
 
 ## Visualization of DA results
+
 Finally, we visualize DA results in boxplots.
 
 ```{r visualize-da, fig.width=12, fig.height=20}
@@ -220,6 +224,7 @@ grid.arrange(grobs = plot_list_fc, ncol = 6)
 ```
 
 We will plot the logFC for the comparisons between conditions in a barplot.
+
 ```{r barplot-logFC, fig.width=7, fig.height=8}
 df <- res[, c("logFC", "p_adj")]
 df$p_adj_signif <- stars.pval(df$p_adj)

@@ -7,8 +7,8 @@ output:
 editor_options:
   chunk_output_type: inline
 params: 
-  input: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data"
-  output: "/mnt/Multimodal_Imaging_Daria/Publication/processed_data/data"
+  input: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_Zenodo-Upload"
+  output: "/mnt/Multimodal_Imaging_Daria/Publication/20240811_R_output"
 ---
 
 ```{r setup, include=FALSE}
@@ -19,6 +19,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 # Investigation of cell composition dynamics in metastatic bone marrow {#bm-th}
+
 Here, we investigate phenotypic changes in response to therapy in the metastatic bone marrow.
 
 ## Load libraries
@@ -43,12 +44,14 @@ library(gtools)
 </details>
 
 ## Read data
+
 First, we load the processed and phenotyped single-cell data from [chapter 4](#phenotyping). 
 
 ```{r read-data}
 spe <- readRDS(file.path(params$output,"spe_final.rds"))
 ```
 ## Hierarchical clustering of each timepoint 
+
 We first perform hierarchcial clustering for each timepoint, separately. 
 
 ```{r}
@@ -56,7 +59,7 @@ samples_with_tumor_cells <- unique(spe[,spe$tissue=="BM"& spe$metacluster=="tumo
 keep_rows <- rowData(spe)$use_channel 
 ```
 
-Therefore, we define function for converting the SPE objects into catalayst compatible objects, for hierarhichal clustering and plotting of barplots and dendograms. 
+Therefore, we define a function for converting the SPE objects into catalayst compatible objects, for hierarhichal clustering and plotting of barplots and dendograms. 
 ```{r functions}
 catalyst_convert <- function(timepoint){
   keep_cols <- spe$celltype != "other" & spe$tissue=="BM" & spe$sample_id%in%samples_with_tumor_cells & spe$control=="no" & spe$timepoint == timepoint
@@ -105,6 +108,7 @@ plot_dend <- function(plot_object){
 
 
 ### Diagnostic BM samples
+
 We transform the SPE object into a catalyst-compatible object, cluster proportions of tumor cell types across all diagnostic BM samples and plot the result in barplots:
 
 ```{r catalyst-comp-cluster-DE}
@@ -121,6 +125,7 @@ plot(dend)
 ```
 
 ### Mid-induction chemotherapy (RE1) BM samples
+
 We repeat the same for the other therapeutic timepoints.
 
 ```{r catalyst-comp-cluster-RE1}
@@ -182,7 +187,7 @@ sce$mna <- factor(spe[keep_rows, keep_cols]$MYCN_amp)
 mna <- recode(sce$mna, `1` = 'MNA', `2` = 'het', `0` = 'nMNA', `9` = 'unknown')
 sce$mna <- as.factor(mna)
 
-sce$patient <- factor(spe[keep_rows, keep_cols]$study_id)
+sce$patient <- factor(spe[keep_rows, keep_cols]$patient_id)
 sce$fm_id <- spe[keep_rows, keep_cols]$fm_id
 sce$tissue <- factor(spe[keep_rows, keep_cols]$tissue)
 
@@ -248,7 +253,9 @@ tumor_het <- apply(tumor_prop,2, entropy)
 ```
 
 ## Plot metadata 
+
 Then we plot intra-sample heterogeneity together with sample-specific metadata for the clustered sammples.
+
 ```{r plot-metadata}
 #access sample-level data
 sample_summary <- as.data.frame(colData(sce)) %>%
@@ -288,6 +295,7 @@ columnAnnotation(MYCN_amp=sample_summary$mna, col=list(MYCN_amp=col_code)) %v%
 ## Plot continuous and discrete summary statistics
 
 We then plot summary statistics of continuous and discrete metadata in boxplots and piecharts, respectively.
+
 ```{r piecharts, fig.height=4, fig.width=5}
 discrete_metadata <- c("mna", "progress")
 
@@ -366,6 +374,7 @@ do.call("grid.arrange", c(plot_list, ncol=3))
 ## Plot metaclusters
 
 Finally, we plot the proportions of metaclusters in the clustered samples.
+
 ```{r plot-metaclusters, fig.width=14, figh.height=5}
 sce_tmp <- sce
 sce_tmp$cluster_id <- sce_tmp$metacluster

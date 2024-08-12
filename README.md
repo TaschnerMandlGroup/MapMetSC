@@ -19,7 +19,7 @@ wget -P <path/to/extract/directory> https://zenodo.org/records/13220635/files/Ma
 unzip <path/to/extract/directory>/MapMetIP_ProcessedDataset.zip -d <path/to/extract/directory>
 rm <path/to/extract/directory>/MapMetIP_ProcessedDataset.zip
  ```
-Alternatively, the R object containing already MapMetSC-processed single cell data with all annotations (cell types, metaclusters, spatial neighborhoods, etc.) can be downloaded from Zenodo [(MapMet_final_scobject.rds)](10.5281/zenodo.13220634).
+Alternatively, the R object containing already MapMetSC-processed single cell data with all annotations (cell types, metaclusters, etc.) can be downloaded from Zenodo [(spe_final.rds)](10.5281/zenodo.13220634).
 
 ## Usage
   

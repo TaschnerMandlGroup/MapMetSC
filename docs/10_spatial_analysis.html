@@ -363,7 +363,7 @@ samples</h1>
 <p>
 <button type="button" class="btn btn-default btn-workflowr btn-workflowr-report" data-toggle="collapse" data-target="#workflowr-report">
 <span class="glyphicon glyphicon-list" aria-hidden="true"></span>
-workflowr <span class="glyphicon glyphicon-ok text-success"
+workflowr <span class="glyphicon glyphicon-exclamation-sign text-danger"
 aria-hidden="true"></span>
 </button>
 </p>
@@ -374,8 +374,8 @@ aria-hidden="true"></span>
 </li>
 <li>
 <a data-toggle="tab" href="#checks"> Checks <span
-class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
-</a>
+class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> </a>
 </li>
 <li>
 <a data-toggle="tab" href="#versions">Past versions</a>
@@ -388,9 +388,9 @@ class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span>
 </p>
 <p>
 <strong>Checks:</strong> <span
-class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 7
+class="glyphicon glyphicon-ok text-success" aria-hidden="true"></span> 6
 <span class="glyphicon glyphicon-exclamation-sign text-danger"
-aria-hidden="true"></span> 0
+aria-hidden="true"></span> 1
 </p>
 <p>
 <strong>Knit directory:</strong> <code>MapMetSC/</code> <span
@@ -413,18 +413,21 @@ versions</em> tab lists the development history.
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguptodate">
-<span class="glyphicon glyphicon-ok text-success"
-aria-hidden="true"></span> <strong>R Markdown file:</strong> up-to-date
-</a>
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRMarkdownfilestronguncommittedchanges">
+<span class="glyphicon glyphicon-exclamation-sign text-danger"
+aria-hidden="true"></span> <strong>R Markdown file:</strong> uncommitted
+changes </a>
 </p>
 </div>
-<div id="strongRMarkdownfilestronguptodate"
+<div id="strongRMarkdownfilestronguncommittedchanges"
 class="panel-collapse collapse">
 <div class="panel-body">
-<p>Great! Since the R Markdown file has been committed to the Git
-repository, you know the exact version of the code that produced these
-results.</p>
+<p>The R Markdown file has unstaged changes. To know which version of
+the R Markdown file created these results, you’ll want to first commit
+it to the Git repo. If you’re still working on the analysis, you can
+ignore this warning. When you’re finished, you can run
+<code>wflow_publish</code> to commit the R Markdown file and build the
+HTML.</p>
 </div>
 </div>
 </div>
@@ -515,15 +518,15 @@ project makes it easier to run your code on other machines.</p>
 <div class="panel panel-default">
 <div class="panel-heading">
 <p class="panel-title">
-<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMetSCtreee212c665a84c7b41ac229691cf1bca2eb016285atargetblanke212c66a">
+<a data-toggle="collapse" data-parent="#workflowr-checks" href="#strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMetSCtreef9f823c5240e8998bd5bcefed73bad8eb3d535a7targetblankf9f823ca">
 <span class="glyphicon glyphicon-ok text-success"
 aria-hidden="true"></span> <strong>Repository version:</strong>
-<a href="https://github.com/TaschnerMandlGroup/MapMetSC/tree/e212c665a84c7b41ac229691cf1bca2eb016285a" target="_blank">e212c66</a>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/tree/f9f823c5240e8998bd5bcefed73bad8eb3d535a7" target="_blank">f9f823c</a>
 </a>
 </p>
 </div>
 <div
-id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMetSCtreee212c665a84c7b41ac229691cf1bca2eb016285atargetblanke212c66a"
+id="strongRepositoryversionstrongahrefhttpsgithubcomTaschnerMandlGroupMapMetSCtreef9f823c5240e8998bd5bcefed73bad8eb3d535a7targetblankf9f823ca"
 class="panel-collapse collapse">
 <div class="panel-body">
 <p>
@@ -533,7 +536,7 @@ reproducibility.
 </p>
 <p>
 The results in this page were generated with repository version
-<a href="https://github.com/TaschnerMandlGroup/MapMetSC/tree/e212c665a84c7b41ac229691cf1bca2eb016285a" target="_blank">e212c66</a>.
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/tree/f9f823c5240e8998bd5bcefed73bad8eb3d535a7" target="_blank">f9f823c</a>.
 See the <em>Past versions</em> tab to see a history of the changes made
 to the R Markdown and HTML files.
 </p>
@@ -548,7 +551,7 @@ were generated:
 </p>
 <pre><code>
 Unstaged changes:
-    Modified:   analysis/11_cytokine_assays.Rmd
+    Modified:   analysis/10_spatial_analysis.Rmd
 
 </code></pre>
 <p>
@@ -594,6 +597,23 @@ Message
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>
+html
+</td>
+<td>
+<a href="https://rawcdn.githack.com/TaschnerMandlGroup/MapMetSC/f9f823c5240e8998bd5bcefed73bad8eb3d535a7/docs/10_spatial_analysis.html" target="_blank">f9f823c</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-08-11
+</td>
+<td>
+update
+</td>
+</tr>
 <tr>
 <td>
 Rmd
@@ -993,6 +1013,43 @@ pheatmap(data_wide,
          fontsize = 10,
          display_numbers = TRUE)  # Optionally display the values in cells</code></pre>
 <p><img src="figure/10_spatial_analysis.Rmd/interaction-heatmap-1.png" width="480" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-interaction-heatmap-1">
+Past versions of interaction-heatmap-1.png
+</button>
+</p>
+<div id="fig-interaction-heatmap-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/f9f823c5240e8998bd5bcefed73bad8eb3d535a7/docs/figure/10_spatial_analysis.Rmd/interaction-heatmap-1.png" target="_blank">f9f823c</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-08-11
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 </div>
 <div id="cellular-neighborhoods" class="section level2">
 <h2>Cellular neighborhoods</h2>
@@ -1018,6 +1075,43 @@ plotSpatial(spe,
             node_size_fix = 0.5) +
     scale_color_brewer(palette = &quot;Set3&quot;)</code></pre>
 <p><img src="figure/10_spatial_analysis.Rmd/c-neighborhoods%20cn-analysis-1.png" width="1920" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-no-spaces-c-neighborhoods-cn-analysis-1">
+Past versions of "c-neighborhoods cn-analysis-1.png"
+</button>
+</p>
+<div id="fig-no-spaces-c-neighborhoods-cn-analysis-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/f9f823c5240e8998bd5bcefed73bad8eb3d535a7/docs/figure/10_spatial_analysis.Rmd/c-neighborhoods cn-analysis-1.png" target="_blank">f9f823c</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-08-11
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <p>Lastly, we can visualize the enrichment of cell types within cellular
 neighborhoods using the <code>regionMap</code> function of the
 <code>lisaClust</code> package.</p>
@@ -1025,6 +1119,43 @@ neighborhoods using the <code>regionMap</code> function of the
           cellType = &quot;celltype_2&quot;,
           region = &quot;cn_celltypes_2&quot;)</code></pre>
 <p><img src="figure/10_spatial_analysis.Rmd/regionmap-1.png" width="480" style="display: block; margin: auto;" /></p>
+<p>
+<button type="button" class="btn btn-default btn-xs btn-workflowr btn-workflowr-fig" data-toggle="collapse" data-target="#fig-regionmap-1">
+Past versions of regionmap-1.png
+</button>
+</p>
+<div id="fig-regionmap-1" class="collapse">
+<div class="table-responsive">
+<table class="table table-condensed table-hover">
+<thead>
+<tr>
+<th>
+Version
+</th>
+<th>
+Author
+</th>
+<th>
+Date
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/f9f823c5240e8998bd5bcefed73bad8eb3d535a7/docs/figure/10_spatial_analysis.Rmd/regionmap-1.png" target="_blank">f9f823c</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-08-11
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <div id="differential-abundance-of-cns" class="section level3">
 <h3>Differential abundance of CNs</h3>
 <p>Finally, we will generate a barplot showing the proportions of CNs
@@ -1867,6 +1998,17 @@ Date
 <tbody>
 <tr>
 <td>
+<a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/f9f823c5240e8998bd5bcefed73bad8eb3d535a7/docs/figure/10_spatial_analysis.Rmd/ridges-distance-1.png" target="_blank">f9f823c</a>
+</td>
+<td>
+LazDaria
+</td>
+<td>
+2024-08-11
+</td>
+</tr>
+<tr>
+<td>
 <a href="https://github.com/TaschnerMandlGroup/MapMetSC/blob/d27375d6c7d7608d4642e42d978ad0533d86fac2/docs/figure/10_spatial_analysis.Rmd/ridges-distance-1.png" target="_blank">d27375d</a>
 </td>
 <td>
@@ -2189,7 +2331,7 @@ lazdaria
 <div id="save-r-object" class="section level2">
 <h2>Save R object</h2>
 <p>Finally, we save the R object.</p>
-<pre class="r"><code>saveRDS(spe, file.path(params$output,&quot;MapMet_final_scobject.RDS&quot;))</code></pre>
+<pre class="r"><code>saveRDS(spe, file.path(params$output,&quot;spe_PT_spatial.rds&quot;))</code></pre>
 </div>
 <div id="session-info" class="section level2">
 <h2>Session Info</h2>

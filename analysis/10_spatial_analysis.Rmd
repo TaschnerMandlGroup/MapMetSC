@@ -823,7 +823,7 @@ p
 Finally, we save the R object.
 
 ```{r save-rds}
-saveRDS(spe, file.path(params$output,"MapMet_final_scobject.RDS"))
+saveRDS(spe, file.path(params$output,"spe_PT_spatial.rds"))
 ```
 
 

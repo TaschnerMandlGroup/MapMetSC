@@ -45,7 +45,7 @@ To reproduce CCC analysis results on public single-cell RNA-sequencing data from
  ```bash
  docker image pull swernig/mapmet_paper:v1.2
 ```
-Afterwards, proceed with RMD files the folder [CCC_analysis](https://github.com/TaschnerMandlGroup/MapMetSC/tree/main/CCC_analysis).
+Afterwards, proceed with RMD files in the folder [CCC_analysis](https://github.com/TaschnerMandlGroup/MapMetSC/tree/main/CCC_analysis).
   
 ## Contributors
 

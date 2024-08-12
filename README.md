@@ -2,6 +2,8 @@
 
 # MapMetSC
 [comment]: <> (repo-specific shields will work once the repo is online)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13304644.svg)](https://doi.org/10.5281/zenodo.13304644)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13220634.svg)](https://doi.org/10.5281/zenodo.13220634)
 ![Suggestions Welcome](https://img.shields.io/badge/suggestions-welcome-green)
 
 _This repository is currently under development._

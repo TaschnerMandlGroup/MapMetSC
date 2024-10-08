@@ -6,7 +6,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13220634.svg)](https://doi.org/10.5281/zenodo.13220634)
 ![Suggestions Welcome](https://img.shields.io/badge/suggestions-welcome-green)
 
-_This repository is currently under development._  
+_This repository is currently under development._
 
 This repository provides scripts to reproduce figures published in Lazic et al (in preparation). In brief, we spatially and temporally mapped primary and metastatic neuroblastoma by multi-modal high-plex imaging in combination with scRNA-seq datasets. The data analysis worflow in Lazic et al. is split into two parts:
 - [MapMetIP](https://github.com/TaschnerMandlGroup/MapMetIP): `python` based image-processing pipeline 

@@ -10,7 +10,7 @@ library("stringr")
 library("tidyverse")
 library("CellChat")
 library("monocle3")
-library("SpatialExperiment")
+#library("SpatialExperiment")
 library("SingleR")
 library("magrittr")
 library("RColorBrewer")
@@ -21,7 +21,21 @@ library("NMF")
 library("clusterProfiler")
 library("org.Hs.eg.db")
 library("DOSE")
-library("meshes")
+#library("meshes")
+
+
+
+COLOR_CODE_DOTPLOT <- c("#005BC4",
+                        "#2681D7",
+                        "#72A4EB",
+                        "#A0C0F7",
+                        "#C2D4F7",
+                        "#DDDDDD",
+                        "#FBC7C9",
+                        "#F9AAAD",
+                        "#E9858A",
+                        "#CE5A60",
+                        "#A8202C")
 
 
 # scRNA-seq color code
@@ -29,7 +43,7 @@ library("meshes")
 PATIENT_GROUPS = c("I" = "Control",
                    "II" = "MYCNamp",
                    "III" = "ATRXmut",
-                   "IV" = "MYCNwt/ATRXwt")
+                   "IV" = "MYCNwtATRXwt")
 
 # UMAP color code
 COLOR_CODE_RNA_v3 = c("NB (8)" = "palegreen4",

@@ -52,7 +52,7 @@ PART I
 # __Input data__
 
 ```{r}
-dong2020 <- readRDS(file = paste0(params$input,"/dong2020.2023/data/tumor_data_dong.rds"))
+dong2020 <- readRDS(file = paste0(params$input,"/fetahu.scRNA.2023/data/tumor_data_dong.rds"))
 dong2020@meta.data
 ```
 
@@ -73,17 +73,18 @@ gene.list
 # additionally excluding genes that are vastly different on the dong2020 levels
 # and are not predictive. These are CD274 and ST8SIA1/B4GALNT1.
 
-IMC_markers <- protein2gene %>% filter(used.for.clustering.dong2020 == "yes")
-gene.list.dong2020 <- IMC_markers$gene_name
+IMC_markers <- protein2gene %>% filter(used.for.clustering.RNA == "yes")
+gene.list.RNA <- IMC_markers$gene_name
 
-length(gene.list.dong2020)
-gene.list.dong2020
+length(gene.list.RNA)
+gene.list.RNA
 ```
 
 # __Clustering based on IMC markers__
 
 ```{r heatmap - IMC markers}
 # Convert count data for the 31 markers to a matrix
+mat <- dong2020[["RNA"]][gene.list.RNA,]
 
 ## scale the rows
 mat <- t(scale(t(mat)))
@@ -112,7 +113,7 @@ marker.expression <-
 
 marker.expression
 
-pdf(file = paste0(params$out,"/figures/Dong.exp.IMC.markers.pdf"))
+pdf(file = paste0(params$out,"/figures/Dong2020.exp.IMC.markers.pdf"))
 marker.expression
 dev.off()
 
@@ -133,7 +134,7 @@ marker.expression.v2 <-
         use_raster = TRUE,
         raster_quality = 4)
 
-pdf(file = paste0(params$out,"/figures/Dong.exp.IMC.markers.v2.pdf"))
+pdf(file = paste0(params$out,"/figures/Dong2020.exp.IMC.markers.v2.pdf"))
 marker.expression.v2
 dev.off()
 ```
@@ -152,14 +153,14 @@ dong2020 <- dong2020 %>%
 dong2020 <- RunPCA(dong2020, 
                    seed.use = 28, 
                    npcs = 50,
-                   features = gene.list.dong2020)
+                   features = gene.list.RNA)
 PCAPlot(object = dong2020)
 
 dong2020 <- FindNeighbors(dong2020, 
                           reduction = "pca", 
                           dims = 1:10,
                           k.param = 50,
-                          features = gene.list.dong2020)
+                          features = gene.list.RNA)
 
 dong2020 <- FindClusters(dong2020, 
                          resolution = 0.3,
@@ -191,7 +192,6 @@ p2 <- DimPlot(dong2020,
 
 p1 
 p2
-
 ```
 
 
@@ -204,7 +204,6 @@ Transfer cell type annotations from Lazic et al. 2024 to Dong et al. 2020
 library(BiocParallel)
 library(SingleR)
 library(tidyr)
-
 
 dong2020_clusters <- dong2020@active.ident
 common_genes_dong2020 <- rownames(dong2020_mat) %in% gene.list
@@ -221,27 +220,26 @@ predicted_labels <- SingleR(test = dong2020_mat, # Transfer labels to dong2020 d
                             BPPARAM = MulticoreParam(workers=10, RNGseed=20201030)) 
 
 saveRDS(predicted_labels,
-        file = paste0(params$out,"Rds/20240126_predicted_labels_IMCtodong2020.rds"))
+        file = paste0(params$out,"Rds/20240126_predicted_labels_IMC_to_Dong2020.rds"))
 
 ################################################################################
 
-# Take only the BM samples (because some cell types were only present in the PT)
+# Take only the PT samples (because some cell types were only present in the PT)
 imc_data@meta.data$tissue
-imc_BM <- subset(imc_data, tissue == "BM")
-imc_BM 
+imc_PT <- subset(imc_data, tissue == "PT")
+imc_PT 
 
-protein_mat <- GetAssayData(imc_BM, assay = "originalexp", slot = "counts")
+protein_mat <- GetAssayData(imc_PT, assay = "originalexp", slot = "counts")
 common_genes_protein <- rownames(protein_mat) %in% rownames(dong2020_mat)
-protein_mat <- GetAssayData(imc_BM, assay = "originalexp", slot = "counts")[common_genes_protein,]
-imc_clusters <- imc_BM@meta.data$celltype
+protein_mat <- GetAssayData(imc_PT, assay = "originalexp", slot = "counts")[common_genes_protein,]
+imc_clusters <- imc_PT@meta.data$celltype
 predicted_labels <- SingleR(test = dong2020_mat, # Transfer labels to dong2020 data
                             ref = protein_mat, # Original cell types from IMC data
                             labels = imc_clusters, # Cell types defined by IMC data
                             BPPARAM = MulticoreParam(workers=10, RNGseed=20201030)) 
 
 saveRDS(predicted_labels,
-        file = paste0(params$out,"Rds/20240126_predicted_labels_IMC-BMtodong2020.rds"))
-
+        file = paste0(params$out,"Rds/20240126_predicted_labels_IMC-PTtodong2020.rds"))
 ```
 
 ## __Label transfer: using BM and PT samples (IMC data)__
@@ -413,7 +411,7 @@ library(RColorBrewer)
 set.seed(20200517)
 
 predicted_labels <- 
-  readRDS(file = paste0(params$out,"Rds/20240126_predicted_labels_IMC-BMtodong2020.rds"))
+  readRDS(file = paste0(params$out,"Rds/20240126_predicted_labels_IMC-PTtoDong2020.rds"))
 
 plotScoreHeatmap(predicted_labels[sample(seq_len(nrow(predicted_labels)), 2000),], 
                  annotation_legend=T, treeheight_row=0) 
@@ -1237,7 +1235,6 @@ ggsave(paste0(params$out,"/figures/3c_dots.png"), height = 3.4, width = 7)
 ```
 
 
-
 -------------------------------------------------------------------------------
 
 PART II
@@ -1492,7 +1489,7 @@ overlap
 
 
 
-```{r CD44}
+```{r CD44 high-low}
 Dong.NB@active.ident <- factor(Dong.NB@meta.data$sample)
 
 CD44_high <- c("2016_4503","2018_1404","2019_5022","2019_5754")
@@ -2325,7 +2322,7 @@ dev.off()
 
 #### __Cell type annotation based on: Dong et al., 2020__
 
-```{r original labels}
+```{r original labels Dong2020}
 
 true_label <- dong2020@active.ident
 predicted_label <- predicted_labels$labels
@@ -3791,17 +3788,7 @@ dev.off()
 
 ## __Cell type annotation based on: Dong et al., 2020__
 
-```{r original labels}
-
-true_label <- dong2020@active.ident
-predicted_label <- predicted_labels$labels
-
-dong2020$original_celltype <- dong2020@active.ident
-dong2020$predicted_celltype <- predicted_label
-
-Idents(dong2020) <- dong2020@meta.data$original_celltype
-
-
+```{r CCC analysis}
 # CellChat infers the biologically significant cell-cell communication by 
 # assigning each interaction with a probability value and peforming a permutation test. 
 pathway <- c("TWEAK", "PSAP")
@@ -4236,9 +4223,7 @@ df.path.lazic <- subsetCommunication(cellchat_predict,
 
 ```
 
-# __Cell type abundance analysis__
-
-## __Cell type abundance per patient__
+# __Cell type abundance per patient__
 
 ```{r}
 # Cell type annotation predicted from IMC data
@@ -4247,706 +4232,7 @@ Idents(dong2020) <- dong2020@meta.data$predicted_celltype
 # bar plot of cell type composition per patient
 # with highlighted patients, which are common between IMC and Dong.NB.filt data
 pt <- table(dong2020$predicted_celltype,dong2020$sample)
-
 ```
-
-
-## __Cell type abundance per group__
-
-```{r miloR - two groups}
-#1. If comparing two groups use normal DA testing
-
-# MiloR doesn't use the "original" clusters but rather creates neighborhoods
-# based on similar logFC (note the fold change here is the number of cells
-# per cell type)
-
-library("statmod")
-library("miloR")
-library("SingleCellExperiment")
-library("scater")
-library("scran")
-library("dplyr")
-library("patchwork")
-
-# For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
-# This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
-
-dong2020_milo <- Milo(as.SingleCellExperiment(dong2020))
-dong2020_milo
-
-
-reducedDim(dong2020_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(dong2020), "UMAP")
-
-plotUMAP(dong2020_milo, colour_by="group") + plotUMAP(dong2020_milo, colour_by="sample")
-
-# We need to add the KNN graph to the Milo object. This is stored in the graph slot, in igraph format.
-dong2020_milo <- buildGraph(dong2020_milo, k = 30, d = 30, reduced.dim = "PCA")
-
-# test k = 10
-
-# Defining representative neighbourhoods on the KNN graph
-dong2020_milo <- makeNhoods(dong2020_milo, prop = 0.1, k = 30, d=30, 
-                       refined = TRUE, 
-                       reduced_dims = "PCA") # (faster) refinement_scheme="graph"
-
-# plot the distribution of neighbourhood sizes (i.e. how many cells form each neighborhood) 
-# to evaluate whether the value of k used for graph building was appropriate
-plotNhoodSizeHist(dong2020_milo)
-
-# Counting cells in neighbourhoods
-dong2020_milo <- countCells(dong2020_milo, 
-                       meta.data = as.data.frame(colData(dong2020_milo)), 
-                       sample="sample")
-head(nhoodCounts(dong2020_milo))
-
-#1. If comparing two samples use normal DA testing
-
-# Defining experimental design
-dong2020_design <- data.frame(colData(dong2020_milo))[,c("sample", "group")]
-dong2020_design <- distinct(dong2020_design)
-rownames(dong2020_design) <- dong2020_design$sample
-dong2020_design
-
-# Computing neighborhood connectivity
-dong2020_milo <- calcNhoodDistance(dong2020_milo, d = 30, reduced.dim = "PCA")
-
-
-# DA testing
-da_results <- testNhoods(dong2020_milo, design = ~ group, 
-                         design.df = dong2020_design, 
-                         reduced.dim="PCA")
-head(da_results)
-
-da_results %>%
-  arrange(SpatialFDR) %>%
-  head() 
-
-dong2020_milo <- buildNhoodGraph(dong2020_milo)
-
-# QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
-
-# Plot single-cell UMAP
-umap_pl <- plotReducedDim(dong2020_milo, 
-                          dimred = "UMAP", 
-                          colour_by = "group", 
-                          text_by = "original_celltype", 
-                          text_size = 3, point_size = 0.5,) +
-  guides(fill = "none")
-
-# Plot neighbourhood graph
-nh_graph_pl <- plotNhoodGraphDA(dong2020_milo, da_results, layout="UMAP", alpha=0.05) 
-
-umap_pl + nh_graph_pl +
-  plot_layout(guides = "collect")
-
-da_results <- annotateNhoods(dong2020_milo, da_results, 
-                             coldata_col = "original_celltype")
-
-da_results$original_celltype <- ifelse(da_results$original_celltype_fraction < 0.7, 
-                                       "Mixed", da_results$original_celltype)
-
-
-results <- da_results %>% arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) > 0.6)
-results
-
-plotDAbeeswarm(da_results, group.by = "original_celltype")
-
-#2. If comparing more than two sample / groups, use DA testing with contrasts
-
-# For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
-# This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
-
-dong2020_milo <- Milo(as.SingleCellExperiment(dong2020))
-dong2020_milo
-
-reducedDim(dong2020_milo, "UMAP") <- reducedDim(dong2020_milo, "UMAP")
-
-plotUMAP(dong2020_milo, colour_by="group") + plotUMAP(dong2020_milo, colour_by="sample")
-
-
-# Define cell neighbourhoods
-dong2020_milo <- buildGraph(dong2020_milo, k = 10, d = 30)
-
-## Constructing kNN graph with k = 10
-dong2020_milo <- makeNhoods(dong2020_milo, 
-                       prop = 0.1, 
-                       k = 10, 
-                       d = 30, 
-                       refined = TRUE, 
-                       refinement_scheme = "graph") # make nhoods using graph-only as this is faster
-
-# metadata
-colData(dong2020_milo)$sample <- paste(colData(dong2020_milo)$group, colData(dong2020_milo)$sample, sep="_")
-
-# Counting cells in neighbourhoods
-dong2020_milo <- countCells(dong2020_milo, meta.data = data.frame(colData(dong2020_milo)), samples="sample") # make the nhood X sample counts matrix
-
-# Differential abundance testing with contrasts
-dong2020_design <- data.frame(colData(dong2020_milo))[,c("sample", "group")]
-dong2020_design <- distinct(dong2020_design)
-rownames(dong2020_design) <- dong2020_design$sample
-
-# Reorder rownames to match columns of nhoodCounts(milo)
-dong2020_design <- dong2020_design[colnames(nhoodCounts(dong2020_milo)), , drop=FALSE]
-table(dong2020_design$group)
-
-# Comparisons
-
-#A. ATRXmut vs. MYCNA
-rownames(dong2020_design) <- dong2020_design$sample
-contrast.1 <- c("groupIII - groupII") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsMYCNA <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.1, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction withgraph-overlap weighting
-table(da_results_ATRXmutvsMYCNA$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsMYCNA <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsMYCNA, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsMYCNA$original_celltype <- 
-  ifelse(da_results_ATRXmutvsMYCNA$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsMYCNA$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsMYCNA %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_ATRXmutvsMYCNA, group.by = "original_celltype")
-
-
-
-#B. ATRXmut vs. sporadic
-contrast.2 <- c("groupIII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsSporadic <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.2, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction withgraph-overlap weighting
-table(da_results_ATRXmutvsSporadic$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsSporadic <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsSporadic, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsSporadic$original_celltype <- 
-  ifelse(da_results_ATRXmutvsSporadic$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsSporadic$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsSporadic %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_ATRXmutvsSporadic, group.by = "original_celltype")
-
-#C. MYCNA vs. sporadic
-contrast.3 <- c("groupII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_MYCNAvsSporadic <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.3, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction withgraph-overlap weighting
-table(da_results_MYCNAvsSporadic$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_MYCNAvsSporadic <- annotateNhoods(dong2020_milo, da_results_MYCNAvsSporadic, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_MYCNAvsSporadic$original_celltype <- 
-  ifelse(da_results_MYCNAvsSporadic$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_MYCNAvsSporadic$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_MYCNAvsSporadic %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_MYCNAvsSporadic, group.by = "original_celltype")
-
-
-#D. ATRXmut vs. MYCNA and sporadic
-
-model <- model.matrix(~ 0 + group, data = dong2020_design)
-ave.contrast <- c("groupIII - (groupII + groupIV) / 2")
-mod.constrast <- makeContrasts(contrasts = ave.contrast, levels = model)
-mod.constrast
-
-da_results_ATRXmutvsAll <- testNhoods(dong2020_milo, design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = ave.contrast, 
-                         fdr.weighting = "graph-overlap")
-
-table(da_results_ATRXmutvsAll$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsAll <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsAll, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsAll$original_celltype <- 
-  ifelse(da_results_ATRXmutvsAll$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsAll$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsAll %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_ATRXmutvsAll, group.by = "original_celltype")
-
-#E. ATRXmut vs. control
-
-contrast.4 <- c("groupIII - groupI") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsCtrl <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.4, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction with graph-overlap weighting
-table(da_results_ATRXmutvsCtrl$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsCtrl <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsCtrl, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsCtrl$original_celltype <- 
-  ifelse(da_results_ATRXmutvsCtrl$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsCtrl$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsCtrl %>% 
-  arrange(FDR) %>% filter(FDR < 0.5 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(results, group.by = "original_celltype")
-```
-
-```{r miloR - many groups}
-#2. If comparing more than two sample / groups, use DA testing with contrasts
-
-# MiloR doesn't use the "original" clusters but rather creates neighborhoods
-# based on similar logFC (note the fold change here is the number of cells
-# per cell type)
-
-#BiocManager::install("scran")
-#BiocManager::install("statmod")
-
-library("statmod")
-library("miloR")
-library("SingleCellExperiment")
-library("scater")
-library("scran")
-library("dplyr")
-library("patchwork")
-
-#2. If comparing more than two sample / groups, use DA testing with contrasts
-
-# For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
-# This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
-
-dong2020_milo <- Milo(as.SingleCellExperiment(dong2020))
-dong2020_milo
-
-reducedDim(dong2020_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(dong2020), "UMAP")
-
-plotUMAP(dong2020_milo, colour_by="group") + plotUMAP(dong2020_milo, colour_by="sample")
-
-
-# Define cell neighbourhoods
-dong2020_milo <- buildGraph(dong2020_milo, k = 10, d = 30)
-
-## Constructing kNN graph with k = 10
-dong2020_milo <- makeNhoods(dong2020_milo, 
-                       prop = 0.1, 
-                       k = 10, 
-                       d = 30, 
-                       refined = TRUE, 
-                       refinement_scheme = "graph") # make nhoods using graph-only as this is faster
-
-# metadata
-colData(dong2020_milo)$sample <- paste(colData(dong2020_milo)$group, colData(dong2020_milo)$sample, sep="_")
-
-# Counting cells in neighbourhoods
-dong2020_milo <- countCells(dong2020_milo, meta.data = data.frame(colData(dong2020_milo)), samples="sample") # make the nhood X sample counts matrix
-
-# QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
-
-# Plot single-cell UMAP
-umap_pl <- plotReducedDim(dong2020_milo, 
-                          dimred = "UMAP", 
-                          colour_by = "group", 
-                          text_by = "original_celltype", 
-                          text_size = 3, point_size = 0.5,) +
-  guides(fill = "none")
-
-# Plot neighbourhood graph
-nh_graph_pl <- plotNhoodGraphDA(dong2020_milo, da_results, layout="UMAP", alpha=0.05) 
-
-umap_pl + nh_graph_pl +
-  plot_layout(guides = "collect")
-
-# Differential abundance testing with contrasts
-dong2020_design <- data.frame(colData(dong2020_milo))[,c("sample", "group")]
-dong2020_design <- distinct(dong2020_design)
-rownames(dong2020_design) <- dong2020_design$sample
-
-# Reorder rownames to match columns of nhoodCounts(milo)
-dong2020_design <- dong2020_design[colnames(nhoodCounts(dong2020_milo)), , drop=FALSE]
-table(dong2020_design$group)
-
-# Comparisons
-
-#A. ATRXmut vs. MYCNA
-rownames(dong2020_design) <- dong2020_design$sample
-contrast.1 <- c("groupIII - groupII") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsMYCNA <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.1, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction withgraph-overlap weighting
-table(da_results_ATRXmutvsMYCNA$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsMYCNA <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsMYCNA, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsMYCNA$original_celltype <- 
-  ifelse(da_results_ATRXmutvsMYCNA$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsMYCNA$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsMYCNA %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_ATRXmutvsMYCNA, group.by = "original_celltype")
-
-
-
-#B. ATRXmut vs. sporadic
-contrast.2 <- c("groupIII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsSporadic <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.2, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction withgraph-overlap weighting
-table(da_results_ATRXmutvsSporadic$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsSporadic <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsSporadic, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsSporadic$original_celltype <- 
-  ifelse(da_results_ATRXmutvsSporadic$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsSporadic$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsSporadic %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_ATRXmutvsSporadic, group.by = "original_celltype")
-
-#C. MYCNA vs. sporadic
-contrast.3 <- c("groupII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_MYCNAvsSporadic <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.3, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction withgraph-overlap weighting
-table(da_results_MYCNAvsSporadic$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_MYCNAvsSporadic <- annotateNhoods(dong2020_milo, da_results_MYCNAvsSporadic, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_MYCNAvsSporadic$original_celltype <- 
-  ifelse(da_results_MYCNAvsSporadic$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_MYCNAvsSporadic$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_MYCNAvsSporadic %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_MYCNAvsSporadic, group.by = "original_celltype")
-
-
-#D. ATRXmut vs. MYCNA and sporadic
-
-model <- model.matrix(~ 0 + group, data = dong2020_design)
-ave.contrast <- c("groupIII - (groupII + groupIV) / 2")
-mod.constrast <- makeContrasts(contrasts = ave.contrast, levels = model)
-mod.constrast
-
-da_results_ATRXmutvsAll <- testNhoods(dong2020_milo, design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = ave.contrast, 
-                         fdr.weighting = "graph-overlap")
-
-table(da_results_ATRXmutvsAll$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsAll <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsAll, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsAll$original_celltype <- 
-  ifelse(da_results_ATRXmutvsAll$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsAll$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsAll %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_ATRXmutvsAll, group.by = "original_celltype")
-
-#E. ATRXmut vs. control
-
-contrast.4 <- c("groupIII - groupI") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsCtrl <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.4, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction with graph-overlap weighting
-table(da_results_ATRXmutvsCtrl$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsCtrl <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsCtrl, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsCtrl$original_celltype <- 
-  ifelse(da_results_ATRXmutvsCtrl$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsCtrl$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsCtrl %>% 
-  arrange(FDR) %>% filter(FDR < 0.5 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(results, group.by = "original_celltype")
-```
-
-```{r miloR - many groups}
-#2. If comparing more than two sample / groups, use DA testing with contrasts
-
-# MiloR doesn't use the "original" clusters but rather creates neighborhoods
-# based on similar logFC (note the fold change here is the number of cells
-# per cell type)
-
-library("statmod")
-library("miloR")
-library("SingleCellExperiment")
-library("scater")
-library("scran")
-library("dplyr")
-library("patchwork")
-
-#2. If comparing more than two sample / groups, use DA testing with contrasts
-
-# For differential abundance analysis on graph neighborhoods we first construct a Milo object. 
-# This extends the SingleCellExperiment class to store information about neighbourhoods on the KNN graph.
-
-dong2020_milo <- Milo(as.SingleCellExperiment(dong2020))
-dong2020_milo
-
-reducedDim(dong2020_milo, "UMAP") <- reducedDim(as.SingleCellExperiment(dong2020), "UMAP")
-
-plotUMAP(dong2020_milo, colour_by="group") + plotUMAP(dong2020_milo, colour_by="sample")
-
-
-# Define cell neighbourhoods
-dong2020_milo <- buildGraph(dong2020_milo, k = 10, d = 30)
-
-## Constructing kNN graph with k = 10
-dong2020_milo <- makeNhoods(dong2020_milo, 
-                       prop = 0.1, 
-                       k = 10, 
-                       d = 30, 
-                       refined = TRUE, 
-                       refinement_scheme = "graph") # make nhoods using graph-only as this is faster
-
-# metadata
-colData(dong2020_milo)$sample <- paste(colData(dong2020_milo)$group, colData(dong2020_milo)$sample, sep="_")
-
-# Counting cells in neighbourhoods
-dong2020_milo <- countCells(dong2020_milo, meta.data = data.frame(colData(dong2020_milo)), samples="sample") # make the nhood X sample counts matrix
-
-# QUALITY CHECK OF THE DIFFERENTIAL ABUNDANCE TESTING
-
-# Plot single-cell UMAP
-umap_pl <- plotReducedDim(dong2020_milo, 
-                          dimred = "UMAP", 
-                          colour_by = "group", 
-                          text_by = "original_celltype", 
-                          text_size = 3, point_size = 0.5,) +
-  guides(fill = "none")
-
-# Plot neighbourhood graph
-nh_graph_pl <- plotNhoodGraphDA(dong2020_milo, da_results, layout="UMAP", alpha=0.05) 
-
-umap_pl + nh_graph_pl +
-  plot_layout(guides = "collect")
-
-# Differential abundance testing with contrasts
-dong2020_design <- data.frame(colData(dong2020_milo))[,c("sample", "group")]
-dong2020_design <- distinct(dong2020_design)
-rownames(dong2020_design) <- dong2020_design$sample
-
-# Reorder rownames to match columns of nhoodCounts(milo)
-dong2020_design <- dong2020_design[colnames(nhoodCounts(dong2020_milo)), , drop=FALSE]
-table(dong2020_design$group)
-
-# Comparisons
-
-#A. ATRXmut vs. MYCNA
-rownames(dong2020_design) <- dong2020_design$sample
-contrast.1 <- c("groupIII - groupII") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsMYCNA <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.1, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction withgraph-overlap weighting
-table(da_results_ATRXmutvsMYCNA$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsMYCNA <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsMYCNA, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsMYCNA$original_celltype <- 
-  ifelse(da_results_ATRXmutvsMYCNA$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsMYCNA$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsMYCNA %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_ATRXmutvsMYCNA, group.by = "original_celltype")
-
-
-
-#B. ATRXmut vs. sporadic
-contrast.2 <- c("groupIII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_ATRXmutvsSporadic <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.2, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction withgraph-overlap weighting
-table(da_results_ATRXmutvsSporadic$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_ATRXmutvsSporadic <- annotateNhoods(dong2020_milo, da_results_ATRXmutvsSporadic, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_ATRXmutvsSporadic$original_celltype <- 
-  ifelse(da_results_ATRXmutvsSporadic$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_ATRXmutvsSporadic$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_ATRXmutvsSporadic %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_ATRXmutvsSporadic, group.by = "original_celltype")
-
-#C. MYCNA vs. sporadic
-contrast.3 <- c("groupII - groupIV") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-
-# we need to use the ~ 0 + Variable expression here so that we have all of the levels of our variable as separate columns in our model matrix
-da_results_MYCNAvsSporadic <- testNhoods(dong2020_milo, 
-                         design = ~ 0 + group, 
-                         design.df = dong2020_design, 
-                         model.contrasts = contrast.3, 
-                         fdr.weighting="graph-overlap")
-## Using TMM normalisation
-## Performing spatial FDR correction withgraph-overlap weighting
-table(da_results_MYCNAvsSporadic$SpatialFDR < 0.1)
-
-# annotate hood with original cell type annotation
-da_results_MYCNAvsSporadic <- annotateNhoods(dong2020_milo, da_results_MYCNAvsSporadic, 
-                             coldata_col = "original_celltype")
-
-# remove hoods that contained mixed cell type populations
-da_results_MYCNAvsSporadic$original_celltype <- 
-  ifelse(da_results_MYCNAvsSporadic$original_celltype_fraction < 0.7, 
-         "Mixed", da_results_MYCNAvsSporadic$original_celltype)
-
-# filter only significant populations (less than 10% false discovery rate and 
-# fold change bigger than 0.5)
-results <- da_results_MYCNAvsSporadic %>% 
-  arrange(FDR) %>% filter(FDR < 0.1 & abs(logFC) >= 0.5)
-results
-
-plotDAbeeswarm(da_results_MYCNAvsSporadic, group.by = "original_celltype")
-```
-
 
 # __Session Info__
 

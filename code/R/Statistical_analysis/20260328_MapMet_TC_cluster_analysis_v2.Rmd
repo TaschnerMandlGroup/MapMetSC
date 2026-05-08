@@ -1,0 +1,1557 @@
+---
+title: "MapMet project"
+subtitle: "Tumor Cell Cluster Reliability and BM vs PT Enrichment Analysis"
+author: "Dr. Sara Wernig-Zorc"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 3
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    theme: flatly
+    highlight: tango
+    code_folding: hide
+    fig_width: 10
+    fig_height: 6
+---
+
+```{css, echo=FALSE}
+body { font-size: 15px; line-height: 1.7; }
+h1, h2, h3 { margin-top: 2rem; }
+.section-note {
+  background: #f0f4f8;
+  border-left: 4px solid #378ADD;
+  padding: 0.8rem 1.2rem;
+  margin: 1rem 0 1.5rem;
+  border-radius: 0 6px 6px 0;
+  font-size: 14px;
+  color: #333;
+}
+.warning-note {
+  background: #fff8ed;
+  border-left: 4px solid #EF9F27;
+  padding: 0.8rem 1.2rem;
+  margin: 1rem 0 1.5rem;
+  border-radius: 0 6px 6px 0;
+  font-size: 14px;
+}
+.result-note {
+  background: #f0faf5;
+  border-left: 4px solid #1D9E75;
+  padding: 0.8rem 1.2rem;
+  margin: 1rem 0 1.5rem;
+  border-radius: 0 6px 6px 0;
+  font-size: 14px;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center"
+)
+
+options(cli.unicode = FALSE)
+```
+
+---
+
+## IMPORTANT
+
+Using the original analysis here (2024).
+
+# Overview
+
+This document presents a complete statistical analysis of tumor cell (TC) cluster reliability and tissue-specific enrichment in the MapMet IMC dataset. The dataset comprises imaging mass cytometry (IMC) acquisitions from primary tumors (PT) and bone marrow (BM) samples across multiple timepoints from neuroblastoma patients.
+
+The analysis addresses two central questions:
+
+1. **Which TC cluster calls are statistically reliable**, given that some samples — particularly BM samples — contain very few TC cells? TC cluster proportions derived from small cell counts are subject to substantial multinomial sampling noise and may not reflect true biology.
+
+2. **Are specific TC clusters genuinely enriched in BM relative to PT at diagnosis**, as claimed for marker-lo TC and early SYM-like TC cells?
+
+**Study design note:** The cohort has a mixed paired/unpaired structure. A subset of patients contributed both a primary tumor (PT) and a bone marrow (BM) biopsy at the same timepoint — these paired samples enable within-patient BM vs PT comparisons that control for inter-patient variability. The remainder contributed only one tissue type. The statistical models in section 5 account for this structure explicitly via a random intercept per patient.
+
+The analysis proceeds in four stages: (1) bootstrap-based stability assessment of cluster calls, (2) a three-test artifact detection framework, (3) validation of flagged clusters in PT samples, and (4) formal statistical testing of BM vs PT enrichment using multiple complementary models.
+
+---
+
+# 1. Setup and Data Loading
+
+## 1.1 Libraries and parameters
+
+All key thresholds are defined here and propagate through the entire analysis. Adjusting these values here automatically updates all downstream results.
+
+```{r libraries-params}
+library(tidyverse)
+library(ggrepel)
+library(patchwork)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+
+set.seed(42)
+
+metadata <- read.table(
+  "/home/rstudio/mnt_data/MapMet/lazic.imc.2024/metadata/20231128_metadata_complete.csv",
+  sep = ",", header = TRUE, row.names = 1
+)
+imc <- readRDS("/home/rstudio/mnt_data/MapMet/lazic.imc.2024/Rds/imc_seurat.rds")
+seu_meta <- imc@meta.data
+
+TC_PATTERN       <- "TC|[Tt]umor"  # regex to identify TC celltypes
+BM_LABEL         <- "BM"           # tissue label for bone marrow
+PT_LABEL         <- "PT"           # tissue label for primary tumor
+DE_LABEL         <- "DE"           # timepoint label for diagnosis
+
+N_BOOT           <- 1000           # bootstrap resamples per unit
+MIN_TC_CELLS     <- 30             # minimum pooled TC cells for reliability flag
+MAX_MEAN_SD      <- 0.10           # mean bootstrap SD threshold for instability flag
+
+MIN_DETECT_CELLS <- 3              # minimum cells for cluster detection (T2/T3)
+MIN_DETECT_PROP  <- 0.01           # minimum proportion for detection (1%)
+MIN_DETECT_CELLS_T2 <- 1          # relaxed threshold for T2 presence test
+CLR_PSEUDOCOUNT  <- 0.5            # Haldane-Anscombe correction before log transform
+
+
+CLUSTERS_OF_INTEREST  <- c("CD24+ marker-lo TC", "CD24- marker-lo TC", "early SYM-like TC")
+ARTIFACT_CLUSTERS <- c("CHGAhi TC", "GD2lo TC", "GATA3hi TC")
+
+# ── Colour palette for reliability tiers ──────────────────────────────────────
+rel_colours <- c(
+  "critical (n<10)"   = "#E24B4A",
+  "unreliable (n<30)" = "#EF9F27",
+  "marginal (n<100)"  = "#BA7517",
+  "reliable (n≥100)"  = "#185FA5"
+)
+```
+
+## 1.2 Metadata preparation
+
+Each cell in `seu_meta` carries a `sample_id` encoding the patient ID, tissue type, and acquisition number. The patient-level ID is extracted via regex and joined to the external metadata table to attach `Tissue` and `Timepoint` annotations.
+
+The join is performed on both `Sample` (patient ID) and `tissue` (tissue type) simultaneously to prevent the many-to-many row explosion that occurs when a patient has samples from multiple tissues — each cell is matched only to its own tissue's metadata entry.
+
+A subset of BM samples come from stage L patients (no tumor infiltration detected) who were enrolled as controls at the DE timepoint. These samples have no explicit `Timepoint` entry in the metadata table; they are assigned `DE_LABEL` here before any downstream filtering.
+
+```{r metadata-prep}
+seu_meta <- seu_meta %>%
+  mutate(Sample = str_extract(sample_id, "[0-9]{2}-[0-9]{4,5}"))
+
+unmatched <- setdiff(unique(seu_meta$Sample), unique(metadata$Sample))
+if (length(unmatched) > 0) {
+  warning("Unmatched Sample IDs: ", paste(unmatched, collapse = ", "))
+} else {
+  message("✓ All Sample IDs match metadata (n = ", n_distinct(seu_meta$Sample), " patients)")
+}
+
+seu_meta_annot <- seu_meta %>%
+  left_join(
+    metadata %>%
+      select(Sample, Tissue, Timepoint) %>%
+      distinct(Sample, Tissue, .keep_all = TRUE),
+    by = c("Sample" = "Sample", "tissue" = "Tissue")
+  ) %>%
+  rename(Tissue = tissue) %>%
+  mutate(
+    is_control = is.na(Timepoint) & Tissue == BM_LABEL,
+    Timepoint  = ifelse(is_control, DE_LABEL, Timepoint)
+  )
+
+stopifnot(nrow(seu_meta_annot) == nrow(seu_meta))
+message("✓ seu_meta_annot: ", nrow(seu_meta_annot), " cells | ",
+        n_distinct(seu_meta_annot$Sample), " patients | ",
+        n_distinct(seu_meta_annot$Tissue), " tissues | ",
+        sum(seu_meta_annot$is_control & !duplicated(seu_meta_annot$Sample)),
+        " stage L control patients")
+
+seu_meta_annot %>%
+  distinct(Sample, Tissue, Timepoint, is_control) %>%
+  count(Tissue, Timepoint, is_control) %>%
+  mutate(note = ifelse(is_control, "stage L controls (no BM infiltration; assigned DE)", "")) %>%
+  select(-is_control) %>%
+  knitr::kable(caption = "Units (patient × tissue) per tissue × timepoint combination. Stage L BM controls are patients enrolled without detectable tumor infiltration; they carry no Timepoint entry in the metadata and are assigned to the DE group for analysis.")
+```
+
+## 1.3 DE cohort overview
+
+The figure below shows the structure of the DE timepoint cohort — the cohort used for all BM vs PT enrichment analyses. Each row is one patient. Coloured tiles indicate which tissue types are available for that patient. Paired patients (with both a BM and a PT sample at DE) are shown first; stage L BM controls are indicated separately.
+
+```{r cohort-figure, fig.height=10, fig.width=7}
+de_cohort <- seu_meta_annot %>%
+  filter(Timepoint == DE_LABEL) %>%
+  distinct(Sample, Tissue, is_control)
+
+paired_patients <- de_cohort %>%
+  count(Sample) %>%
+  filter(n == 2) %>%
+  pull(Sample)
+
+bm_only_patients <- de_cohort %>%
+  filter(Tissue == BM_LABEL, !Sample %in% paired_patients) %>%
+  pull(Sample) %>% unique()
+
+pt_only_patients <- de_cohort %>%
+  filter(Tissue == PT_LABEL, !Sample %in% paired_patients) %>%
+  pull(Sample) %>% unique()
+
+patient_order <- c(
+  sort(paired_patients),
+  sort(pt_only_patients),
+  sort(bm_only_patients)
+)
+
+cohort_df <- de_cohort %>%
+  mutate(
+    Sample      = factor(Sample, levels = rev(patient_order)),
+    tile_label  = case_when(
+      is_control            ~ "BM (stage L control)",
+      Tissue == BM_LABEL    ~ "BM (neuroblastoma)",
+      Tissue == PT_LABEL    ~ "PT"
+    ),
+    paired_group = case_when(
+      Sample %in% paired_patients   ~ "Paired",
+      Sample %in% pt_only_patients  ~ "PT only",
+      TRUE                           ~ "BM only"
+    )
+  )
+
+tile_colours <- c(
+  "BM (neuroblastoma)"   = "#E24B4A",
+  "BM (stage L control)" = "#F0997B",
+  "PT"                   = "#185FA5"
+)
+
+group_counts <- tibble(
+  paired_group = c("Paired", "PT only", "BM only"),
+  label        = c(
+    paste0("Paired (n=", length(paired_patients), ")"),
+    paste0("PT only (n=", length(pt_only_patients), ")"),
+    paste0("BM only (n=", length(bm_only_patients), ")")
+  )
+)
+
+group_y_positions <- tibble(
+  Sample        = factor(patient_order, levels = rev(patient_order)),
+  paired_group  = case_when(
+    patient_order %in% paired_patients  ~ "Paired",
+    patient_order %in% pt_only_patients ~ "PT only",
+    TRUE                                 ~ "BM only"
+  )
+) %>%
+  group_by(paired_group) %>%
+  summarise(
+    y_mid = median(as.numeric(Sample)),
+    .groups = "drop"
+  ) %>%
+  left_join(group_counts, by = "paired_group")
+
+p_cohort <- ggplot(cohort_df,
+                   aes(x = Tissue, y = Sample, fill = tile_label)) +
+  geom_tile(colour = "white", linewidth = 0.8, width = 0.85, height = 0.85) +
+  geom_segment(
+    data = cohort_df %>%
+      filter(Sample %in% paired_patients) %>%
+      distinct(Sample),
+    aes(x = 0.55, xend = 1.45, y = Sample, yend = Sample),
+    colour = "grey40", linewidth = 0.5, linetype = "dashed",
+    inherit.aes = FALSE
+  ) +
+  geom_text(
+    data    = group_y_positions,
+    aes(x   = 2.65, y = y_mid, label = label),
+    hjust   = 0, size = 3.2, colour = "grey30", fontface = "bold",
+    inherit.aes = FALSE
+  ) +
+  geom_hline(
+    yintercept = c(
+      length(bm_only_patients) + 0.5,
+      length(bm_only_patients) + length(pt_only_patients) + 0.5
+    ),
+    colour    = "grey70", linewidth = 0.4, linetype = "dotted"
+  ) +
+  scale_fill_manual(values = tile_colours, name = "Sample type") +
+  scale_x_discrete(expand = expansion(add = c(0.6, 1.8))) +
+  labs(
+    title    = "DE cohort — sample availability per patient",
+    subtitle = paste0(
+      "Each row = one patient | dashed lines connect paired BM+PT samples\n",
+      "Total: ", length(patient_order), " patients | ",
+      length(paired_patients), " paired | ",
+      length(pt_only_patients), " PT only | ",
+      length(bm_only_patients), " BM only (",
+      sum(de_cohort$is_control[!duplicated(de_cohort$Sample)]), " stage L controls)"
+    ),
+    x = NULL,
+    y = "Patient ID"
+  ) +
+  theme_classic(base_size = 10) +
+  theme(
+    plot.title      = element_text(size = 12, face = "bold", colour = "black"),
+    plot.subtitle   = element_text(size = 8.5, colour = "grey35"),
+    axis.text.x     = element_text(size = 10, colour = "black", face = "bold"),
+    axis.text.y     = element_text(size = 7,  colour = "black"),
+    legend.position = "bottom",
+    legend.key.size = unit(0.4, "cm")
+  )
+
+p_cohort
+```
+
+## 2.1 Rationale
+
+IMC data from BM samples at diagnosis frequently contains very few tumor cells — in some acquisitions, fewer than 10 TC cells are identified across all ROIs. When TC cluster proportions are derived from such small counts, the resulting composition reflects multinomial sampling noise rather than true biology.
+
+To quantify this uncertainty, I use **non-parametric bootstrap resampling**: for each patient × tissue × timepoint unit, TC cells are resampled with replacement 1,000 times, and cluster proportions are recomputed each time. The spread of these resampled proportions — measured as the bootstrap standard deviation and 95% confidence interval width — directly quantifies how reliably any given cluster proportion can be estimated from the available cell count.
+
+The key insight is the theoretical 1/√n relationship between cell count and proportion uncertainty: with 10 TC cells, the 95% CI on a cluster at 20% spans roughly 0–55%; with 100 cells it narrows to 12–32%; with 500 cells it reaches 16–24%. Samples below ~30 TC cells are therefore treated as unreliable for composition analysis.
+
+## 2.2 Aggregation unit definition
+
+The analysis unit is **patient × tissue × timepoint** — all ROIs from the same patient in the same tissue at the same timepoint are pooled before bootstrapping. This reflects the true biological unit of interest and avoids pseudo-replication at the ROI level.
+
+```{r aggregation-units}
+# Identify TC clusters
+tc_cols <- grep(TC_PATTERN, unique(seu_meta_annot$celltype), value = TRUE)
+message("TC clusters: ", paste(tc_cols, collapse = ", "))
+
+# Build TC-only cell table with unit IDs
+tc_meta_agg <- seu_meta_annot %>%
+  filter(grepl(TC_PATTERN, celltype)) %>%
+  select(Sample, Tissue, Timepoint, sample_id, TC_cluster = celltype) %>%
+  mutate(unit_id = paste0(Sample, " | ", Tissue, " | ", Timepoint))
+
+# ROIs pooled per unit
+rois_per_unit <- seu_meta_annot %>%
+  mutate(unit_id = paste0(Sample, " | ", Tissue, " | ", Timepoint)) %>%
+  distinct(unit_id, sample_id) %>%
+  count(unit_id, name = "n_ROIs")
+
+# Per-unit totals and per-cluster counts
+tc_counts_agg        <- tc_meta_agg %>% count(unit_id, name = "n_TC_cells")
+tc_counts_per_cluster <- tc_meta_agg %>% count(unit_id, TC_cluster, name = "n_cluster_cells")
+observed_props_agg   <- tc_meta_agg %>%
+  count(unit_id, TC_cluster) %>%
+  group_by(unit_id) %>%
+  mutate(observed_prop = n / sum(n)) %>%
+  ungroup()
+
+tc_meta_agg %>%
+  distinct(unit_id, Sample, Tissue, Timepoint) %>%
+  count(Tissue, Timepoint) %>%
+  knitr::kable(caption = "Number of units per tissue × timepoint")
+```
+
+## 2.3 Bootstrap resampling
+
+```{r bootstrap}
+run_bootstrap_unit <- function(uid, tc_data, n_boot, all_clusters) {
+  cells <- tc_data %>% filter(unit_id == uid) %>% pull(TC_cluster)
+  n     <- length(cells)
+  resamples <- replicate(n_boot, {
+    s     <- sample(cells, size = n, replace = TRUE)
+    props <- table(factor(s, levels = all_clusters)) / n
+    as.numeric(props)
+  })
+  tibble(
+    unit_id    = uid,
+    TC_cluster = all_clusters,
+    boot_mean  = rowMeans(resamples),
+    boot_sd    = apply(resamples, 1, sd),
+    boot_q025  = apply(resamples, 1, quantile, 0.025),
+    boot_q975  = apply(resamples, 1, quantile, 0.975),
+    boot_q25   = apply(resamples, 1, quantile, 0.25),
+    boot_q75   = apply(resamples, 1, quantile, 0.75),
+    n_TC_cells = n
+  )
+}
+
+message("Bootstrapping ", n_distinct(tc_meta_agg$unit_id),
+        " units × ", N_BOOT, " iterations...")
+
+boot_results_agg <- map_dfr(
+  unique(tc_meta_agg$unit_id),
+  run_bootstrap_unit,
+  tc_data      = tc_meta_agg,
+  n_boot       = N_BOOT,
+  all_clusters = tc_cols
+)
+```
+
+## 2.4 Instability scores and flagging
+
+Each unit receives two flags: (1) `flag_n` if fewer than 30 TC cells are pooled, and (2) `flag_sd` if the mean bootstrap SD across clusters exceeds 0.10. A unit is flagged if either criterion fires.
+
+```{r instability-scores}
+instability_agg <- boot_results_agg %>%
+  group_by(unit_id, n_TC_cells) %>%
+  summarise(
+    mean_boot_SD  = mean(boot_sd),
+    mean_CI_width = mean(boot_q975 - boot_q025),
+    max_CI_width  = max(boot_q975 - boot_q025),
+    .groups = "drop"
+  ) %>%
+  separate(unit_id, into = c("Sample", "Tissue", "Timepoint"),
+           sep = " \\| ", remove = FALSE) %>%
+  left_join(rois_per_unit, by = "unit_id") %>%
+  mutate(
+    flag_n      = n_TC_cells < MIN_TC_CELLS,
+    flag_sd     = mean_boot_SD > MAX_MEAN_SD,
+    flagged     = flag_n | flag_sd,
+    flag_reason = case_when(
+      flag_n & flag_sd ~ paste0("n=", n_TC_cells, " & SD>", MAX_MEAN_SD),
+      flag_n           ~ paste0("n=", n_TC_cells, " < ", MIN_TC_CELLS),
+      flag_sd          ~ paste0("mean SD=", round(mean_boot_SD, 3)),
+      TRUE             ~ "OK"
+    ),
+    reliability = case_when(
+      n_TC_cells <  10 ~ "critical (n<10)",
+      n_TC_cells <  30 ~ "unreliable (n<30)",
+      n_TC_cells < 100 ~ "marginal (n<100)",
+      TRUE             ~ "reliable (n≥100)"
+    ) %>% factor(levels = c("critical (n<10)", "unreliable (n<30)",
+                            "marginal (n<100)", "reliable (n≥100)")),
+    is_BM    = Tissue    == BM_LABEL,
+    is_DE    = Timepoint == DE_LABEL,
+    is_BM_DE = is_BM & is_DE,
+    group    = case_when(
+      is_BM_DE          ~ "BM + DE",
+      is_BM & !is_DE    ~ "BM, other timepoint",
+      !is_BM & is_DE    ~ "Tumor + DE",
+      TRUE              ~ "Tumor, other timepoint"
+    ) %>% factor(levels = c("BM + DE", "BM, other timepoint",
+                            "Tumor + DE", "Tumor, other timepoint"))
+  )
+
+instability_agg %>%
+  count(group, reliability) %>%
+  knitr::kable(caption = "Unit counts by group and reliability tier")
+```
+
+## 2.5 Instability plot — BM+DE units highlighted {.tabset}
+
+The plot below shows the key diagnostic: mean bootstrap SD (y-axis) against pooled TC cell count (x-axis, log scale) for all units. The expected 1/√n decay is visible. BM+DE units are highlighted with bold outlines; dot size reflects the number of ROIs pooled.
+
+### All units
+
+```{r plot-instability, fig.height=7}
+bm_de_units <- instability_agg %>% filter(is_BM_DE)
+
+p_highlighted <- ggplot(instability_agg,
+                        aes(x = n_TC_cells, y = mean_boot_SD, colour = reliability)) +
+  geom_vline(xintercept = MIN_TC_CELLS, linetype = "dashed",
+             colour = "grey60", linewidth = 0.5) +
+  geom_hline(yintercept = MAX_MEAN_SD, linetype = "dashed",
+             colour = "grey60", linewidth = 0.5) +
+  geom_point(aes(size = n_ROIs), alpha = 0.72) +
+  geom_point(data = bm_de_units, aes(size = n_ROIs),
+             shape = 21, stroke = 1.2, colour = "black", fill = NA) +
+  geom_text_repel(data = bm_de_units, aes(label = unit_id),
+                  size = 2.5, fontface = "bold", max.overlaps = 30,
+                  box.padding = 0.4, segment.size = 0.3,
+                  segment.colour = "grey50", colour = "black") +
+  annotate("text", x = MIN_TC_CELLS, y = Inf,
+           label = paste0("min n = ", MIN_TC_CELLS),
+           hjust = -0.1, vjust = 1.5, size = 3, colour = "grey45") +
+  annotate("text", x = Inf, y = MAX_MEAN_SD,
+           label = paste0("SD threshold = ", MAX_MEAN_SD),
+           hjust = 1.05, vjust = -0.5, size = 3, colour = "grey45") +
+  scale_colour_manual(values = rel_colours, name = "Reliability") +
+  scale_size_continuous(range = c(2, 7), name = "ROIs pooled") +
+  scale_x_continuous(trans = "log10", breaks = c(1, 5, 10, 30, 100, 500, 1000),
+                     labels = scales::comma) +
+  labs(
+    title    = "TC cluster call stability — BM+DE units highlighted",
+    subtitle = paste0(sum(bm_de_units$flagged), " of ", nrow(bm_de_units),
+                      " BM+DE units flagged | one dot = patient × tissue × timepoint | dot size = ROIs pooled"),
+    x = "TC cells pooled across ROIs (log scale)",
+    y = "Mean bootstrap SD (proportion units)"
+  ) +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 9, colour = "grey35"),
+        axis.text = element_text(colour = "black"),
+        legend.position = "right")
+
+p_highlighted
+```
+
+### BM+DE bootstrap ribbons
+
+Bootstrap confidence intervals per TC cluster for BM+DE units, sorted by ascending TC cell count. Flagged units are marked with ⚑. Wide ribbons with high uncertainty should not be interpreted biologically.
+
+```{r plot-bm-de-ribbons, fig.height=12}
+bm_de_unit_ids <- bm_de_units %>% arrange(n_TC_cells) %>% pull(unit_id)
+
+plot_df_bm_de <- boot_results_agg %>%
+  filter(unit_id %in% bm_de_unit_ids) %>%
+  select(-n_TC_cells) %>%
+  left_join(observed_props_agg %>% select(unit_id, TC_cluster, observed_prop),
+            by = c("unit_id", "TC_cluster")) %>%
+  left_join(instability_agg %>% select(unit_id, flagged, reliability, n_ROIs, n_TC_cells),
+            by = "unit_id") %>%
+  replace_na(list(observed_prop = 0)) %>%
+  mutate(
+    unit_label = paste0(ifelse(flagged, "⚑ ", ""), unit_id,
+                        "\n(", n_ROIs, " ROIs, n=", n_TC_cells, ")"),
+    unit_label = factor(unit_label,
+                        levels = unique(unit_label[order(match(unit_id, bm_de_unit_ids))]))
+  )
+
+ggplot(plot_df_bm_de, aes(x = unit_label, colour = reliability, fill = reliability)) +
+  geom_linerange(aes(ymin = boot_q025, ymax = boot_q975), linewidth = 3.5, alpha = 0.18) +
+  geom_linerange(aes(ymin = boot_q25, ymax = boot_q75), linewidth = 3.5, alpha = 0.45) +
+  geom_point(aes(y = observed_prop), size = 2.2, alpha = 0.95) +
+  geom_hline(yintercept = 0, colour = "grey80", linewidth = 0.3) +
+  facet_wrap(~ TC_cluster, scales = "free_y", ncol = 2) +
+  scale_colour_manual(values = rel_colours, name = "Reliability") +
+  scale_fill_manual(values = rel_colours, name = "Reliability") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(title = paste0("Bootstrap stability — BM units at ", DE_LABEL, " timepoint"),
+       subtitle = "Point = observed; thick = IQR; thin = 95% CI | ⚑ = flagged | sorted low → high pooled TC cells",
+       x = NULL, y = "TC cluster proportion") +
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8, colour = "grey35"),
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 7, colour = "black"),
+        strip.text = element_text(face = "bold", size = 9),
+        strip.background = element_blank(),
+        legend.position = "top")
+```
+
+### BM+DE CI width summary
+
+```{r plot-ci-bars, fig.height=8}
+p_table_order <- instability_agg %>%
+  filter(is_BM_DE) %>%
+  arrange(n_TC_cells) %>%
+  mutate(unit_label = paste0(unit_id, " (", n_ROIs, " ROIs)")) %>%
+  pull(unit_label)
+
+instability_agg %>%
+  filter(is_BM_DE) %>%
+  arrange(n_TC_cells) %>%
+  mutate(
+    unit_label = paste0(unit_id, " (", n_ROIs, " ROIs)"),
+    unit_label = factor(unit_label, levels = p_table_order)
+  ) %>%
+  ggplot(aes(y = unit_label)) +
+  geom_col(aes(x = mean_CI_width, fill = reliability), width = 0.7, alpha = 0.85) +
+  geom_vline(xintercept = 0.40, linetype = "dashed", colour = "grey50", linewidth = 0.5) +
+  geom_text(aes(x = mean_CI_width + 0.008,
+                label = paste0("n=", n_TC_cells, " cells  ", flag_reason)),
+            hjust = 0, size = 2.8, colour = "grey25") +
+  scale_fill_manual(values = rel_colours, name = "Reliability") +
+  scale_x_continuous(limits = c(0, 1.2), labels = scales::percent_format(accuracy = 1)) +
+  labs(title = "BM + DE units: mean bootstrap 95% CI width",
+       subtitle = "Dashed = 40 pp threshold (CI spans nearly half the proportion range — uninterpretable)",
+       x = "Mean 95% CI width across TC clusters", y = NULL) +
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8.5, colour = "grey35"),
+        axis.text = element_text(colour = "black"))
+```
+
+---
+
+# 3. Artifact Detection — Three-Test Framework
+
+<div class="section-note">
+The three tests below ask complementary questions about whether a TC cluster's apparent presence in low-TC-count samples reflects biology or sampling noise. A cluster flagged by ≥2/3 tests is classified as a probable sampling artifact and excluded from BM composition analyses.
+</div>
+
+## 3.1 Test 1 — Per-cluster bootstrap instability
+
+**Question:** Which clusters have the highest bootstrap SD overall, and is that instability concentrated in low-n units (artifact signature) or distributed across reliable units (biological variability signature)?
+
+```{r test1}
+cluster_rank <- boot_results_agg %>%
+  select(-n_TC_cells) %>%
+  left_join(instability_agg %>% select(unit_id, n_TC_cells), by = "unit_id") %>%
+  group_by(TC_cluster) %>%
+  summarise(overall_mean_SD = mean(boot_sd), overall_median_SD = median(boot_sd),
+            .groups = "drop") %>%
+  arrange(desc(overall_mean_SD)) %>%
+  mutate(instability_rank = row_number())
+
+cluster_instability <- boot_results_agg %>%
+  select(-n_TC_cells) %>%
+  left_join(instability_agg %>% select(unit_id, reliability, flagged, n_TC_cells),
+            by = "unit_id") %>%
+  group_by(TC_cluster, reliability) %>%
+  summarise(mean_SD = mean(boot_sd), n_units = n(), .groups = "drop")
+
+t1_cluster_order <- cluster_rank %>% arrange(overall_mean_SD) %>% pull(TC_cluster)
+```
+
+```{r plot-t1, fig.height=5, fig.width=9}
+cluster_instability %>%
+  left_join(cluster_rank %>% select(TC_cluster, instability_rank), by = "TC_cluster") %>%
+  mutate(TC_cluster = factor(TC_cluster, levels = t1_cluster_order)) %>%
+  ggplot(aes(x = TC_cluster, y = mean_SD, fill = reliability)) +
+  geom_col(position = "stack", width = 0.7, alpha = 0.88) +
+  geom_hline(yintercept = MAX_MEAN_SD, linetype = "dashed",
+             colour = "grey50", linewidth = 0.5) +
+  annotate("text", x = Inf, y = MAX_MEAN_SD,
+           label = paste0("SD threshold = ", MAX_MEAN_SD),
+           hjust = 1.05, vjust = -0.5, size = 3, colour = "grey45") +
+  scale_fill_manual(values = rel_colours, name = "Reliability tier") +
+  labs(title = "Test 1 — Per-cluster bootstrap instability across all units",
+       subtitle = "High SD driven only by unreliable/critical units = artifact; high SD in reliable units = variable biology",
+       x = NULL, y = "Mean bootstrap SD (proportion units)") +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8.5, colour = "grey35"),
+        axis.text.x = element_text(angle = 35, hjust = 1, colour = "black"),
+        axis.text.y = element_text(colour = "black"))
+```
+
+```{r plot-t1b, fig.height=5, fig.width=9}
+boot_results_agg %>%
+  select(-n_TC_cells) %>%
+  left_join(instability_agg %>% select(unit_id, reliability, n_TC_cells), by = "unit_id") %>%
+  mutate(TC_cluster = factor(TC_cluster, levels = t1_cluster_order)) %>%
+  ggplot(aes(x = TC_cluster, y = boot_sd, colour = reliability)) +
+  geom_violin(aes(group = TC_cluster), fill = "grey92", colour = "grey70",
+              linewidth = 0.4, alpha = 0.6) +
+  geom_jitter(width = 0.2, size = 1.4, alpha = 0.65) +
+  geom_hline(yintercept = MAX_MEAN_SD, linetype = "dashed",
+             colour = "grey50", linewidth = 0.5) +
+  scale_colour_manual(values = rel_colours, name = "Reliability") +
+  labs(title = "Test 1b — Bootstrap SD distribution per cluster",
+       subtitle = "Each dot = one patient × tissue × timepoint unit",
+       x = NULL, y = "Bootstrap SD (proportion units)") +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8.5, colour = "grey35"),
+        axis.text.x = element_text(angle = 35, hjust = 1, colour = "black"),
+        axis.text.y = element_text(colour = "black"))
+```
+
+## 3.2 Test 2 — Detection rate analysis
+
+**Question:** Is a cluster detected more often in low-TC-count (flagged) samples than in high-TC-count (reliable) samples? A cluster that disappears as cell count increases is a phantom cluster — it exists only because with few cells, random assignment places 1–2 stray cells there by chance.
+
+Detection here uses a relaxed threshold (≥1 cell AND ≥1% proportion) to preserve sensitivity for the enrichment-in-flagged question. The strict threshold (≥3 cells AND ≥1%) is reserved for Test 3.
+
+```{r test2}
+detection_df_t2 <- observed_props_agg %>%
+  left_join(tc_counts_per_cluster, by = c("unit_id", "TC_cluster")) %>%
+  replace_na(list(n_cluster_cells = 0)) %>%
+  left_join(instability_agg %>% select(unit_id, n_TC_cells, flagged, reliability),
+            by = "unit_id") %>%
+  mutate(
+    detected = n_cluster_cells >= MIN_DETECT_CELLS_T2 & observed_prop >= MIN_DETECT_PROP,
+    n_bin    = cut(n_TC_cells,
+                  breaks = c(0, 10, 30, 100, 500, Inf),
+                  labels = c("<10", "10–30", "30–100", "100–500", ">500"),
+                  right = TRUE, include.loIst = TRUE)
+  )
+
+detection_rate <- detection_df_t2 %>%
+  group_by(TC_cluster, n_bin, .drop = FALSE) %>%
+  summarise(n_units = n(), n_detected = sum(detected),
+            detection_rate = n_detected / n_units, .groups = "drop")
+
+artifact_cor <- detection_df_t2 %>%
+  group_by(TC_cluster) %>%
+  summarise(
+    spearman_r             = cor(n_TC_cells, as.numeric(detected),
+                                 method = "spearman", use = "complete.obs"),
+    p_value                = tryCatch(
+      cor.test(n_TC_cells, as.numeric(detected), method = "spearman",
+               exact = FALSE)$p.value, error = function(e) NA_real_),
+    pct_detected_flagged   = mean(detected[flagged == TRUE],  na.rm = TRUE) * 100,
+    pct_detected_reliable  = mean(detected[flagged == FALSE], na.rm = TRUE) * 100,
+    enrichment_in_flagged  = pct_detected_flagged - pct_detected_reliable,
+    median_cells_when_detected = median(n_cluster_cells[detected], na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    p_adj         = p.adjust(p_value, method = "BH"),
+    artifact_label = case_when(
+      spearman_r < -0.3 & p_adj < 0.05 ~ "likely artifact",
+      spearman_r < 0    & p_adj < 0.05 ~ "possible artifact",
+      spearman_r < 0    & p_adj >= 0.05 ~ "inconclusive",
+      TRUE                              ~ "likely biology"
+    ) %>% factor(levels = c("likely artifact", "possible artifact",
+                            "inconclusive", "likely biology"))
+  ) %>%
+  arrange(spearman_r)
+
+t2_heat_order   <- artifact_cor %>% arrange(spearman_r)            %>% pull(TC_cluster)
+t2_enrich_order <- artifact_cor %>% arrange(enrichment_in_flagged) %>% pull(TC_cluster)
+
+artifact_colours <- c(
+  "likely artifact"   = "#E24B4A", "possible artifact" = "#EF9F27",
+  "inconclusive"      = "#888780", "likely biology"    = "#185FA5"
+)
+```
+
+```{r plot-t2a, fig.height=5}
+detection_rate %>%
+  left_join(artifact_cor %>% select(TC_cluster, artifact_label, spearman_r),
+            by = "TC_cluster") %>%
+  mutate(TC_cluster = factor(TC_cluster, levels = t2_heat_order)) %>%
+  ggplot(aes(x = n_bin, y = TC_cluster, fill = detection_rate)) +
+  geom_tile(colour = "white", linewidth = 0.4) +
+  geom_text(aes(label = paste0(n_detected, "/", n_units)), size = 2.8, colour = "white") +
+  scale_fill_gradientn(colours = c("#E6F1FB", "#378ADD", "#042C53"),
+                       limits = c(0, 1), labels = scales::percent_format(accuracy = 1),
+                       name = "Detection\nrate") +
+  labs(title = "Test 2 — Cluster detection rate by n_TC_cells bin",
+       subtitle = paste0("Detected = ≥", MIN_DETECT_CELLS_T2, " cell AND ≥",
+                         MIN_DETECT_PROP * 100, "% | top rows = artifact-like"),
+       x = "TC cells in unit (pooled across ROIs)", y = NULL) +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8.5, colour = "grey35"),
+        axis.text = element_text(colour = "black"),
+        legend.key.height = unit(0.8, "cm"))
+```
+
+```{r plot-t2b, fig.height=5}
+artifact_cor %>%
+  mutate(
+    TC_cluster = factor(TC_cluster, levels = t2_enrich_order),
+    hjust_val  = ifelse(enrichment_in_flagged > 0, -0.15, 1.15)
+  ) %>%
+  ggplot(aes(y = TC_cluster, colour = artifact_label)) +
+  geom_vline(xintercept = 0, colour = "grey50", linewidth = 0.5) +
+  geom_segment(aes(x = 0, xend = enrichment_in_flagged, yend = TC_cluster),
+               linewidth = 1.2, alpha = 0.8) +
+  geom_point(aes(x = enrichment_in_flagged), size = 3.5) +
+  geom_text(aes(x = enrichment_in_flagged,
+                label = paste0(round(pct_detected_flagged, 0), "% vs ",
+                               round(pct_detected_reliable, 0), "%"),
+                hjust = hjust_val), size = 2.8, colour = "grey25") +
+  scale_colour_manual(values = artifact_colours, name = "Artifact assessment") +
+  scale_x_continuous(labels = function(x) paste0(x, " pp"),
+                     expand = expansion(mult = 0.25)) +
+  labs(title = "Test 2b — Detection enrichment in flagged vs reliable units",
+       subtitle = "Positive = cluster detected more often in low-n samples = artifact signal",
+       x = "Detection rate difference (flagged − reliable, percentage points)", y = NULL) +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8.5, colour = "grey35"),
+        axis.text = element_text(colour = "black"))
+```
+
+## 3.3 Test 3 — Bootstrap CI overlap with zero
+
+**Question:** Even when a cluster is detected (using the strict ≥3 cells AND ≥1% threshold), is its bootstrap 95% CI statistically distinguishable from zero? A cluster whose CI routinely includes zero in flagged samples cannot be distinguished from complete absence — its observed proportion could easily be a sampling fluke.
+
+```{r test3}
+zero_overlap <- boot_results_agg %>%
+  select(-n_TC_cells) %>%
+  left_join(observed_props_agg %>% select(unit_id, TC_cluster, observed_prop),
+            by = c("unit_id", "TC_cluster")) %>%
+  left_join(tc_counts_per_cluster, by = c("unit_id", "TC_cluster")) %>%
+  replace_na(list(observed_prop = 0, n_cluster_cells = 0)) %>%
+  left_join(instability_agg %>% select(unit_id, n_TC_cells, flagged, reliability),
+            by = "unit_id") %>%
+  mutate(
+    CI_overlaps_zero = boot_q025 <= 0,
+    detected         = n_cluster_cells >= MIN_DETECT_CELLS & observed_prop >= MIN_DETECT_PROP
+  )
+
+zero_summary <- zero_overlap %>%
+  filter(detected) %>%
+  group_by(TC_cluster) %>%
+  summarise(
+    n_detected           = n(),
+    pct_CI_overlaps_zero = mean(CI_overlaps_zero) * 100,
+    pct_flagged_overlap  = ifelse(sum(flagged) > 0,
+                                  mean(CI_overlaps_zero[flagged]) * 100, NA_real_),
+    pct_reliable_overlap = ifelse(sum(!flagged) > 0,
+                                  mean(CI_overlaps_zero[!flagged]) * 100, NA_real_),
+    .groups = "drop"
+  ) %>%
+  left_join(artifact_cor %>% select(TC_cluster, artifact_label, spearman_r),
+            by = "TC_cluster") %>%
+  arrange(desc(pct_CI_overlaps_zero))
+
+t3_cluster_order <- zero_summary %>% arrange(pct_CI_overlaps_zero) %>% pull(TC_cluster)
+```
+
+```{r plot-t3, fig.height=5}
+zero_summary %>%
+  mutate(TC_cluster = factor(TC_cluster, levels = t3_cluster_order)) %>%
+  pivot_longer(cols = c(pct_flagged_overlap, pct_reliable_overlap),
+               names_to = "unit_type", values_to = "pct_overlap") %>%
+  mutate(unit_type = recode(unit_type,
+                            pct_flagged_overlap  = "Flagged units",
+                            pct_reliable_overlap = "Reliable units")) %>%
+  ggplot(aes(y = TC_cluster, x = pct_overlap, fill = unit_type)) +
+  geom_col(position = "dodge", width = 0.65, alpha = 0.88) +
+  geom_vline(xintercept = 50, linetype = "dashed", colour = "grey50", linewidth = 0.5) +
+  annotate("text", x = 50, y = Inf, label = "50% overlap",
+           hjust = -0.1, vjust = 1.5, size = 3, colour = "grey45") +
+  scale_fill_manual(values = c("Flagged units" = "#E24B4A", "Reliable units" = "#185FA5"),
+                    name = NULL) +
+  scale_x_continuous(limits = c(0, 105), labels = function(x) paste0(x, "%")) +
+  labs(title = "Test 3 — 95% CI overlap with zero per cluster",
+       subtitle = paste0("Among units passing strict detection threshold (≥", MIN_DETECT_CELLS,
+                         " cells AND ≥", MIN_DETECT_PROP * 100,
+                         "%) | >50% overlap in flagged units = strong artifact"),
+       x = "% of detections where 95% CI includes zero", y = NULL) +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8.5, colour = "grey35"),
+        axis.text = element_text(colour = "black"), legend.position = "top")
+```
+
+## 3.4 Combined artifact verdict
+
+The T2* criterion corrects for a structural blind spot in T1 and T3: very rare clusters never accumulate enough cells to generate bootstrap variance (T1) or pass the strict detection threshold (T3), yet may show the strongest artifact signal in T2. T2* fires when Spearman r < −0.3 AND Δdetect > 30pp.
+
+```{r combined-verdict}
+verdict <- cluster_rank %>%
+  left_join(artifact_cor %>% select(TC_cluster, spearman_r, artifact_label,
+                                     enrichment_in_flagged,
+                                     pct_detected_flagged, pct_detected_reliable),
+            by = "TC_cluster") %>%
+  left_join(zero_summary %>% select(TC_cluster, pct_CI_overlaps_zero, pct_flagged_overlap),
+            by = "TC_cluster") %>%
+  mutate(
+    pct_flagged_overlap  = replace_na(pct_flagged_overlap, 0),
+    pct_CI_overlaps_zero = replace_na(pct_CI_overlaps_zero, 0),
+    t1_flag   = instability_rank <= ceiling(length(tc_cols) / 2),
+    t2_flag   = artifact_label %in% c("likely artifact", "possible artifact"),
+    t3_flag   = !is.na(pct_flagged_overlap) & pct_flagged_overlap > 50,
+    strong_t2 = spearman_r < -0.3 & enrichment_in_flagged > 30,
+    n_red_flags_revised = t1_flag + t2_flag + t3_flag + strong_t2,
+    final_verdict = case_when(
+      n_red_flags_revised >= 3 ~ "artifact (≥3 criteria)",
+      n_red_flags_revised == 2 ~ "probable artifact (2 criteria)",
+      n_red_flags_revised == 1 ~ "uncertain (1 criterion)",
+      TRUE                     ~ "biology (0 criteria)"
+    ) %>% factor(levels = c("artifact (≥3 criteria)", "probable artifact (2 criteria)",
+                            "uncertain (1 criterion)", "biology (0 criteria)"))
+  ) %>%
+  arrange(desc(n_red_flags_revised))
+
+verdict_colours <- c(
+  "artifact (≥3 criteria)"         = "#E24B4A",
+  "probable artifact (2 criteria)" = "#EF9F27",
+  "uncertain (1 criterion)"        = "#888780",
+  "biology (0 criteria)"           = "#185FA5"
+)
+t4_cluster_order <- verdict %>% arrange(n_red_flags_revised) %>% pull(TC_cluster)
+```
+
+```{r plot-verdict, fig.height=5, fig.width=11}
+verdict %>%
+  mutate(TC_cluster = factor(TC_cluster, levels = t4_cluster_order)) %>%
+  ggplot(aes(y = TC_cluster, x = n_red_flags_revised, fill = final_verdict)) +
+  geom_col(width = 0.65, alpha = 0.9) +
+  geom_text(aes(x = n_red_flags_revised + 0.05,
+                label = paste0(final_verdict,
+                               " | T1:", ifelse(t1_flag, "✓", "✗"),
+                               " T2:", ifelse(t2_flag, "✓", "✗"),
+                               " T3:", ifelse(t3_flag, "✓",
+                                       ifelse(is.na(pct_flagged_overlap), "NA", "✗")),
+                               " T2*:", ifelse(strong_t2, "✓", "✗"),
+                               " | r=", round(spearman_r, 2),
+                               " | Δ=", round(enrichment_in_flagged, 0), "pp")),
+            hjust = 0, size = 2.5, colour = "grey25") +
+  scale_fill_manual(values = verdict_colours, name = NULL, guide = "none") +
+  scale_x_continuous(breaks = 0:4, limits = c(0, 10.5)) +
+  labs(title = "Combined artifact verdict — 4 criteria",
+       subtitle = "T1: top-half instability | T2: detection enriched in low-n (≥1 cell, ≥1%) | T3: CI overlaps zero >50% | T2*: r<−0.3 AND Δ>30pp",
+       x = "Number of criteria met (out of 4)", y = NULL) +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8, colour = "grey35"),
+        axis.text = element_text(colour = "black"))
+```
+
+```{r verdict-table}
+verdict %>%
+  select(TC_cluster, instability_rank, t1_flag, t2_flag, t3_flag, strong_t2,
+         spearman_r, enrichment_in_flagged, pct_CI_overlaps_zero,
+         n_red_flags_revised, final_verdict) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  knitr::kable(caption = "Artifact verdict table — all TC clusters")
+```
+
+<div class="result-note">
+**Verdict summary:** CHGAhi TC, GD2lo TC, and GATA3hi TC are classified as probable artifacts (2/4 criteria). They should be excluded from BM composition analyses. Bridge-like TC, CD24+/-, and early SYM-like TC show variable evidence and require further scrutiny.
+</div>
+
+---
+
+# 4. Validation of Flagged Clusters in Primary Tumor
+
+<div class="section-note">
+If CHGAhi, GD2lo, and GATA3hi TC are genuine cell types rather than classification noise, they should be stably detected in primary tumor samples where TC cell counts are very high (>500 cells per unit). Their near-absence in reliable BM units can then be attributed to true rarity in BM, not to sampling artifact.
+</div>
+
+## 4.1 PT detection rates for flagged clusters
+
+```{r pt-analysis}
+instability_pt <- instability_agg %>% filter(Tissue == PT_LABEL)
+
+detection_pt <- observed_props_agg %>%
+  filter(unit_id %in% instability_pt$unit_id) %>%
+  left_join(tc_counts_per_cluster, by = c("unit_id", "TC_cluster")) %>%
+  replace_na(list(n_cluster_cells = 0)) %>%
+  left_join(instability_pt %>% select(unit_id, n_TC_cells, reliability, flagged),
+            by = "unit_id") %>%
+  mutate(
+    detected = n_cluster_cells >= MIN_DETECT_CELLS & observed_prop >= MIN_DETECT_PROP,
+    n_bin    = cut(n_TC_cells,
+                  breaks = c(0, 10, 30, 100, 500, Inf),
+                  labels = c("<10", "10–30", "30–100", "100–500", ">500"),
+                  right = TRUE, include.loIst = TRUE)
+  )
+
+detection_rate_pt <- detection_pt %>%
+  filter(TC_cluster %in% ARTIFACT_CLUSTERS) %>%
+  group_by(TC_cluster, n_bin, .drop = FALSE) %>%
+  summarise(n_units = n(), n_detected = sum(detected),
+            detection_rate = n_detected / n_units, .groups = "drop")
+
+artifact_cor_pt <- detection_pt %>%
+  filter(TC_cluster %in% ARTIFACT_CLUSTERS) %>%
+  group_by(TC_cluster) %>%
+  summarise(
+    spearman_r_PT            = cor(n_TC_cells, as.numeric(detected),
+                                   method = "spearman", use = "complete.obs"),
+    pct_detected_flagged_PT  = mean(detected[flagged == TRUE],  na.rm = TRUE) * 100,
+    pct_detected_reliable_PT = mean(detected[flagged == FALSE], na.rm = TRUE) * 100,
+    .groups = "drop"
+  )
+
+comparison_table <- artifact_cor_pt %>%
+  left_join(
+    artifact_cor %>%
+      filter(TC_cluster %in% ARTIFACT_CLUSTERS) %>%
+      select(TC_cluster, spearman_r_BM = spearman_r,
+             pct_detected_reliable_BM = pct_detected_reliable),
+    by = "TC_cluster"
+  )
+
+pt_heat_order <- detection_rate_pt %>%
+  filter(n_bin == ">500") %>% arrange(desc(detection_rate)) %>% pull(TC_cluster)
+pt_heat_order <- c(pt_heat_order, setdiff(ARTIFACT_CLUSTERS, pt_heat_order))
+```
+
+```{r plot-pt-heat, fig.height=3}
+detection_rate_pt %>%
+  mutate(TC_cluster = factor(TC_cluster, levels = pt_heat_order)) %>%
+  ggplot(aes(x = n_bin, y = TC_cluster, fill = detection_rate)) +
+  geom_tile(colour = "white", linewidth = 0.5) +
+  geom_text(aes(label = paste0(n_detected, "/", n_units)), size = 3.2, colour = "white") +
+  scale_fill_gradientn(colours = c("#E6F1FB", "#378ADD", "#042C53"),
+                       limits = c(0, 1), labels = scales::percent_format(accuracy = 1),
+                       name = "Detection\nrate") +
+  labs(title = "PT detection rate — probable-artifact BM clusters",
+       subtitle = "High detection in PT at >500 cells = biologically real cluster",
+       x = "TC cells in PT unit (pooled across ROIs)", y = NULL) +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8.5, colour = "grey35"),
+        axis.text = element_text(colour = "black"))
+```
+
+## 4.2 BM vs PT detection rate comparison
+
+```{r plot-lollipop, fig.height=4}
+comparison_table %>%
+  select(TC_cluster,
+         `BM — reliable` = pct_detected_reliable_BM,
+         `PT — reliable` = pct_detected_reliable_PT) %>%
+  pivot_longer(-TC_cluster, names_to = "context", values_to = "pct_detected") %>%
+  mutate(TC_cluster = factor(TC_cluster, levels = rev(ARTIFACT_CLUSTERS))) %>%
+  ggplot(aes(y = TC_cluster, x = pct_detected, colour = context)) +
+  geom_line(aes(group = TC_cluster), colour = "grey70", linewidth = 1) +
+  geom_point(size = 4.5, alpha = 0.9) +
+  geom_text(aes(label = paste0(round(pct_detected, 0), "%")),
+            vjust = -0.9, size = 3, colour = "grey25") +
+  scale_colour_manual(values = c("BM — reliable" = "#E24B4A", "PT — reliable" = "#185FA5"),
+                      name = NULL) +
+  scale_x_continuous(limits = c(0, 110), labels = function(x) paste0(x, "%")) +
+  labs(title = "Detection rate in reliable units: BM vs PT",
+       subtitle = "Large BM→PT gap = biologically real in PT but artifactual in BM",
+       x = "% of reliable units where cluster is detected", y = NULL) +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8.5, colour = "grey35"),
+        axis.text = element_text(colour = "black"), legend.position = "top")
+```
+
+<div class="result-note">
+CHGAhi TC (13% reliable BM vs 13% reliable PT), GD2lo TC (0% vs 15%), and GATA3hi TC (0% vs 16%) are all detected at low rates even in PT — confirming they are genuinely rare TC subtypes rather than common clusters mislabelled. Their near-zero detection in reliable BM units is therefore a combination of true rarity and sampling artifact, not pure artifact.
+</div>
+
+---
+
+# 5. BM vs PT Enrichment — Testing the Metastasis Claim
+
+<div class="section-note">
+Testing if **CD24+ marker-lo TC, CD24- marker-lo TC, and early SYM-like TC cells preferentially detach from the tumor core and metastasize to bone marrow**. I test this claim using reliable units only (n≥30 TC cells pooled), at the DE timepoint, across the mixed paired/unpaired study design.
+
+**Important caveat:** Even if enrichment is confirmed statistically, this analysis cannot distinguish between preferential metastasis (these cells leave the tumor more readily) and preferential BM survival/expansion (all cells arrive but only these survive). The metastasis interpretation requires additional functional or longitudinal evidence.
+</div>
+
+## 5.1 Unweighted Wilcoxon tests — exploratory
+
+```{r enrichment-wilcoxon}
+enrich_df <- observed_props_agg %>%
+  left_join(instability_agg %>% select(unit_id, Sample, Tissue, Timepoint,
+                                        n_TC_cells, flagged, reliability),
+            by = "unit_id") %>%
+  filter(Timepoint == DE_LABEL, !flagged) %>%
+  select(Sample, Tissue, TC_cluster, observed_prop, n_TC_cells, reliability)
+
+both_tissues <- enrich_df %>%
+  distinct(Sample, Tissue) %>%
+  count(Sample) %>%
+  filter(n == 2) %>%
+  pull(Sample)
+
+bm_only_n <- enrich_df %>%
+  distinct(Sample, Tissue) %>%
+  filter(Tissue == BM_LABEL) %>%
+  anti_join(enrich_df %>% filter(Tissue == PT_LABEL) %>% distinct(Sample), by = "Sample") %>%
+  nrow()
+
+pt_only_n <- enrich_df %>%
+  distinct(Sample, Tissue) %>%
+  filter(Tissue == PT_LABEL) %>%
+  anti_join(enrich_df %>% filter(Tissue == BM_LABEL) %>% distinct(Sample), by = "Sample") %>%
+  nrow()
+
+tibble(
+  Design       = c("Paired — both BM and PT reliable at DE",
+                   "BM only — no reliable PT at DE",
+                   "PT only — no reliable BM at DE",
+                   "Total"),
+  `N patients` = c(length(both_tissues), bm_only_n, pt_only_n,
+                   length(both_tissues) + bm_only_n + pt_only_n)
+) %>%
+  knitr::kable(caption = paste0(
+    "Patient contribution to the BM vs PT enrichment analysis. ",
+    "Only reliable units (>=30 pooled TC cells) at the DE timepoint are included. ",
+    "Paired patients contribute within-patient BM vs PT contrasts in the LMM; ",
+    "unpaired patients contribute as single-tissue observations to the random-intercept model."
+  ))
+
+run_enrichment_test <- function(cluster, df, paired_samples) {
+  bm <- df %>% filter(TC_cluster == cluster, Tissue == BM_LABEL)
+  pt <- df %>% filter(TC_cluster == cluster, Tissue == PT_LABEL)
+  bm_paired <- bm %>% filter(Sample %in% paired_samples) %>% arrange(Sample)
+  pt_paired <- pt %>% filter(Sample %in% paired_samples) %>% arrange(Sample)
+  unpaired_p <- tryCatch(
+    wilcox.test(bm$observed_prop, pt$observed_prop, exact = FALSE)$p.value,
+    error = function(e) NA_real_)
+  paired_p <- tryCatch({
+    if (nrow(bm_paired) >= 3 && nrow(pt_paired) >= 3 &&
+        nrow(bm_paired) == nrow(pt_paired))
+      wilcox.test(bm_paired$observed_prop, pt_paired$observed_prop,
+                  paired = TRUE, exact = FALSE)$p.value
+    else NA_real_
+  }, error = function(e) NA_real_)
+  med_bm <- median(bm$observed_prop, na.rm = TRUE)
+  med_pt <- median(pt$observed_prop, na.rm = TRUE)
+  tibble(TC_cluster = cluster, n_BM = nrow(bm), n_PT = nrow(pt),
+         n_paired = nrow(bm_paired),
+         median_BM_pct = med_bm * 100, median_PT_pct = med_pt * 100,
+         delta_pp = (med_bm - med_pt) * 100,
+         fold_BM_over_PT = ifelse(med_pt > 0, med_bm / med_pt, NA_real_),
+         p_unpaired = unpaired_p, p_paired = paired_p)
+}
+
+all_clusters_enrich <- map_dfr(tc_cols, run_enrichment_test,
+                                df = enrich_df, paired_samples = both_tissues) %>%
+  mutate(
+    p_adj_unpaired   = p.adjust(p_unpaired, method = "BH"),
+    p_adj_paired     = p.adjust(p_paired,   method = "BH"),
+    direction        = case_when(delta_pp > 0 ~ "BM > PT", delta_pp < 0 ~ "PT > BM",
+                                 TRUE ~ "equal"),
+    is_claim_cluster = TC_cluster %in% CLUSTERS_OF_INTEREST,
+    sig_label        = case_when(p_adj_unpaired < 0.001 ~ "***",
+                                 p_adj_unpaired < 0.01  ~ "**",
+                                 p_adj_unpaired < 0.05  ~ "*",
+                                 p_adj_unpaired < 0.10  ~ "†",
+                                 TRUE ~ "ns")
+  ) %>%
+  arrange(p_adj_unpaired)
+
+all_clusters_enrich %>%
+  select(TC_cluster, n_BM, n_PT, median_BM_pct, median_PT_pct,
+         delta_pp, fold_BM_over_PT, p_adj_unpaired, sig_label, direction) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  knitr::kable(caption = "Unweighted Wilcoxon results — all clusters, BH-corrected")
+```
+
+```{r plot-forest-Unweighted, fig.height=5}
+forest_order <- all_clusters_enrich %>% arrange(delta_pp) %>% pull(TC_cluster)
+
+all_clusters_enrich %>%
+  mutate(
+    TC_cluster   = factor(TC_cluster, levels = forest_order),
+    point_colour = case_when(
+      is_claim_cluster & delta_pp > 0 & p_adj_unpaired < 0.05 ~ "claim — significant",
+      is_claim_cluster ~ "claim — ns",
+      delta_pp > 0 & p_adj_unpaired < 0.05 ~ "other — significant",
+      TRUE ~ "other — ns"
+    ) %>% factor(levels = c("claim — significant", "claim — ns",
+                            "other — significant", "other — ns"))
+  ) %>%
+  ggplot(aes(y = TC_cluster, x = delta_pp, colour = point_colour)) +
+  geom_vline(xintercept = 0, colour = "grey50", linewidth = 0.5) +
+  geom_segment(aes(x = 0, xend = delta_pp, yend = TC_cluster),
+               linewidth = 1.0, alpha = 0.7) +
+  geom_point(size = 4) +
+  geom_text(aes(x = delta_pp,
+                label = paste0(sig_label, "  ", round(median_BM_pct, 1),
+                               "% vs ", round(median_PT_pct, 1), "%")),
+            hjust = ifelse(all_clusters_enrich %>% arrange(delta_pp) %>%
+                             pull(delta_pp) >= 0, -0.1, 1.1),
+            size = 2.8, colour = "grey25") +
+  scale_colour_manual(values = c("claim — significant" = "#E24B4A",
+                                  "claim — ns" = "#F0997B",
+                                  "other — significant" = "#185FA5",
+                                  "other — ns" = "#B5D4F4"), name = NULL) +
+  scale_x_continuous(labels = function(x) paste0(x, " pp"),
+                     expand = expansion(mult = 0.3)) +
+  labs(title = "BM vs PT enrichment — all TC clusters (Unweighted Wilcoxon)",
+       subtitle = "Δ = median BM% − median PT% | BH-adjusted | claim clusters in red",
+       x = "Median proportion difference (BM − PT, percentage points)", y = NULL) +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8.5, colour = "grey35"),
+        axis.text = element_text(colour = "black"))
+```
+
+## 5.2 Linear mixed-effects models — three representations
+
+<div class="section-note">
+The Unweighted Wilcoxon treats all units equally regardless of how many TC cells they contain. A unit with 15,000 cells provides a far more reliable proportion estimate than one with 30 cells. I address this with three parallel LMMs:
+
+- **Model 1 (logit proportion):** Standard compositional model. The logit transform improves distributional properties. Zeros receive a Haldane-Anscombe correction (0.5/n) before transformation.
+- **Model 2 (CLR proportion):** Centred log-ratio transform removes the sum-to-1 compositional constraint. A cluster appearing "enriched" in BM only because other clusters are depleted there will be demoted by CLR. This is the most statistically principled model for compositional data.
+- **Model 3 (log count):** Included for transparency only. **Cannot be validly used for BM vs PT comparison** — BM samples are cytospins and PT are tissue sections, so absolute cell counts per ROI are not comparable across tissues.
+
+All models use `log(n_TC_cells)` as a weight, and include a random intercept per patient `(1|Sample)` to account for the mixed paired/unpaired study design. Crucially, the model is fitted on a complete unit × cluster grid including zero-proportion entries — this ensures that units where a cluster is absent contribute to the model rather than being silently dropped, which would bias estimates upward.
+</div>
+
+```{r lmm-setup}
+inv_logit <- function(x) 1 / (1 + exp(-x))
+
+reliable_de_units <- instability_agg %>%
+  filter(Timepoint == DE_LABEL, !flagged) %>%
+  select(unit_id, Sample, Tissue, Timepoint, n_TC_cells, flagged, reliability)
+
+complete_grid <- expand_grid(
+  unit_id    = reliable_de_units$unit_id,
+  TC_cluster = tc_cols
+)
+
+base_df <- complete_grid %>%
+  left_join(observed_props_agg %>% select(unit_id, TC_cluster, observed_prop),
+            by = c("unit_id", "TC_cluster")) %>%
+  replace_na(list(observed_prop = 0)) %>%
+  left_join(tc_counts_per_cluster, by = c("unit_id", "TC_cluster")) %>%
+  replace_na(list(n_cluster_cells = 0)) %>%
+  left_join(reliable_de_units, by = "unit_id") %>%
+  mutate(
+    Tissue     = factor(Tissue, levels = c(PT_LABEL, BM_LABEL)),
+    log_weight = log(n_TC_cells)
+  )
+
+message("base_df: ", nrow(base_df), " rows | ",
+        n_distinct(base_df$unit_id), " units | ",
+        sum(base_df$Tissue == BM_LABEL) / length(tc_cols), " BM units | ",
+        sum(base_df$Tissue == PT_LABEL) / length(tc_cols), " PT units")
+
+logit_df <- base_df %>%
+  mutate(
+    prop_adj   = ifelse(observed_prop == 0, CLR_PSEUDOCOUNT / n_TC_cells, observed_prop),
+    logit_prop = log(prop_adj / (1 - prop_adj))
+  )
+
+clr_df <- base_df %>%
+  group_by(unit_id) %>%
+  mutate(
+    prop_adj  = ifelse(observed_prop == 0, CLR_PSEUDOCOUNT / n_TC_cells, observed_prop),
+    log_prop  = log(prop_adj),
+    clr_value = log_prop - mean(log_prop)
+  ) %>%
+  ungroup()
+
+clr_check <- clr_df %>% group_by(unit_id) %>%
+  summarise(clr_sum = sum(clr_value), .groups = "drop")
+message("CLR sanity — max |deviation from 0|: ",
+        round(max(abs(clr_check$clr_sum)), 12))
+
+count_df <- base_df %>% mutate(log_count = log1p(n_cluster_cells))
+```
+
+```{r lmm-fitter}
+fit_lmm_generic <- function(cluster, df, response_col,
+                             weight_col = "log_weight", model_name = "model") {
+  d <- df %>% filter(TC_cluster == cluster) %>%
+    rename(y = all_of(response_col), w = all_of(weight_col))
+  n_bm <- sum(d$Tissue == BM_LABEL, na.rm = TRUE)
+  n_pt <- sum(d$Tissue == PT_LABEL, na.rm = TRUE)
+  if (n_bm < 3 || n_pt < 3 || isTRUE(var(d$y, na.rm = TRUE) == 0))
+    return(tibble(TC_cluster = cluster, model = model_name,
+                  estimate = NA_real_, se = NA_real_, df_satt = NA_real_,
+                  t_value = NA_real_, p_value = NA_real_, mm_BM = NA_real_,
+                  mm_PT = NA_real_, n_BM = n_bm, n_PT = n_pt,
+                  n_patients = n_distinct(d$Sample), n_paired = NA_integer_,
+                  converged = FALSE, note = "insufficient data"))
+  n_paired <- d %>% distinct(Sample, Tissue) %>% count(Sample) %>%
+    filter(n == 2) %>% nrow()
+  fit <- tryCatch(
+    suppressMessages(lmer(y ~ Tissue + (1 | Sample), data = d, weights = w, REML = TRUE,
+                          control = lmerControl(optimizer = "bobyqa",
+                                                optCtrl = list(maxfun = 1e5)))),
+    error = function(e) NULL)
+  if (is.null(fit))
+    return(tibble(TC_cluster = cluster, model = model_name,
+                  estimate = NA_real_, se = NA_real_, df_satt = NA_real_,
+                  t_value = NA_real_, p_value = NA_real_, mm_BM = NA_real_,
+                  mm_PT = NA_real_, n_BM = n_bm, n_PT = n_pt,
+                  n_patients = n_distinct(d$Sample), n_paired = n_paired,
+                  converged = FALSE, note = "model failed"))
+  conv    <- length(fit@optinfo$conv$lme4) == 0
+  coef_tb <- as.data.frame(summary(fit)$coefficients)
+  trow    <- paste0("Tissue", BM_LABEL)
+  em <- tryCatch(as.data.frame(emmeans(fit, ~ Tissue, weights = "proportional")),
+                 error = function(e) NULL)
+  mm_BM <- if (!is.null(em)) em$emmean[em$Tissue == BM_LABEL] else NA_real_
+  mm_PT <- if (!is.null(em)) em$emmean[em$Tissue == PT_LABEL] else NA_real_
+  tibble(TC_cluster = cluster, model = model_name,
+         estimate = coef_tb[trow, "Estimate"], se = coef_tb[trow, "Std. Error"],
+         df_satt = coef_tb[trow, "df"], t_value = coef_tb[trow, "t value"],
+         p_value = coef_tb[trow, "Pr(>|t|)"], mm_BM = mm_BM, mm_PT = mm_PT,
+         n_BM = n_bm, n_PT = n_pt, n_patients = n_distinct(d$Sample),
+         n_paired = n_paired, converged = conv,
+         note = ifelse(conv, "OK", "convergence warning"))
+}
+
+apply_BH <- function(df) {
+  df %>%
+    mutate(
+      p_adj_BH  = p.adjust(p_value, method = "BH"),
+      sig_label = case_when(p_adj_BH < 0.001 ~ "***", p_adj_BH < 0.01  ~ "**",
+                            p_adj_BH < 0.05  ~ "*",   p_adj_BH < 0.10  ~ "†",
+                            TRUE ~ "ns"),
+      direction = case_when(estimate > 0 ~ "BM > PT", estimate < 0 ~ "PT > BM",
+                            TRUE ~ "equal"),
+      is_claim  = TC_cluster %in% CLUSTERS_OF_INTEREST
+    ) %>%
+    arrange(p_adj_BH)
+}
+```
+
+```{r fit-lmm}
+message("Fitting logit proportion model...")
+results_logit <- map_dfr(tc_cols, fit_lmm_generic, df = logit_df,
+                          response_col = "logit_prop", model_name = "logit_proportion") %>%
+  apply_BH()
+
+message("Fitting CLR proportion model...")
+results_clr <- map_dfr(tc_cols, fit_lmm_generic, df = clr_df,
+                        response_col = "clr_value", model_name = "CLR_proportion") %>%
+  apply_BH()
+
+message("Fitting log count model")
+results_count <- map_dfr(tc_cols, fit_lmm_generic, df = count_df,
+                          response_col = "log_count", model_name = "log_count") %>%
+  apply_BH()
+```
+
+### Model results tables {.tabset}
+
+#### Logit proportion
+
+```{r table-logit}
+results_logit %>%
+  select(TC_cluster, estimate, se, df_satt, p_value, p_adj_BH,
+         sig_label, direction, mm_BM, mm_PT, converged) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  knitr::kable(caption = "LMM results — logit(proportion) ~ Tissue + (1|Patient)")
+```
+
+#### CLR proportion
+
+```{r table-clr}
+results_clr %>%
+  select(TC_cluster, estimate, se, df_satt, p_value, p_adj_BH,
+         sig_label, direction, mm_BM, mm_PT, converged) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  knitr::kable(caption = "LMM results — CLR(proportion) ~ Tissue + (1|Patient)")
+```
+
+#### Log count [confounded]
+
+```{r table-count}
+results_count %>%
+  select(TC_cluster, estimate, se, df_satt, p_value, p_adj_BH,
+         sig_label, direction, mm_BM, mm_PT, converged) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  knitr::kable(caption = "LMM results — log1p(count) ~ Tissue + (1|Patient)")
+```
+
+### Three-model forest comparison
+
+Estimates are z-scored within each model to allow visual comparison across different scales. Agreement between logit and CLR (the two compositionally-corrected models) is the key diagnostic.
+
+```{r plot-three-model, fig.height=6, fig.width=10}
+all_results <- bind_rows(results_logit, results_clr, results_count) %>%
+  group_by(model) %>%
+  mutate(sd_est = sd(estimate, na.rm = TRUE),
+         z_estimate = (estimate - mean(estimate, na.rm = TRUE)) / sd_est,
+         z_se = se / sd_est,
+         model_label = recode(model,
+                              logit_proportion = "Logit proportion",
+                              CLR_proportion   = "CLR proportion",
+                              log_count        = "log count") %>%
+           factor(levels = c("Logit proportion", "CLR proportion",
+                              "log count"))) %>%
+  ungroup()
+
+cluster_order_forest <- results_clr %>% arrange(estimate) %>% pull(TC_cluster)
+model_colours <- c("Logit proportion" = "#185FA5", "CLR proportion" = "#1D9E75",
+                   "log count" = "#888780")
+
+all_results %>%
+  mutate(TC_cluster = factor(TC_cluster, levels = cluster_order_forest)) %>%
+  ggplot(aes(y = TC_cluster, x = z_estimate, colour = model_label, shape = model_label)) +
+  geom_vline(xintercept = 0, colour = "grey50", linewidth = 0.5) +
+  geom_errorbarh(aes(xmin = z_estimate - 1.96 * z_se, xmax = z_estimate + 1.96 * z_se),
+                 height = 0.2, linewidth = 0.5, alpha = 0.6,
+                 position = position_dodge(width = 0.6)) +
+  geom_point(size = 3, alpha = 0.9, position = position_dodge(width = 0.6)) +
+  geom_text(aes(x = z_estimate + 1.96 * z_se + 0.1, label = sig_label),
+            hjust = 0, size = 2.8, position = position_dodge(width = 0.6)) +
+  scale_colour_manual(values = model_colours, name = "Model") +
+  scale_shape_manual(values = c(16, 17, 15), name = "Model") +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.2))) +
+  labs(title = "Three-model comparison: BM vs PT enrichment — all TC clusters",
+       subtitle = "Z-scored within model | positive = BM enriched | Logit + CLR: compositionally-corrected",
+       x = "Standardised estimate (z-score, 95% CI)", y = NULL) +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8, colour = "grey35"),
+        axis.text = element_text(colour = "black"), legend.position = "right")
+```
+
+### Model agreement heatmap
+
+```{r plot-heatmap, fig.height=5, fig.width=7}
+sig_matrix <- all_results %>%
+  mutate(
+    cell_label = paste0(sig_label, "\n", ifelse(direction == "BM > PT", "↑BM", "↓PT")),
+    fill_val   = case_when(
+      p_adj_BH < 0.05  & direction == "BM > PT" ~  1,
+      p_adj_BH < 0.05  & direction == "PT > BM" ~ -1,
+      p_adj_BH < 0.10  & direction == "BM > PT" ~  0.5,
+      p_adj_BH < 0.10  & direction == "PT > BM" ~ -0.5,
+      TRUE ~ 0),
+    TC_cluster = factor(TC_cluster, levels = cluster_order_forest)
+  )
+
+ggplot(sig_matrix, aes(x = model_label, y = TC_cluster, fill = fill_val)) +
+  geom_tile(colour = "white", linewidth = 0.5) +
+  geom_text(aes(label = cell_label), size = 2.5, lineheight = 0.9, colour = "white") +
+  geom_rect(data = sig_matrix %>% filter(is_claim) %>%
+              distinct(TC_cluster) %>% mutate(ynum = as.numeric(TC_cluster)),
+            aes(ymin = ynum - 0.5, ymax = ynum + 0.5, xmin = 0.5, xmax = 3.5),
+            fill = NA, colour = "#E24B4A", linewidth = 0.9, inherit.aes = FALSE) +
+  scale_fill_gradientn(
+    colours = c("#042C53", "#378ADD", "#E6F1FB", "#FAECE7", "#D85A30", "#4A1B0C"),
+    values  = scales::rescale(c(-1, -0.5, -0.05, 0.05, 0.5, 1)),
+    limits  = c(-1, 1), name = "Direction\n& strength",
+    labels  = c("PT***", "", "ns", "", "BM***")) +
+  labs(title = "Model agreement heatmap — BM vs PT, all three models",
+       subtitle = "Red outline = clusters of interest",
+       x = NULL, y = NULL) +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+        plot.subtitle = element_text(size = 8.5, colour = "grey35"),
+        axis.text = element_text(colour = "black"),
+        legend.key.height = unit(1.2, "cm"))
+```
+
+### Claim cluster marginal means
+
+```{r plot-marginal-logit, fig.height=5}
+claim_logit_data <- results_logit %>%
+  filter(is_claim, !is.na(mm_BM), !is.na(mm_PT))
+
+if (nrow(claim_logit_data) > 0) {
+  claim_logit_mm <- claim_logit_data %>%
+    pivot_longer(cols = c(mm_BM, mm_PT), names_to = "Tissue", values_to = "emmean") %>%
+    mutate(
+      Tissue     = recode(Tissue, mm_BM = BM_LABEL, mm_PT = PT_LABEL),
+      Tissue     = factor(Tissue, levels = c(PT_LABEL, BM_LABEL)),
+      prop_pct   = inv_logit(emmean) * 100,
+      ci_lo      = inv_logit(emmean - 1.96 * se) * 100,
+      ci_hi      = inv_logit(emmean + 1.96 * se) * 100,
+      TC_cluster = factor(TC_cluster, levels = CLUSTERS_OF_INTEREST)
+    )
+
+  sig_logit <- claim_logit_data %>%
+    mutate(TC_cluster = factor(TC_cluster, levels = CLUSTERS_OF_INTEREST),
+           y_pos = inv_logit(pmax(mm_BM, mm_PT, na.rm = TRUE)) * 100 * 1.2,
+           label = paste0(sig_label, "\nΔ=",
+                          round(inv_logit(mm_BM) * 100 - inv_logit(mm_PT) * 100, 1), "pp"))
+
+  ggplot(claim_logit_mm, aes(x = Tissue, y = prop_pct, colour = Tissue, fill = Tissue)) +
+    geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi), width = 0.15, linewidth = 0.7, alpha = 0.8) +
+    geom_point(size = 4.5, alpha = 0.95) +
+    geom_line(aes(group = TC_cluster), colour = "grey60", linewidth = 0.5, linetype = "dashed") +
+    geom_text(data = sig_logit, aes(x = 1.5, y = y_pos, label = label),
+              size = 2.8, colour = "grey25", inherit.aes = FALSE) +
+    facet_wrap(~ TC_cluster, scales = "free_y", ncol = 3) +
+    scale_colour_manual(values = c("BM" = "#E24B4A", "PT" = "#185FA5"), name = NULL) +
+    scale_fill_manual(values = c("BM" = "#E24B4A", "PT" = "#185FA5"), name = NULL) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.3))) +
+    labs(title = "LMM marginal means — claim clusters (logit, back-transformed to %)",
+         subtitle = "logit(prop) ~ Tissue + (1|Patient) | weights = log(n_TC_cells) | BH-corrected",
+         x = NULL, y = "Estimated marginal mean proportion (%)") +
+    theme_classic(base_size = 11) +
+    theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+          plot.subtitle = element_text(size = 8, colour = "grey35"),
+          strip.text = element_text(face = "bold", size = 10),
+          strip.background = element_blank(),
+          axis.text = element_text(colour = "black"), legend.position = "none")
+} else {
+  message("No convergent logit models for claim clusters — check model fitting above.")
+}
+```
+
+```{r plot-marginal-clr, fig.height=5}
+claim_clr_data <- results_clr %>%
+  filter(is_claim, !is.na(mm_BM), !is.na(mm_PT))
+
+if (nrow(claim_clr_data) > 0) {
+  claim_clr_mm <- claim_clr_data %>%
+    pivot_longer(cols = c(mm_BM, mm_PT), names_to = "Tissue", values_to = "emmean") %>%
+    mutate(
+      Tissue     = recode(Tissue, mm_BM = BM_LABEL, mm_PT = PT_LABEL),
+      Tissue     = factor(Tissue, levels = c(PT_LABEL, BM_LABEL)),
+      prop_pct   = emmean,
+      ci_lo      = emmean - 1.96 * se,
+      ci_hi      = emmean + 1.96 * se,
+      TC_cluster = factor(TC_cluster, levels = CLUSTERS_OF_INTEREST)
+    )
+
+  sig_clr <- claim_clr_data %>%
+    mutate(TC_cluster = factor(TC_cluster, levels = CLUSTERS_OF_INTEREST),
+           y_pos = pmax(mm_BM, mm_PT, na.rm = TRUE) * 1.3,
+           label = paste0(sig_label, "\nΔ=", round(mm_BM - mm_PT, 2), " CLR units"))
+
+  ggplot(claim_clr_mm, aes(x = Tissue, y = prop_pct, colour = Tissue, fill = Tissue)) +
+    geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi), width = 0.15, linewidth = 0.7, alpha = 0.8) +
+    geom_point(size = 4.5, alpha = 0.95) +
+    geom_line(aes(group = TC_cluster), colour = "grey60", linewidth = 0.5, linetype = "dashed") +
+    geom_text(data = sig_clr, aes(x = 1.5, y = y_pos, label = label),
+              size = 2.8, colour = "grey25", inherit.aes = FALSE) +
+    facet_wrap(~ TC_cluster, scales = "free_y", ncol = 3) +
+    scale_colour_manual(values = c("BM" = "#E24B4A", "PT" = "#185FA5"), name = NULL) +
+    scale_fill_manual(values = c("BM" = "#E24B4A", "PT" = "#185FA5"), name = NULL) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.3))) +
+    labs(title = "LMM marginal means — claim clusters (CLR scale, compositionally-corrected)",
+         subtitle = "CLR removes sum-to-1 constraint | significant CLR effect = genuine enrichment, not compositional artefact",
+         x = NULL, y = "Estimated marginal mean (CLR units)") +
+    theme_classic(base_size = 11) +
+    theme(plot.title = element_text(size = 12, face = "bold", colour = "black"),
+          plot.subtitle = element_text(size = 8, colour = "grey35"),
+          strip.text = element_text(face = "bold", size = 10),
+          strip.background = element_blank(),
+          axis.text = element_text(colour = "black"), legend.position = "none")
+} else {
+  message("No convergent CLR models for claim clusters — check model fitting above.")
+}
+```
+
+---
+
+# 6. Final Conclusions
+
+## 6.1 TC cluster reliability verdict
+
+```{r final-reliability-table}
+verdict %>%
+  select(TC_cluster, final_verdict, t1_flag, t2_flag, t3_flag, strong_t2,
+         spearman_r, enrichment_in_flagged) %>%
+  mutate(
+    recommendation = case_when(
+      TC_cluster %in% ARTIFACT_CLUSTERS ~ "Exclude from BM composition analysis",
+      final_verdict == "probable artifact (2 criteria)" ~ "Use in BM with caution — flag low-n units",
+      final_verdict == "uncertain (1 criterion)"        ~ "Include with caveat",
+      TRUE ~ "Include — robust"
+    )
+  ) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  knitr::kable(caption = "Final reliability verdict and recommendation per TC cluster")
+```
+
+<div class="result-note">
+**CHGAhi TC, GD2lo TC, and GATA3hi TC** should be excluded from BM composition analyses. All three are detected in fewer than 16% of reliable PT units and near-zero percent of reliable BM units, with strong sampling artifact signatures (Spearman r = −0.38 to −0.59, Δdetect = 54–72pp). Their occasional appearance in low-TC-count BM samples is statistically indistinguishable from sampling noise. Note that the LMM analysis shows apparent BM enrichment for these clusters in the reliable units where they are detected — this is consistent with the artifact interpretation: a handful of cells in a low-TC-count BM sample produce inflated proportions, and those same samples are the ones that pass the n≥30 threshold. The detection is unreliable; the proportion estimate from those detections is not biologically interpretable.
+
+**Bridge-like TC** is also classified as a probable artifact (T1 + T2 flags, r = −0.27, Δdetect = +22pp). It shows no significant enrichment in either tissue in any model. BM proportion calls for bridge-like TC should be treated with caution and low-n units excluded.
+</div>
+
+## 6.2 Verdict on the BM metastasis claim
+
+```{r final-claim-table}
+comparison_models <- results_logit %>%
+  select(TC_cluster, logit_sig = sig_label, logit_dir = direction,
+         mm_BM_logit = mm_BM, mm_PT_logit = mm_PT) %>%
+  mutate(logit_delta_pp = inv_logit(mm_BM_logit) * 100 -
+                          inv_logit(mm_PT_logit) * 100) %>%
+  left_join(results_clr %>% select(TC_cluster, clr_sig = sig_label,
+                                    clr_dir = direction, clr_delta = estimate),
+            by = "TC_cluster") %>%
+  mutate(
+    is_claim        = TC_cluster %in% CLUSTERS_OF_INTEREST,
+    logit_clr_agree = logit_dir == clr_dir,
+    interpretation  = case_when(
+      !logit_clr_agree ~ "Direction conflict — CLR result supersedes logit",
+      logit_clr_agree & clr_sig %in% c("***", "**", "*") & clr_delta > 0
+        ~ "Genuine BM enrichment",
+      logit_clr_agree & clr_sig %in% c("***", "**", "*") & clr_delta < 0
+        ~ "Genuine PT enrichment",
+      logit_clr_agree & logit_sig %in% c("***","**","*") & clr_sig == "ns"
+        ~ "Compositional artefact — logit inflated by depletion of other clusters",
+      TRUE ~ "Not significant in either model"
+    )
+  ) %>%
+  filter(is_claim) %>%
+  select(TC_cluster, logit_sig, logit_delta_pp, clr_sig, clr_delta,
+         logit_clr_agree, interpretation)
+
+comparison_models %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
+  knitr::kable(caption = "Final claim verdict — logit vs CLR model comparison")
+```
+
+<div class="warning-note">
+**Early SYM-like TC is depleted in BM relative to PT** — consistently significant in both models (logit Δ=−10.9pp \*\*, CLR Δ=−1.33 units \*\*\*). It is a primary-tumor-dominant subtype that does not preferentially appear in BM at diagnosis. The metastasis claim for this cluster is **not supported**.
+
+**CD24+ and CD24- marker-lo TC are genuinely enriched in BM** — both logit and CLR models reach significance (\*\* and \* for CD24+; \* and \* for CD24−), meaning the enrichment is not simply a compositional artefact driven by depletion of other clusters. This represents a change from the earlier unweighted analysis and provides statistical support for selective BM presence of these subtypes. Note however that both clusters also carry a "probable artifact" flag from the bootstrap analysis (T1 + T2), meaning their BM proportion estimates in low-TC-count samples are unreliable. The enrichment signal from the LMM is based only on reliable units (n≥30), which is the appropriate subgroup — but the absolute proportions should be interpreted with caution given the wide CIs.
+
+**Final conclusion:** The data partially support a model of selective BM presence for CD24+/- marker-lo TC. Early SYM-like TC shows the opposite pattern and does not preferentially appear in BM. These findings highlight the importance of using compositionally-corrected models (CLR) rather than raw proportions for tissue enrichment claims, and of restricting analyses to samples with sufficient TC cell counts.
+</div>
+
+## 6.3 Session info
+
+```{r session-info}
+sessionInfo()
+```
